@@ -19,6 +19,7 @@ from app.models import (ComplaintCategory, Department, DutyRoster, Organization,
 def app():
     application = create_app(scheduler=False)
     application.config["TESTING"] = True
+    application.config["SYNC_DELIVERY_FOR_TESTS"] = True   # deterministic WhatsApp/SMS delivery
     with application.app_context():
         db.drop_all()
         db.create_all()
@@ -79,7 +80,12 @@ def seeded(app):
 
 
 def login(client, username, password="Passw0rd!x"):
-    page = client.get("/login")
+    # ensure a clean session even if another user is already logged in
+    page = client.get("/login", follow_redirects=False)
+    if page.status_code == 302:
+        tok = csrf(client, "/")
+        client.post("/logout", data={"_csrf": tok})
+        page = client.get("/login")
     token = page.data.decode().split('name="_csrf" value="')[1].split('"')[0]
     r = client.post("/login", data={"username": username, "password": password,
                                     "_csrf": token}, follow_redirects=False)

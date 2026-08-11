@@ -21,6 +21,7 @@
     Only your number — never your name — is shown on public screens.</div>
   <form class="card pad-lg" method="post" action="/queue/join">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="loc" value="{{ loc or '' }}">
     <label>1 · Department / Service <span class="req">*</span></label>
     <select name="department_id" required>
       <option value="">— Select department —</option>

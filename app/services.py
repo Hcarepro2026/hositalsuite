@@ -209,17 +209,15 @@ def management_attention(org_id: int, now: datetime = None) -> list[dict]:
                       "text": f"{failed} WhatsApp message(s) failed to deliver. Review and retry.",
                       "href": "/admin/notifications"})
 
-    # 6. Missed inspections in last 7 days
+    # 6. Missed inspections in last 7 days (duty assigned but nothing submitted)
     today = now.date()
     for offset in range(1, 8):
         day = today - timedelta(days=offset)
-        st = inspection_state(org_id, day, now=now)
-        if st["state"] in ("overdue", "unassigned") and on_duty(org_id, day) is None and st["state"] == "unassigned":
-            continue
-        if st["state"] == "overdue" or (st["duty"] and not st["inspection"]):
+        duty = on_duty(org_id, day)
+        if duty and not todays_inspection(org_id, day):
             items.append({"level": "medium", "kind": "Missed inspection",
                           "text": f"No inspection recorded on {day.strftime('%a %d %b')} "
-                                  f"(on duty: {st['duty'].name if st['duty'] else '—'}).",
+                                  f"(on duty: {duty.name}).",
                           "href": "/inspections"})
     return items
 

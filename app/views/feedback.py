@@ -75,6 +75,9 @@ def portal_submit():
     if rating <= LOW_RATING_THRESHOLD:
         target_dept = dept or db.session.query(Department).filter_by(
             org_id=org.id, active=True).order_by(Department.id).first()
+        if target_dept is None:
+            db.session.commit()   # keep the feedback record; hospital has no departments yet
+            return redirect(url_for("feedback.portal_thanks", rating=rating))
         category = (db.session.query(ComplaintCategory)
                     .filter(ComplaintCategory.name.ilike("%feedback%")).first())
         cat_name = category.name if category else "Other"

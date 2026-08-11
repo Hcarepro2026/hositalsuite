@@ -56,9 +56,7 @@ def roster_view():
         d += timedelta(days=1)
     return render_template("roster.html", days=days, month_label=start.strftime("%B %Y"),
                            month_offset=month_offset,
-                           admins=_org_admin_managers(current_user.org_id),
-                           can_edit=current_user.role in ("ADMIN_MANAGER", "SUPER_ADMIN")
-                           and current_user.is_am is False or current_user.is_super)
+                           admins=_org_admin_managers(current_user.org_id))
 
 
 # ------------------------------------------------------------------ manual entry

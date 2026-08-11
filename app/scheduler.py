@@ -116,11 +116,12 @@ def job_complaint_sla(app):
                                    Complaint.escalated.is_(False)).all())
         for c in open_complaints:
             if scoring.should_escalate(c.status, c.escalated, c.sla_deadline_at, now):
+                old_status = c.status                     # capture BEFORE mutation
                 c.escalated = True
                 c.status = "ESCALATED"
                 c.escalated_at = now
                 from .models import ComplaintStatusHistory
-                db.session.add(ComplaintStatusHistory(complaint_id=c.id, from_status=c.status,
+                db.session.add(ComplaintStatusHistory(complaint_id=c.id, from_status=old_status,
                                                       to_status="ESCALATED",
                                                       note="Automatic escalation — HOD SLA expired"))
                 audit("COMPLAINT_ESCALATED", "complaint", c.id,

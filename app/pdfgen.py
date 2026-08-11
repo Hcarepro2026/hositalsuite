@@ -211,6 +211,69 @@ def build_inspection_pdf(org, inspection, scores_by_no: dict, dest_path: str,
     return dest_path
 
 
+# =============================================================== QR poster pack (§43A)
+def build_poster_pdf(org, posters: list[dict], dest_path: str) -> str:
+    """posters: [{title, subtitle, url, steps:[...]}] — one A4 page each."""
+    import io as _io
+    import qrcode as _qrcode
+    st = _styles()
+    doc = SimpleDocTemplate(dest_path, pagesize=A4, leftMargin=14 * mm, rightMargin=14 * mm,
+                            topMargin=12 * mm, bottomMargin=12 * mm,
+                            title=f"{org.name} — QR Posters", author=org.name)
+    story = []
+    for i, p in enumerate(posters):
+        if i > 0:
+            from reportlab.platypus import PageBreak
+            story.append(PageBreak())
+        # header band
+        band = Table([[Paragraph(org.name, ParagraphStyle(
+            "pb", parent=st["title"], fontSize=16, textColor=colors.white))]],
+            colWidths=[182 * mm])
+        band.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), ACCENT),
+            ("LEFTPADDING", (0, 0), (-1, -1), 12),
+            ("TOPPADDING", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ("ROUNDEDCORNERS", [8, 8, 8, 8]),
+        ]))
+        story.append(band)
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(p["title"], ParagraphStyle("pt", parent=st["title"],
+                                                          fontSize=26, alignment=TA_CENTER)))
+        story.append(Paragraph(p["subtitle"], ParagraphStyle("ps", parent=st["subtitle"],
+                                                             fontSize=12, alignment=TA_CENTER)))
+        story.append(Spacer(1, 10))
+        # QR
+        img = _qrcode.make(p["url"], box_size=14, border=3)
+        buf = _io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        qr = Image(buf, width=88 * mm, height=88 * mm)
+        qt = Table([[qr]], colWidths=[182 * mm])
+        qt.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+        story.append(qt)
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(f"Or open: <b>{p['url']}</b>", st["center"]))
+        story.append(Spacer(1, 12))
+        # steps
+        step_rows = [[Paragraph(f"<b>{idx + 1}.</b>  {s}", ParagraphStyle(
+            "stp", parent=st["body"], fontSize=12, leading=17))] for idx, s in enumerate(p["steps"])]
+        steps = Table(step_rows, colWidths=[170 * mm])
+        steps.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), LIGHT),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ]))
+        st_wrap = Table([[steps]], colWidths=[182 * mm])
+        st_wrap.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+        story.append(st_wrap)
+        story.append(Spacer(1, 16))
+        story.append(Paragraph("No account · No app · Works on any phone", st["center"]))
+    doc.build(story)
+    return dest_path
+
+
 # =============================================================== generic summary PDF
 def build_summary_pdf(org, title: str, subtitle: str, table_header: list[str],
                       table_rows: list[list], dest_path: str, notes: list[str] | None = None,

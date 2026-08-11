@@ -223,7 +223,8 @@ def inspection_submit():
     if not targets and md_number:
         whatsapp.queue_message(org.id, md_number, summary, kind="report",
                                media_path=insp.pdf_path, entity_type="inspection", entity_id=insp.id)
-    whatsapp.process_queue()
+    from ..tasks import dispatch_delivery
+    dispatch_delivery()   # §39 — never block the submission on third-party APIs
 
     # --- management notifications + executive alerts
     ctx = {"ref": insp.ref, "dept": dept.name, "name": current_user.name,
@@ -281,8 +282,9 @@ def inspection_list():
     depts = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True).all()
     inspectors = db.session.query(User).filter_by(org_id=current_user.org_id, role="ADMIN_MANAGER").all()
     return render_template("inspection_list.html", items=items, depts=depts, inspectors=inspectors,
-                           args=request.args, ratings=["EXCELLENT", "GOOD", "FAIR / NEEDS IMPROVEMENT",
-                                                       "POOR", "CRITICAL"])
+                           args=request.args, today=now_naive().date(),
+                           ratings=["EXCELLENT", "GOOD", "FAIR / NEEDS IMPROVEMENT",
+                                    "POOR", "CRITICAL"])
 
 
 @bp.get("/inspections/<int:insp_id>")
@@ -300,8 +302,8 @@ def inspection_detail(insp_id: int):
                   .filter(Inspection.id != insp.id, Inspection.submitted_at < (insp.submitted_at or now_naive()))
                   .order_by(Inspection.submitted_at.desc()).first())
     trend = scoring.trend(insp.total_score, trend_prev.total_score if trend_prev else None)
-    can_amend = insp.status == "SUBMITTED" and current_user.role in ("SUPER_ADMIN", "ADMIN_MANAGER") \
-        and insp.inspector_id in (current_user.id,) or current_user.is_super
+    can_amend = current_user.is_super or (
+        insp.status == "SUBMITTED" and current_user.is_am and insp.inspector_id == current_user.id)
     users = (db.session.query(User).filter_by(org_id=current_user.org_id, active=True)
              .order_by(User.name).all())
     return render_template("inspection_detail.html", insp=insp, scores=scores_by_no,

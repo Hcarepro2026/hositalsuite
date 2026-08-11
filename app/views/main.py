@@ -160,9 +160,8 @@ def corrective_actions():
     if status in ("OPEN", "IN_PROGRESS", "COMPLETED", "OVERDUE", "VERIFIED"):
         q = q.filter(CorrectiveAction.status == status)
     mine = request.args.get("mine")
-    if mine == "1" or (current_user.is_am or current_user.is_hod):
-        if mine == "1":
-            q = q.filter(CorrectiveAction.owner_id == current_user.id)
+    if mine == "1":
+        q = q.filter(CorrectiveAction.owner_id == current_user.id)
     items = q.order_by(CorrectiveAction.deadline).all()
     from ..models import User
     users = db.session.query(User).filter_by(org_id=current_user.org_id, active=True).order_by(User.name).all()

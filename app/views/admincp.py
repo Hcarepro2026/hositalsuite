@@ -377,6 +377,86 @@ def whatsapp_test():
     return redirect(url_for("admin.notification_logs"))
 
 
+# ------------------------------------------------------------------ QR poster pack (§43A)
+POSTER_SERVICES = {
+    "complaint": {
+        "title": "Make a Complaint",
+        "subtitle": "Your voice matters — we listen and act",
+        "steps": ["Point your phone camera at the QR code",
+                  "Choose the department and describe the problem (typing or speaking)",
+                  "Get your reference number instantly — management is notified immediately"],
+        "path": "/complaint",
+    },
+    "booking": {
+        "title": "Book a Hospital Visit",
+        "subtitle": "Skip the uncertainty — reserve your slot in 1 minute",
+        "steps": ["Scan the QR code with your phone camera",
+                  "Pick the service, date and time that suits you",
+                  "Save your booking reference — see it at reception on arrival"],
+        "path": "/book",
+    },
+    "queue": {
+        "title": "Join the Queue",
+        "subtitle": "Get your number and track your position",
+        "steps": ["Scan the QR code with your phone camera",
+                  "Enter your name to receive a queue number",
+                  "Watch your position live — you'll get an SMS when it's your turn"],
+        "path": "/queue/join",
+    },
+    "feedback": {
+        "title": "Rate Your Experience",
+        "subtitle": "1 minute of feedback makes care better for everyone",
+        "steps": ["Scan the QR code after your visit",
+                  "Tap a star rating — add a comment by typing or speaking",
+                  "Low ratings reach management immediately; high ratings help us improve"],
+        "path": "/feedback",
+    },
+}
+
+
+@bp.get("/posters")
+@require_role(*SUPER)
+def posters():
+    locs = db.session.query(QrLocation).filter_by(org_id=current_user.org_id).order_by(QrLocation.name).all()
+    return render_template("admin/posters.html", locs=locs, services=POSTER_SERVICES,
+                           base=Config.PUBLIC_BASE_URL)
+
+
+@bp.get("/posters/download")
+@require_role(*SUPER)
+def posters_download():
+    org = db.session.get(Organization, current_user.org_id)
+    from ..config import Config as _Cfg
+    wanted = [s for s in (request.args.get("services") or "").split(",") if s in POSTER_SERVICES] \
+        or list(POSTER_SERVICES.keys())
+    locs = db.session.query(QrLocation).filter_by(org_id=org.id).order_by(QrLocation.name).all()
+    posters = []
+    base = _Cfg.PUBLIC_BASE_URL.rstrip("/")
+    for svc_key in wanted:
+        svc = POSTER_SERVICES[svc_key]
+        if svc_key in ("complaint", "booking") and locs:
+            for loc in locs:
+                posters.append({
+                    "title": svc["title"],
+                    "subtitle": f"{svc['subtitle']}  ·  📍 {loc.name}",
+                    "url": f"{base}{svc['path']}?loc={loc.code}",
+                    "steps": svc["steps"],
+                })
+        else:
+            posters.append({"title": svc["title"], "subtitle": svc["subtitle"],
+                            "url": f"{base}{svc['path']}", "steps": svc["steps"]})
+    from .. import pdfgen
+    path = os.path.join(Config.REPORT_DIR, f"qr-posters-{new_code(4)}.pdf")
+    pdfgen.build_poster_pdf(org, posters, path)
+    rf = ReportFile(org_id=org.id, kind="posters", title=f"QR Poster Pack ({len(posters)} posters)",
+                    path=path, verify_code=new_code(10), created_by_id=current_user.id)
+    db.session.add(rf)
+    audit("POSTERS_GENERATED", "report", None, {"count": len(posters), "services": wanted})
+    db.session.commit()
+    return send_file(path, as_attachment=True, download_name="QR-Poster-Pack.pdf",
+                     mimetype="application/pdf")
+
+
 # ------------------------------------------------------------------ audit log
 @bp.get("/audit")
 @require_role(*SUPER_MD)
@@ -395,7 +475,7 @@ def audit_log():
 @bp.post("/backup")
 @require_role(*SUPER)
 def backup_now():
-    uri = current_app_uri = db.engine.url
+    uri = db.engine.url
     if str(uri).startswith("sqlite"):
         from ..scheduler import job_nightly_backup
         from flask import current_app
@@ -429,7 +509,7 @@ def health():
         "disk": None,
     }
     try:
-        usage = shutil.disk_usage(Config.DATA_DIR if hasattr(Config, "DATA_DIR") else os.path.dirname(Config.BACKUP_DIR))
+        usage = shutil.disk_usage(os.path.dirname(Config.BACKUP_DIR))
         info["disk"] = f"{usage.free / 1e9:.1f} GB free of {usage.total / 1e9:.1f} GB"
     except OSError:
         pass

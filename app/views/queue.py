@@ -56,7 +56,8 @@ def join_page():
     depts = (db.session.query(Department)
              .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
     pre = request.args.get("dept", type=int)
-    return render_template("queue_join.html", org=org, depts=depts, pre=pre)
+    loc = (request.args.get("loc") or "").strip().upper()
+    return render_template("queue_join.html", org=org, depts=depts, pre=pre, loc=loc)
 
 
 @bp.post("/queue/join")
@@ -122,7 +123,7 @@ def screen():
     dept_id = request.args.get("dept", type=int)
     dept = db.session.get(Department, dept_id) if dept_id else None
     today = now_naive().date()
-    called = now_serving = None
+    now_serving = None
     upcoming = []
     if dept:
         now_serving = (db.session.query(QueueTicket)
@@ -185,7 +186,8 @@ def call_next(tid: int):
                              f"You are next in the {t.department.name} queue. Ticket {t.code}. "
                              f"Please proceed now.", kind="alert",
                              entity_type="queue_ticket", entity_id=t.id)
-        sms_engine.process_sms_queue(limit=3)
+        from ..tasks import dispatch_delivery
+        dispatch_delivery()   # §39 — async delivery
     db.session.commit()
     flash(f"Called {t.code}.", "success")
     return redirect(url_for("queue.staff_queue", dept=t.department_id))

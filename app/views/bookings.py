@@ -135,7 +135,8 @@ def portal_submit():
     if services.get_setting(org.id, "booking_confirmation_sms", True):
         sms_engine.queue_sms(org.id, phone, confirm_body, kind="confirmation",
                              entity_type="appointment", entity_id=apt.id)
-        sms_engine.process_sms_queue(limit=5)
+        from ..tasks import dispatch_delivery
+        dispatch_delivery()   # §39 — async delivery
 
     # inform the Admin Manager on duty (in-app)
     duty = services.on_duty(org.id, now.date())
