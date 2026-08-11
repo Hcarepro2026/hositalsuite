@@ -37,7 +37,7 @@ the patient-journey half (book → queue → feedback → refer) is the main bui
 
 ## 3. UPGRADE PLAN — build order respects spec priority
 
-### WAVE A — Patient Experience completion + foundation hardening (start now)
+### WAVE A — Patient Experience completion + foundation hardening ✅ COMPLETE (2026-08-11)
 1. **PostgreSQL migration**: connect to Supabase free project (founder creates project), extend schema
    (appointments, queues, queue_events, feedback, referrals, attendance, geofences, branches), verify, keep SQLite for dev.
 2. **Booking** (§5): QR/Web/USSD-ready, service + date + contact, reference number, confirmation via available channel,
@@ -48,6 +48,13 @@ the patient-journey half (book → queue → feedback → refer) is the main bui
    low ratings instantly route into the existing service-recovery/complaint pipeline.
 5. **Notification Provider Interface + Termii/Twilio SMS** (§38) with automatic fallback + delivery logs.
 6. **Resilience**: idempotency keys, all third-party calls → background queue, gunicorn entrypoint, Dockerfile.
+
+> ✅ All six items shipped & tested (50 automated tests, green on SQLite + PostgreSQL 17):
+> booking (HOSP-APT refs, capacity, cancel, USSD), queue (tickets, staff control,
+> privacy-safe screen, voice announcement), feedback → service recovery (auto complaint),
+> SMS provider interface (Termii/Twilio/sandbox), idempotency on booking+complaint,
+> Dockerfile + render.yaml + dbcheck. Supabase compatibility proven; live connection
+> happens on the deployed host (workspace egress is web-only).
 
 ### WAVE B — Retention, referral & AI (Priority 2)
 7. **Referral engine** (§14): referral link/QR per satisfied patient, source/code tracking, "Book another visit" prompt,
