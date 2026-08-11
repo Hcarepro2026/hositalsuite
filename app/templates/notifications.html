@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="spread mb"><h1 style="margin:0">My notifications</h1>
+  <form method="post" action="/notifications/read">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="btn small ghost">Mark all read</button>
+  </form>
+</div>
+{% for n in items %}
+<div class="list-item" style="{{ '' if n.status=='READ' else 'border-left:4px solid var(--primary)' }}">
+  <div class="spread"><span class="t">{{ n.subject }}</span>
+    <span class="muted">{{ n.created_at.strftime('%d %b %H:%M') }}</span></div>
+  <div>{{ n.body }}</div>
+</div>
+{% else %}<div class="card center muted">No notifications yet.</div>{% endfor %}
+{% endblock %}

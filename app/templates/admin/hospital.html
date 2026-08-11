@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Hospital setup{% endblock %}
+{% block content %}
+<h1>Hospital Setup</h1>
+<form class="card pad-lg" method="post" action="/admin/hospital" enctype="multipart/form-data" style="max-width:640px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label>Hospital name</label>
+  <input type="text" name="name" value="{{ org.name }}" required>
+  <label>Reference prefix (used in report &amp; complaint numbers)</label>
+  <input type="text" name="code" value="{{ org.code }}" maxlength="12"
+         pattern="[A-Za-z0-9]+" title="Letters and numbers only">
+  <div class="hint">e.g. HOSP produces refs like HOSP-INS-2026-000001 and HOSP-CMP-2026-000001</div>
+  <label>Logo (appears on PDF reports)</label>
+  <input type="file" name="logo" accept="image/jpeg,image/png,image/webp">
+  {% if org.logo_path %}<p class="hint">Current logo: <code>{{ org.logo_path }}</code></p>{% endif %}
+  <button class="btn mt">Save</button>
+</form>
+{% endblock %}

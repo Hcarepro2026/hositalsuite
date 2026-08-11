@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Admin Control Center{% endblock %}
+{% block content %}
+<h1>⚙ Administrator Control Center</h1>
+<p class="muted">{{ org.name }} ({{ org.code }})</p>
+
+<div class="grid cols4 mb">
+  <div class="kpi info"><div class="v">{{ counts.users }}</div><div class="l">Users</div></div>
+  <div class="kpi info"><div class="v">{{ counts.departments }}</div><div class="l">Departments</div></div>
+  <div class="kpi info"><div class="v">{{ counts.roster }}</div><div class="l">Roster days</div></div>
+  <div class="kpi info"><div class="v">{{ counts.reports }}</div><div class="l">Reports archived</div></div>
+  <div class="kpi {{ 'bad' if counts.wa_failed else 'good' }}"><div class="v">{{ counts.wa_failed }}</div><div class="l">WhatsApp failed</div></div>
+  <div class="kpi"><div class="v">{{ counts.wa_queue }}</div><div class="l">WhatsApp queued</div></div>
+</div>
+
+<div class="grid cols3 mb">
+  <a class="card" href="/admin/hospital"><h2>🏥 Hospital Setup</h2><p class="muted">Name, logo, reference prefix</p></a>
+  <a class="card" href="/admin/users"><h2>👥 Users &amp; Roles</h2><p class="muted">Create, deactivate, reset passwords</p></a>
+  <a class="card" href="/admin/structure"><h2>🏬 Departments / Units</h2><p class="muted">Sections, units &amp; HOD assignments</p></a>
+  <a class="card" href="/admin/settings"><h2>🎛 Inspection &amp; Complaint Config</h2><p class="muted">SLA, reminders, GPS, categories, QR locations</p></a>
+  <a class="card" href="/roster"><h2>🗓 Duty Roster</h2><p class="muted">Manual entry &amp; Excel/CSV import</p></a>
+  <a class="card" href="/admin/notifications"><h2>📡 Notifications &amp; WhatsApp</h2><p class="muted">Delivery logs, retries, test message</p></a>
+  <a class="card" href="/reports"><h2>📊 Reports &amp; Archive</h2><p class="muted">All exports + digital archive</p></a>
+  <a class="card" href="/admin/audit"><h2>🧾 Audit Logs</h2><p class="muted">Tamper-evident, hash-chained
+      {% if chain_ok %}<span class="pill green">verified</span>{% else %}<span class="pill red">BROKEN CHAIN</span>{% endif %}</p></a>
+  <a class="card" href="/admin/health"><h2>💚 System Health &amp; Backups</h2><p class="muted">Database, disk, backups</p></a>
+</div>
+
+<div class="card">
+  <h2>Backups</h2>
+  {% if backups %}
+    {% for b in backups %}<div class="row spread">
+      <span><code>{{ b }}</code></span>
+      <a class="btn small ghost" href="/admin/backup/download/{{ b }}">Download</a>
+    </div>{% endfor %}
+  {% else %}<p class="muted">No backups yet — they run nightly at 02:00.</p>{% endif %}
+  <form method="post" action="/admin/backup" class="mt">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="btn secondary">⬇ Create backup now</button>
+  </form>
+</div>
+{% endblock %}

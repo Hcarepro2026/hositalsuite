@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Configuration{% endblock %}
+{% block content %}
+<h1>Inspection &amp; Complaint Configuration</h1>
+
+<form class="card pad-lg mb" method="post" action="/admin/settings">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <h2>⏱ Complaint SLA &amp; escalation</h2>
+  <div class="grid cols3">
+    <div><label>HOD resolution SLA (hours)</label>
+      <input type="number" name="sla_hours" min="1" max="336" value="{{ s.sla_hours }}">
+      <div class="hint">Complaints not resolved within this window are automatically escalated to the MD/CEO.</div></div>
+  </div>
+
+  <h2 class="mt">🔔 Duty reminders &amp; inspection deadline</h2>
+  <div class="grid cols4">
+    <div><label>Day-before reminder</label><input type="time" name="reminder_day_before_time" value="{{ s.reminder_day_before_time }}"></div>
+    <div><label>Duty-day reminder</label><input type="time" name="reminder_duty_day_time" value="{{ s.reminder_duty_day_time }}"></div>
+    <div><label>Inspection deadline</label><input type="time" name="inspection_deadline_time" value="{{ s.inspection_deadline_time }}"></div>
+    <div><label>Overdue alert to management</label><input type="time" name="overdue_notify_time" value="{{ s.overdue_notify_time }}"></div>
+  </div>
+
+  <h2 class="mt">📍 GPS verification</h2>
+  <select name="gps_mode">
+    <option value="mandatory" {{ 'selected' if s.gps_mode=='mandatory' }}>Mandatory — inspection blocked without GPS</option>
+    <option value="optional" {{ 'selected' if s.gps_mode=='optional' }}>Optional — captured when available</option>
+    <option value="disabled" {{ 'selected' if s.gps_mode=='disabled' }}>Disabled</option>
+  </select>
+
+  <h2 class="mt">📡 WhatsApp report delivery</h2>
+  <div class="grid cols2">
+    <div><label>MD/CEO WhatsApp number (E.164, e.g. 2348012345678)</label>
+      <input type="text" name="whatsapp_md_number" value="{{ s.whatsapp_md_number }}" placeholder="2348012345678"></div>
+  </div>
+  <div class="hint">Provider credentials (Phone Number ID, access token) are configured via environment
+    variables — never stored in the browser. See <code>.env.example</code>. Current mode:
+    <b>{{ settings_mode if settings_mode else 'sandbox/cloud per server config' }}</b></div>
+
+  <h2 class="mt">🚨 Alert thresholds &amp; analytics</h2>
+  <div class="grid cols3">
+    <div><label>Multiple "score 2" alert when ≥</label>
+      <input type="number" name="multiple_two_threshold" min="1" max="5" value="{{ s.multiple_two_threshold }}"></div>
+    <div><label>Recurring-issue window (last N inspections)</label>
+      <input type="number" name="recurring_window" min="3" max="30" value="{{ s.recurring_window }}"></div>
+    <div><label>Recurring-issue threshold (poor scores ≥)</label>
+      <input type="number" name="recurring_threshold" min="2" max="15" value="{{ s.recurring_threshold }}"></div>
+  </div>
+
+  <h2 class="mt">🔔 Reminder channels</h2>
+  <div class="row">
+    <label class="row" style="margin:0;gap:6px"><input type="checkbox" name="reminder_channels" value="inapp" {{ 'checked' if 'inapp' in s.reminder_channels }} style="width:auto"> In-app</label>
+    <label class="row" style="margin:0;gap:6px"><input type="checkbox" name="reminder_channels" value="email" {{ 'checked' if 'email' in s.reminder_channels }} style="width:auto"> Email</label>
+    <label class="row" style="margin:0;gap:6px"><input type="checkbox" name="reminder_channels" value="whatsapp" {{ 'checked' if 'whatsapp' in s.reminder_channels }} style="width:auto"> WhatsApp</label>
+  </div>
+
+  <h2 class="mt">🗄 Data retention (NDPR-aligned)</h2>
+  <div class="grid cols3">
+    <div><label>Retention period (days)</label>
+      <input type="number" name="retention_days" min="30" value="{{ s.retention_days }}">
+      <div class="hint">Records older than this are eligible for purge. Default 2190 (6 years).</div></div>
+  </div>
+
+  <button class="btn big mt">Save configuration</button>
+</form>
+
+<div class="grid cols2">
+  <div class="card">
+    <h2>Complaint categories</h2>
+    {% for c in categories %}<div class="row spread">
+      <span>{{ c.name }} {% if not c.active %}<span class="pill gray">inactive</span>{% endif %}</span></div>{% endfor %}
+    <form method="post" action="/admin/settings/categories" class="row mt">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="text" name="name" placeholder="New category" required style="flex:1">
+      <button class="btn small">Add</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Complaint QR locations</h2>
+    <p class="hint">Print these QR codes and post them at each location. Scans are tagged with the location.</p>
+    {% for l in locations %}<div class="row spread mb">
+      <span>📍 {{ l.name }} <code>{{ l.code }}</code></span>
+      <a class="btn small secondary" href="/complaint/qr/{{ l.code }}.png" download="QR-{{ l.code }}.png">⬇ QR</a>
+    </div>{% endfor %}
+    <form method="post" action="/admin/settings/locations" class="row mt">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="text" name="name" placeholder="e.g. Ward A, Reception" required style="flex:1">
+      <button class="btn small">Add</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

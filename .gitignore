@@ -1,0 +1,33 @@
+# --- secrets & local configuration ---
+.env
+.secret_key
+*.pem
+*.key
+
+# --- live data: database, uploads, reports, backups (never commit) ---
+data/
+
+# --- session artifacts from local testing ---
+cookies.txt
+pub_cookies.txt
+adm.txt
+hod.txt
+md.txt
+*.cookies
+
+# --- logs ---
+*.log
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/

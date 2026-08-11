@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e5a8a">
+<title>Make a Complaint — {{ org.name }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="portal-head">
+  <div style="font-size:2rem">🏥</div>
+  <h1>{{ org.name }}</h1>
+  <div>Patient &amp; Visitor Complaint Portal</div>
+  {% if qr_loc %}<div class="mt"><span class="pill blue">📍 Submitted from: {{ qr_loc.name }}</span></div>{% endif %}
+</div>
+<main class="wrap" style="max-width:560px">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="privacy-note">🔒 No account or registration needed. Please do <b>not</b> include
+    unnecessary sensitive medical information — only what is needed to describe the problem.
+    Your complaint is confidential and goes directly to hospital management.</div>
+
+  <form class="card pad-lg" method="post" action="/complaint/submit" enctype="multipart/form-data" id="cmp-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="loc" value="{{ qr_loc.code if qr_loc else '' }}">
+
+    <label>1 · Department / Unit concerned <span class="req">*</span></label>
+    <select name="department_id" required>
+      <option value="">— Select department —</option>
+      {% for d in depts %}
+      <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label>2 · Complaint category <span class="req">*</span></label>
+    <select name="category" required>
+      <option value="">— Select category —</option>
+      {% for c in categories %}
+      <option {{ 'selected' if form and form.get('category')==c.name }}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label>3 · Describe the complaint <span class="req">*</span></label>
+    <textarea name="description" id="cmp-desc" required minlength="10"
+              placeholder="What happened? Where? When?">{{ form.get('description','') if form else '' }}</textarea>
+    <button type="button" class="mic-btn" data-lang="en-NG"
+            onclick="hmsVoice.start(this,'cmp-desc')">🎤 Speak your complaint</button>
+    <div class="hint">You can type or press the microphone and speak — the words appear as editable text.</div>
+
+    <label>4 · Your phone number <span class="req">*</span></label>
+    <input type="tel" name="phone" required inputmode="tel" placeholder="e.g. 08012345678"
+           value="{{ form.get('phone','') if form else '' }}">
+    <div class="hint">Used only to follow up on this complaint.</div>
+
+    <label>5 · Optional: photo evidence and preferred contact method</label>
+    <input type="file" name="attachment" accept="image/jpeg,image/png,image/webp" style="font-size:.9rem">
+    <select name="contact_method" class="mt" style="margin-top:8px">
+      <option value="phone">Call me</option>
+      <option value="whatsapp">WhatsApp me</option>
+      <option value="either">Either is fine</option>
+    </select>
+
+    <button class="btn big mt" type="submit" style="width:100%">SUBMIT COMPLAINT</button>
+  </form>
+
+  <div class="card mt center">
+    <a href="/complaint/status">Already submitted? Check your complaint status with your reference number →</a>
+  </div>
+</main>
+<div class="footer">Complaints are routed automatically to the responsible department and tracked until resolved.</div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

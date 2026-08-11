@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}System health{% endblock %}
+{% block content %}
+<h1>System Health</h1>
+<div class="card" style="max-width:560px">
+  <p><b>Database:</b> <span class="pill {{ 'green' if info.database=='connected' else 'red' }}">{{ info.database }}</span></p>
+  <p><b>WhatsApp integration:</b> <span class="pill blue">{{ info.whatsapp_mode }}</span></p>
+  <p><b>Backup directory:</b> <code>{{ info.backup_dir }}</code></p>
+  <p><b>Disk space:</b> {{ info.disk or 'unknown' }}</p>
+  <h2 class="mt">Monitoring checklist</h2>
+  <ul class="muted">
+    <li>Nightly database backups at 02:00 ({{ info.backup_dir }}) — verify weekly restores.</li>
+    <li>WhatsApp failures are flagged in Notifications &amp; retried manually or via queue.</li>
+    <li>Application errors return a friendly page; stack traces are never shown to users.</li>
+    <li>For production: enable HTTPS (TLS), PostgreSQL, off-box backups and uptime monitoring.</li>
+  </ul>
+</div>
+{% endblock %}

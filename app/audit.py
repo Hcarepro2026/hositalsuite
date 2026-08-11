@@ -1,0 +1,44 @@
+"""Tamper-evident audit trail (hash-chained)."""
+from __future__ import annotations
+
+import json
+
+from flask import request
+
+from .models import AuditLog, db, now_naive
+
+
+def last_hash(org_id: int) -> str:
+    row = db.session.query(AuditLog).filter_by(org_id=org_id).order_by(AuditLog.id.desc()).first()
+    return row.hash if row else "GENESIS"
+
+
+def audit(action: str, entity_type: str = None, entity_id: int = None,
+          detail: dict | None = None, user=None, org_id: int = None):
+    from flask_login import current_user
+    u = user or (current_user if current_user and current_user.is_authenticated else None)
+    uid = u.id if u else None
+    oid = org_id if org_id is not None else (u.org_id if u else None)
+    detail_json = json.dumps(detail or {}, default=str, sort_keys=True)
+    at = now_naive()
+    prev = last_hash(oid) if oid else "GENESIS"
+    h = AuditLog.chain_hash(prev, oid, uid, action, entity_type, entity_id, detail_json, at)
+    db.session.add(AuditLog(
+        org_id=oid, user_id=uid, action=action, entity_type=entity_type, entity_id=entity_id,
+        detail=detail_json, ip=(request.remote_addr if request else None),
+        user_agent=(request.user_agent.string[:250] if request else None),
+        at=at, prev_hash=prev, hash=h,
+    ))
+
+
+def verify_chain(org_id: int) -> tuple[bool, int]:
+    """Re-verify the audit hash chain. Returns (ok, rows_checked)."""
+    rows = db.session.query(AuditLog).filter_by(org_id=org_id).order_by(AuditLog.id).all()
+    prev = "GENESIS"
+    for r in rows:
+        expected = AuditLog.chain_hash(prev, r.org_id, r.user_id, r.action, r.entity_type,
+                                       r.entity_id, r.detail, r.at)
+        if r.hash != expected or r.prev_hash != prev:
+            return False, len(rows)
+        prev = r.hash
+    return True, len(rows)
