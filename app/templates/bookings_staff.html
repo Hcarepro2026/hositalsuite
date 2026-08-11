@@ -26,9 +26,9 @@
     <td>{{ a.phone }}</td>
     <td><span class="pill {{ 'green' if a.status=='BOOKED' else ('blue' if a.status=='ARRIVED' else 'gray') }}">{{ a.status }}</span></td>
     <td>{% if a.status == 'BOOKED' %}
-      <form method="post" action="/bookings/{{ a.id }}/arrive">
+      <form method="post" action="/bookings/{{ a.id }}/checkin-queue">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <button class="btn small">Check in</button>
+        <button class="btn small">Check in → queue</button>
       </form>{% endif %}</td>
   </tr>
   {% endfor %}

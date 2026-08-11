@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Queue ticket {{ t.code }}{% endblock %}
+{% block content %}
+<div class="card pad-lg center" style="max-width:520px;margin:30px auto">
+  <div class="muted" style="text-transform:uppercase;letter-spacing:.06em">Your queue number</div>
+  <div style="font-size:4rem;font-weight:800;color:var(--primary)">{{ t.code }}</div>
+  <div class="muted">{{ t.department.name }} · {{ t.queue_date.strftime('%d %b %Y') }}</div>
+
+  {% if t.status == 'WAITING' %}
+    <div class="notice mt">
+      {% if ahead == 0 %}<b>You are next!</b> Please stay close.
+      {% else %}<b>{{ ahead }}</b> {{ 'person' if ahead == 1 else 'people' }} ahead of you.
+        {% if est %}Estimated wait: about <b>{{ est }} min</b>.{% endif %}{% endif %}
+    </div>
+    {% if now_serving %}<p class="hint">Now serving: <b>{{ now_serving.code }}</b></p>{% endif %}
+    <p class="hint">This page updates when you refresh. Keep it open or note your number.</p>
+    <meta http-equiv="refresh" content="20">
+  {% elif t.status == 'CALLED' %}
+    <div class="flash success" style="font-size:1.2rem">📢 It's your turn! Please proceed to {{ t.department.name }}.</div>
+  {% elif t.status == 'DONE' %}
+    <div class="flash info">You have been served. Thank you!</div>
+  {% else %}
+    <div class="flash error">This ticket is {{ t.status }}.</div>
+  {% endif %}
+
+  <div class="mt">
+    <a class="btn secondary" href="/queue/ticket?key={{ t.access_key }}">🔄 Refresh status</a>
+  </div>
+  <p class="hint mt">Bookmark this page to check your position anytime. Do not share the link —
+     it is your private status key.</p>
+</div>
+{% endblock %}

@@ -51,12 +51,19 @@ def _kpi(org_id: int) -> dict:
         CorrectiveAction.org_id == org_id,
         CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE"))).all()
 
-    from ..models import Appointment
+    from ..models import Appointment, PatientFeedback, QueueTicket
     bookings_today = db.session.query(Appointment).filter_by(
         org_id=org_id, appointment_date=today, status="BOOKED").count()
+    queue_waiting = db.session.query(QueueTicket).filter_by(
+        org_id=org_id, queue_date=today, status="WAITING").count()
+    fb_all = db.session.query(PatientFeedback).filter_by(org_id=org_id).all()
+    satisfaction_avg = round(sum(f.rating for f in fb_all) / len(fb_all), 1) if fb_all else None
 
     return {
         "bookings_today": bookings_today,
+        "queue_waiting": queue_waiting,
+        "satisfaction_avg": satisfaction_avg,
+        "feedback_count": len(fb_all),
         "today": st,
         "total_inspections": total_inspections,
         "avg_score": avg_score,

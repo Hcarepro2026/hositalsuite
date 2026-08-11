@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Patient feedback{% endblock %}
+{% block content %}
+<div class="spread mb"><h1 style="margin:0">Patient Feedback &amp; Satisfaction</h1>
+  <a class="btn small secondary" href="/feedback">⭐ Public feedback page</a></div>
+
+<div class="grid cols3 mb">
+  <div class="kpi {{ 'good' if avg and avg >= 4 else ('warn' if avg and avg >= 3 else 'bad') }}">
+    <div class="v">{{ avg if avg else '—' }}<span style="font-size:1rem">/5</span></div>
+    <div class="l">Average satisfaction</div></div>
+  <div class="kpi info"><div class="v">{{ total }}</div><div class="l">Total ratings</div></div>
+  <div class="kpi {{ 'bad' if items|selectattr('status','equalto','ROUTED')|list|length else 'good' }}">
+    <div class="v">{{ items|selectattr('status','equalto','ROUTED')|list|length }}</div>
+    <div class="l">Routed to recovery (shown page)</div></div>
+</div>
+
+<form class="card mb row" method="get">
+  <select name="dept" style="width:auto" onchange="this.form.submit()">
+    <option value="">All departments</option>
+    {% for d in depts %}<option value="{{ d.id }}" {{ 'selected' if dept==d.id }}>{{ d.name }}</option>{% endfor %}
+  </select>
+</form>
+
+{% for f in items %}
+<div class="list-item">
+  <div class="spread">
+    <span class="t">{{ '⭐' * f.rating }} <span class="muted">({{ f.rating }}/5)</span></span>
+    <span class="muted">{{ f.created_at.strftime('%d %b %H:%M') }}</span>
+  </div>
+  {% if f.department %}<div class="muted">{{ f.department.name }}</div>{% endif %}
+  {% if f.comment %}<div class="mt">{{ f.comment }}</div>{% endif %}
+  <div class="mt">
+    {% if f.status == 'ROUTED' and f.complaint %}
+      <a class="pill red" href="/complaints/{{ f.complaint.id }}">→ Recovery ticket {{ f.complaint.ref }}</a>
+    {% elif f.rating <= 2 %}
+      <span class="pill amber">low rating</span>
+    {% else %}<span class="pill green">positive</span>{% endif %}
+    {% if f.phone %}<span class="pill gray">{{ f.phone }}</span>{% endif %}
+  </div>
+</div>
+{% else %}<div class="card center muted">No feedback yet.</div>{% endfor %}
+{% endblock %}

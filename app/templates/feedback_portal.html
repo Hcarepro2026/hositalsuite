@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e5a8a">
+<title>Your Experience — {{ org.name }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<style>
+  .stars{display:flex;gap:8px;justify-content:center;margin:14px 0}
+  .stars label{flex:1;cursor:pointer}
+  .stars input{position:absolute;opacity:0}
+  .stars span{display:flex;align-items:center;justify-content:center;height:64px;font-size:2rem;
+    border:2px solid var(--line);border-radius:12px;background:#fff}
+  .stars input:checked+span{border-color:var(--primary);background:var(--primary-light)}
+</style>
+</head>
+<body>
+<div class="portal-head">
+  <div style="font-size:2rem">⭐</div>
+  <h1>{{ org.name }}</h1>
+  <div>How was your experience?</div>
+</div>
+<main class="wrap" style="max-width:560px">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+  <div class="privacy-note">🔒 Your feedback goes straight to hospital management.
+    It takes less than a minute — and it genuinely changes how this hospital serves you.</div>
+
+  <form class="card pad-lg" method="post" action="/feedback/submit">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+    <label style="margin-top:0">1 · Rate your experience <span class="req">*</span></label>
+    <div class="stars">
+      {% for s in (1,2,3,4,5) %}
+      <label><input type="radio" name="rating" value="{{ s }}" required><span>⭐<b style="font-size:1.1rem">&nbsp;{{ s }}</b></span></label>
+      {% endfor %}
+    </div>
+    <div class="hint center">1 = very poor · 5 = excellent</div>
+
+    <label>2 · Department (optional)</label>
+    <select name="department_id">
+      <option value="">— Whole hospital —</option>
+      {% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+    </select>
+
+    <label>3 · What can we improve? (optional — type or speak)</label>
+    <textarea name="comment" id="fb-comment" placeholder="Tell us what happened…"></textarea>
+    <button type="button" class="mic-btn" data-lang="en-NG"
+            onclick="hmsVoice.start(this,'fb-comment')">🎤 Speak your feedback</button>
+
+    <label>4 · Phone (optional — only if you'd like us to follow up)</label>
+    <input type="tel" name="phone" inputmode="tel" placeholder="e.g. 08012345678">
+
+    <button class="btn big mt" type="submit" style="width:100%">SEND FEEDBACK</button>
+  </form>
+</main>
+<div class="footer">Every rating is read by management · Low ratings trigger immediate follow-up</div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

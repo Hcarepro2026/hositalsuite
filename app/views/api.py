@@ -61,6 +61,42 @@ def whatsapp_webhook():
 
 
 # ================================================================ USSD / gateway intake
+@csrf_exempt("api.ussd_queue")
+@bp.post("/ussd/queue")
+@rate_limit(limit=30, window=60.0)
+def ussd_queue():
+    """USSD intake: join the queue (spec §6 USSD/SMS fallback)."""
+    import secrets as _secrets
+    cfg_secret = current_app.config.get("USSD_SHARED_SECRET", "")
+    data = request.get_json(silent=True) or {}
+    if not cfg_secret or data.get("secret") != cfg_secret:
+        return jsonify(error="unauthorized"), 401
+    org = db.session.query(Organization).filter_by(code=data.get("hospital_code", "")).first()
+    if not org:
+        org = db.session.query(Organization).order_by(Organization.id).first()
+    dept = (db.session.query(Department)
+            .filter_by(org_id=org.id, active=True)
+            .filter(Department.name.ilike(f"%{data.get('department', '')}%")).first())
+    name = (data.get("name") or "").strip()
+    if not dept or len(name) < 2:
+        return jsonify(error="missing department or name"), 422
+    from ..models import QueueTicket
+    from .queue import next_ticket, _dept_letter
+    now = now_naive()
+    n = next_ticket(org.id, dept, now.date())
+    t = QueueTicket(org_id=org.id, code=f"{_dept_letter(dept)}-{n:03d}",
+                    access_key=_secrets.token_urlsafe(12), department_id=dept.id,
+                    queue_date=now.date(), patient_name=name[:120],
+                    phone=(data.get("phone") or "").strip() or None,
+                    status="WAITING", source="ussd")
+    db.session.add(t)
+    db.session.flush()
+    audit("QUEUE_JOINED", "queue_ticket", t.id, {"code": t.code, "source": "ussd"}, org_id=org.id)
+    db.session.commit()
+    return jsonify(ticket=t.code,
+                   message=f"You are in the {dept.name} queue. Your number is {t.code}.")
+
+
 @csrf_exempt("api.ussd_booking")
 @bp.post("/ussd/booking")
 @rate_limit(limit=30, window=60.0)

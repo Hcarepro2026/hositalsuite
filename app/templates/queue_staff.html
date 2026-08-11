@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Queue control{% endblock %}
+{% block content %}
+<div class="spread mb">
+  <h1 style="margin:0">Queue Control — {{ today.strftime('%d %b %Y') }}</h1>
+  <div class="row">
+    <a class="btn small ghost" href="/queue/screen" target="_blank">📺 Public display</a>
+    <a class="btn small secondary" href="/queue/join">➕ Public join page</a>
+  </div>
+</div>
+
+<form class="card mb row" method="get">
+  <label style="margin:0">Department</label>
+  <select name="dept" style="width:auto" onchange="this.form.submit()">
+    <option value="">All</option>
+    {% for d in depts %}<option value="{{ d.id }}" {{ 'selected' if dept_id==d.id }}>{{ d.name }}</option>{% endfor %}
+  </select>
+  <span class="pill green">{{ waiting|length }} waiting</span>
+  <span class="pill blue">{{ called|length }} called</span>
+  <span class="pill gray">{{ done_count }} finished</span>
+</form>
+
+{% if dept_id and waiting %}
+<form method="post" action="/queue/0/call-next" class="mb">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="department_id" value="{{ dept_id }}">
+  <button class="btn big" style="width:100%">📢 CALL NEXT PATIENT</button>
+</form>
+{% endif %}
+
+<div class="grid cols2">
+  <div class="card">
+    <h2>Waiting</h2>
+    {% for t in waiting %}
+    <div class="list-item">
+      <div class="spread">
+        <span class="t" style="font-size:1.1rem">{{ t.code }}</span>
+        <span class="muted">{{ t.created_at.strftime('%H:%M') }}</span>
+      </div>
+      <div>{{ t.patient_name }}{% if t.phone %} · {{ t.phone }}{% endif %}</div>
+      <div class="muted">{{ t.department.name }}{% if t.source=='booking' %} · from booking{% endif %}</div>
+      <form method="post" action="/queue/{{ t.id }}/call-next" class="mt">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn small">📢 Call this patient</button>
+      </form>
+    </div>
+    {% else %}<p class="muted">Nobody waiting.</p>{% endfor %}
+  </div>
+
+  <div class="card">
+    <h2>Called / serving</h2>
+    {% for t in called %}
+    <div class="list-item">
+      <div class="spread">
+        <span class="t" style="font-size:1.1rem">{{ t.code }}</span>
+        <span class="muted">called {{ t.called_at.strftime('%H:%M') }}</span>
+      </div>
+      <div>{{ t.patient_name }} · {{ t.department.name }}</div>
+      <form method="post" action="/queue/{{ t.id }}/finish" class="row mt">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn small" name="outcome" value="done" style="background:var(--green)">✅ Served</button>
+        <button class="btn small ghost" name="outcome" value="no_show">No-show</button>
+      </form>
+    </div>
+    {% else %}<p class="muted">Nobody called.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -256,6 +256,45 @@ class Appointment(db.Model):
     qr_location = db.relationship("QrLocation")
 
 
+# ---------------------------------------------------------------- patient feedback (§7)
+class PatientFeedback(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), index=True)
+    rating = db.Column(db.Integer, nullable=False, index=True)     # 1..5
+    comment = db.Column(db.Text)
+    phone = db.Column(db.String(32))
+    source = db.Column(db.String(12), default="link")
+    status = db.Column(db.String(12), default="NEW", index=True)   # NEW | ROUTED
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"))
+    created_at = db.Column(db.DateTime, default=now_naive)
+    department = db.relationship("Department")
+    complaint = db.relationship("Complaint")
+
+
+# ---------------------------------------------------------------- queue (§6)
+QUEUE_STATUSES = ("WAITING", "CALLED", "DONE", "NO_SHOW", "CANCELLED")
+
+
+class QueueTicket(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(20), nullable=False, index=True)   # public display e.g. "E-014"
+    access_key = db.Column(db.String(24), unique=True, index=True)  # private status lookup
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=False, index=True)
+    queue_date = db.Column(db.Date, nullable=False, index=True)
+    patient_name = db.Column(db.String(120))        # staff-only; never shown on public screens
+    phone = db.Column(db.String(32))
+    status = db.Column(db.String(12), default="WAITING", nullable=False, index=True)
+    source = db.Column(db.String(12), default="link")   # qr | link | booking | ussd
+    appointment_id = db.Column(db.Integer, db.ForeignKey("appointment.id"))
+    created_at = db.Column(db.DateTime, default=now_naive)
+    called_at = db.Column(db.DateTime)
+    served_at = db.Column(db.DateTime)
+    department = db.relationship("Department")
+    appointment = db.relationship("Appointment")
+
+
 # ---------------------------------------------------------------- SMS delivery
 class SmsMessage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
