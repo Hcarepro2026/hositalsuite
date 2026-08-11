@@ -174,6 +174,8 @@ def job_corrective_actions(app):
 
 def job_whatsapp_queue(app):
     whatsapp.process_queue(limit=20)
+    from . import sms as sms_engine
+    sms_engine.process_sms_queue(limit=30)
 
 
 def job_nightly_backup(app):

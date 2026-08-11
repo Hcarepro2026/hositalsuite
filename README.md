@@ -10,6 +10,7 @@ environments (NDPR-aware, low-connectivity tolerant, WhatsApp-first delivery).
 
 | Module | Behaviour |
 |---|---|
+| **Patient booking** | Public QR/web/USSD booking: service + date + time slot + name + phone → reference like `HOSP-APT-2026-000001`, SMS confirmation (Termii/Twilio/sandbox), capacity-limited slots, patient self-service status check & cancellation, staff check-in. |
 | **Daily inspection** | The rostered Admin Manager scores **exactly five criteria** (1–5 each, max 25). Scores of **1 or 2 force a mandatory explanation** (typed or voice-to-text). One review screen → **SUBMIT INSPECTION** locks the record. |
 | **PDF report** | Generated instantly on submission: hospital branding, ref number, five scores, explanations, total/percent/rating, findings, **verification QR + code**. Archived permanently. |
 | **WhatsApp delivery** | Report is sent to the MD/CEO over the **official WhatsApp Business Cloud API** (Media upload + document message). Status pipeline Generated → Sending → Delivered → Failed with retries and audit. |

@@ -47,11 +47,24 @@
       <input type="number" name="recurring_threshold" min="2" max="15" value="{{ s.recurring_threshold }}"></div>
   </div>
 
+  <h2 class="mt">📅 Patient booking</h2>
+  <div class="grid cols3">
+    <div><label>Bookings open (days ahead)</label>
+      <input type="number" name="booking_window_days" min="1" max="120" value="{{ s.booking_window_days }}"></div>
+    <div><label>Capacity per time slot</label>
+      <input type="number" name="booking_capacity_per_slot" min="1" max="500" value="{{ s.booking_capacity_per_slot }}"></div>
+    <div><label>Time slots (comma-separated)</label>
+      <input type="text" name="booking_slots" value="{{ s.booking_slots | join(', ') }}"></div>
+  </div>
+  <label class="row mt" style="gap:6px"><input type="checkbox" name="booking_confirmation_sms" value="1"
+    {{ 'checked' if s.booking_confirmation_sms }} style="width:auto"> Send SMS confirmation to patient when booked</label>
+
   <h2 class="mt">🔔 Reminder channels</h2>
   <div class="row">
     <label class="row" style="margin:0;gap:6px"><input type="checkbox" name="reminder_channels" value="inapp" {{ 'checked' if 'inapp' in s.reminder_channels }} style="width:auto"> In-app</label>
     <label class="row" style="margin:0;gap:6px"><input type="checkbox" name="reminder_channels" value="email" {{ 'checked' if 'email' in s.reminder_channels }} style="width:auto"> Email</label>
     <label class="row" style="margin:0;gap:6px"><input type="checkbox" name="reminder_channels" value="whatsapp" {{ 'checked' if 'whatsapp' in s.reminder_channels }} style="width:auto"> WhatsApp</label>
+    <label class="row" style="margin:0;gap:6px"><input type="checkbox" name="reminder_channels" value="sms" {{ 'checked' if 'sms' in s.reminder_channels }} style="width:auto"> SMS (Termii)</label>
   </div>
 
   <h2 class="mt">🗄 Data retention (NDPR-aligned)</h2>

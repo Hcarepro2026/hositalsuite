@@ -272,7 +272,19 @@ def settings_save():
         pass
     channels = f.getlist("reminder_channels")
     services.set_setting(org_id, "reminder_channels",
-                         [c for c in channels if c in ("inapp", "email", "whatsapp")] or ["inapp"])
+                         [c for c in channels if c in ("inapp", "email", "whatsapp", "sms")] or ["inapp"])
+    # booking settings
+    try:
+        services.set_setting(org_id, "booking_window_days", max(1, int(f.get("booking_window_days") or 30)))
+        services.set_setting(org_id, "booking_capacity_per_slot", max(1, int(f.get("booking_capacity_per_slot") or 20)))
+    except ValueError:
+        pass
+    raw_slots = [x.strip() for x in (f.get("booking_slots") or "").split(",") if x.strip()]
+    import re as _re
+    valid_slots = [x for x in raw_slots if _re.match(r"^([01]?\d|2[0-3]):[0-5]\d$", x)]
+    if valid_slots:
+        services.set_setting(org_id, "booking_slots", valid_slots)
+    services.set_setting(org_id, "booking_confirmation_sms", bool(f.get("booking_confirmation_sms")))
     audit("SETTINGS_UPDATED", "settings", org_id,
           {"sla_hours": sla, "gps_mode": services.get_setting(org_id, "gps_mode")})
     db.session.commit()
@@ -322,8 +334,12 @@ def notification_logs():
           .order_by(WhatsAppMessage.created_at.desc()).limit(100).all())
     app = (db.session.query(AppNotification).filter_by(org_id=current_user.org_id)
            .order_by(AppNotification.created_at.desc()).limit(200).all())
-    return render_template("admin/notifications.html", wa=wa, app=app,
-                           mode=whatsapp.mode(),
+    from ..models import SmsMessage
+    sms_rows = (db.session.query(SmsMessage).filter_by(org_id=current_user.org_id)
+                .order_by(SmsMessage.created_at.desc()).limit(100).all())
+    from flask import current_app as _ca
+    return render_template("admin/notifications.html", wa=wa, app=app, sms=sms_rows,
+                           mode=whatsapp.mode(), sms_mode=_ca.config.get("SMS_MODE", "sandbox"),
                            md_number=services.get_setting(current_user.org_id, "whatsapp_md_number"))
 
 

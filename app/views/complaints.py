@@ -51,6 +51,13 @@ def portal_submit():
         abort(503)
     now = now_naive()
 
+    # ------- idempotency: re-submitted form returns the original ticket (§41)
+    idem = (request.form.get("idem") or "").strip()[:40]
+    if idem:
+        dup = db.session.query(Complaint).filter_by(org_id=org.id, idempotency_key=idem).first()
+        if dup:
+            return redirect(url_for("complaints.portal_thanks", ref=dup.ref))
+
     # ------- exactly five fields
     dept_id = request.form.get("department_id", type=int)
     category = (request.form.get("category") or "").strip()
@@ -97,6 +104,7 @@ def portal_submit():
     c = Complaint(
         org_id=org.id,
         ref=services.next_complaint_ref(org, now),
+        idempotency_key=idem or None,
         department_id=dept.id,
         category=category,
         description=description,

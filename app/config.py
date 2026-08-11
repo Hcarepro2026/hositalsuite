@@ -57,6 +57,14 @@ class Config:
 
     USSD_SHARED_SECRET = os.environ.get("USSD_SHARED_SECRET", "")
 
+    # SMS provider interface (§38): sandbox | termii | twilio | disabled
+    SMS_MODE = os.environ.get("SMS_MODE", "sandbox")
+    TERMII_API_KEY = os.environ.get("TERMII_API_KEY", "")
+    TERMII_SENDER_ID = os.environ.get("TERMII_SENDER_ID", "")
+    TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    TWILIO_FROM = os.environ.get("TWILIO_FROM", "")
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     PERMANENT_SESSION_LIFETIME = 60 * 60 * 10  # 10 hours

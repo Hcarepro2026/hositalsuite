@@ -51,7 +51,12 @@ def _kpi(org_id: int) -> dict:
         CorrectiveAction.org_id == org_id,
         CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE"))).all()
 
+    from ..models import Appointment
+    bookings_today = db.session.query(Appointment).filter_by(
+        org_id=org_id, appointment_date=today, status="BOOKED").count()
+
     return {
+        "bookings_today": bookings_today,
         "today": st,
         "total_inspections": total_inspections,
         "avg_score": avg_score,

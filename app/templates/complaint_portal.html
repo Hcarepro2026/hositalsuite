@@ -26,6 +26,7 @@
   <form class="card pad-lg" method="post" action="/complaint/submit" enctype="multipart/form-data" id="cmp-form">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="loc" value="{{ qr_loc.code if qr_loc else '' }}">
+    <input type="hidden" name="idem" value="{{ csrf_token()[:24] }}-{{ range(100000, 999999) | random }}">
 
     <label>1 · Department / Unit concerned <span class="req">*</span></label>
     <select name="department_id" required>
@@ -67,7 +68,8 @@
   </form>
 
   <div class="card mt center">
-    <a href="/complaint/status">Already submitted? Check your complaint status with your reference number →</a>
+    <a href="/complaint/status">Already submitted? Check your complaint status with your reference number →</a><br>
+    <small class="muted">Want to book a visit instead? <a href="/book">Book an appointment</a></small>
   </div>
 </main>
 <div class="footer">Complaints are routed automatically to the responsible department and tracked until resolved.</div>

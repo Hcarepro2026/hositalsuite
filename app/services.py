@@ -26,6 +26,12 @@ DEFAULT_SETTINGS = {
     "reminder_channels": ["inapp", "whatsapp"],
     "complaint_channels_note": "QR / direct link / USSD",
     "voice_storage": False,               # never store audio by default
+    # ---- booking (§5) ----
+    "booking_slots": ["08:00", "09:00", "10:00", "11:00", "12:00",
+                      "13:00", "14:00", "15:00", "16:00", "17:00"],
+    "booking_capacity_per_slot": 20,
+    "booking_window_days": 30,
+    "booking_confirmation_sms": True,
 }
 
 
@@ -70,6 +76,21 @@ def next_inspection_ref(org: Organization, when: datetime) -> str:
 
 def next_complaint_ref(org: Organization, when: datetime) -> str:
     return next_ref(org, "CMP", Complaint, when.year)
+
+
+def next_appointment_ref(org: Organization, when: datetime) -> str:
+    from .models import Appointment
+    return next_ref(org, "APT", Appointment, when.year)
+
+
+def slot_is_full(org_id: int, department_id: int, day: date, slot: str) -> bool:
+    from .models import Appointment
+    cap = int(get_setting(org_id, "booking_capacity_per_slot") or 20)
+    taken = (db.session.query(Appointment)
+             .filter_by(org_id=org_id, department_id=department_id,
+                        appointment_date=day, appointment_time=slot)
+             .filter(Appointment.status.in_(("BOOKED", "ARRIVED"))).count())
+    return taken >= cap
 
 
 # ------------------------------------------------------------------ duty / roster

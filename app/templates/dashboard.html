@@ -57,6 +57,7 @@
     <div class="v">{{ kpi.sla_breaches }}</div><div class="l">SLA breaches</div></div>
   <div class="kpi {{ 'bad' if kpi.critical_findings_30d else 'good' }}">
     <div class="v">{{ kpi.critical_findings_30d }}</div><div class="l">Critical findings (30d)</div></div>
+  <div class="kpi info"><div class="v">{{ kpi.bookings_today }}</div><div class="l">Bookings today</div></div>
 </div>
 
 {# ---------------- Management Attention ---------------- #}

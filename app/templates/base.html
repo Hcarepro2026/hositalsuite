@@ -26,6 +26,7 @@
   {% endif %}
   <a href="/inspections" class="{{ 'active' if request.path == '/inspections' }}">Inspections</a>
   {% if current_user.role in ('SUPER_ADMIN','MD_CEO','ADMIN_MANAGER','HOD') %}
+    <a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a>
     <a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a>
     <a href="/corrective-actions" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>
   {% endif %}

@@ -33,18 +33,22 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.main import bp as main_bp
     from .views.inspections import bp as insp_bp
     from .views.complaints import bp as comp_bp
+    from .views.bookings import bp as book_bp
     from .views.roster import bp as roster_bp
     from .views.admincp import bp as admin_bp
     from .views.reports import bp as reports_bp
     from .views.api import bp as api_bp
 
-    for blueprint in (auth_bp, main_bp, insp_bp, comp_bp, roster_bp, admin_bp, reports_bp, api_bp):
+    for blueprint in (auth_bp, main_bp, insp_bp, comp_bp, book_bp, roster_bp,
+                      admin_bp, reports_bp, api_bp):
         app.register_blueprint(blueprint)
 
     register_security_hooks(app)
 
     with app.app_context():
         db.create_all()
+        from .migrate import ensure_schema
+        ensure_schema()
 
     @app.context_processor
     def inject_globals():

@@ -55,6 +55,9 @@ TEMPLATES = {
     "critical_score": (
         "ALERT: Critical inspection finding",
         "Inspection {ref} at {dept} recorded a critical finding. Immediate intervention required."),
+    "booking_new": (
+        "New patient booking",
+        "New booking {ref}: {dept}. Please see the Bookings screen for details."),
 }
 
 
@@ -110,6 +113,12 @@ def notify(org_id: int, user: User, template_key: str, ctx: dict,
         whatsapp.queue_message(org_id, user.phone, wa_body_override or body, kind=wa_kind,
                                media_path=wa_media_path, entity_type=entity_type,
                                entity_id=entity_id, to_user_id=user.id)
+
+    # 4) SMS — provider interface (Termii primary / Twilio fallback / sandbox)
+    if "sms" in channels and user.phone:
+        from . import sms as sms_engine
+        sms_engine.queue_sms(org_id, user.phone, wa_body_override or body, kind=wa_kind,
+                             entity_type=entity_type, entity_id=entity_id)
     db.session.commit()
 
 

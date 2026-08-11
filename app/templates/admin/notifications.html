@@ -37,6 +37,25 @@
   {% endif %}
 </div>
 
+<div class="card mb">
+  <h2>SMS delivery ({{ sms_mode }} mode — Termii primary / Twilio fallback in production)</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Created</th><th>To</th><th>Message</th><th>Provider</th><th>Status</th><th>Error</th></tr>
+    {% for m in sms %}
+    <tr>
+      <td>{{ m.created_at.strftime('%d %b %H:%M') }}</td>
+      <td>{{ m.to_number }}</td>
+      <td class="muted" style="max-width:300px">{{ m.body[:80] }}{% if m.body|length > 80 %}…{% endif %}</td>
+      <td>{{ m.provider or '—' }}</td>
+      <td><span class="pill {{ 'green' if m.status=='SENT' else ('red' if m.status=='FAILED' else 'amber') }}">{{ m.status }}</span></td>
+      <td class="muted">{{ m.last_error or '' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+</div>
+
 <div class="card">
   <h2>All notification log (last 200)</h2>
   <div class="table-wrap">

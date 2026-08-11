@@ -191,6 +191,7 @@ class Complaint(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
     ref = db.Column(db.String(40), unique=True, nullable=False)
+    idempotency_key = db.Column(db.String(40), index=True)   # duplicate-submission guard (§41)
     department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=False, index=True)
     category = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=False)
@@ -229,6 +230,48 @@ class ComplaintStatusHistory(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     at = db.Column(db.DateTime, default=now_naive)
     user = db.relationship("User")
+
+
+# ---------------------------------------------------------------- bookings
+APPOINTMENT_STATUSES = ("BOOKED", "ARRIVED", "CANCELLED", "NO_SHOW")
+
+
+class Appointment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    ref = db.Column(db.String(40), unique=True, nullable=False)
+    idempotency_key = db.Column(db.String(40), index=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=False, index=True)
+    appointment_date = db.Column(db.Date, nullable=False, index=True)
+    appointment_time = db.Column(db.String(5), nullable=False, index=True)   # "HH:MM" slot
+    patient_name = db.Column(db.String(120), nullable=False)
+    phone = db.Column(db.String(32), nullable=False)
+    status = db.Column(db.String(12), default="BOOKED", nullable=False, index=True)
+    source = db.Column(db.String(12), default="link")       # qr | link | ussd | staff
+    qr_location_id = db.Column(db.Integer, db.ForeignKey("qr_location.id"))
+    created_at = db.Column(db.DateTime, default=now_naive)
+    arrived_at = db.Column(db.DateTime)
+    cancelled_at = db.Column(db.DateTime)
+    department = db.relationship("Department")
+    qr_location = db.relationship("QrLocation")
+
+
+# ---------------------------------------------------------------- SMS delivery
+class SmsMessage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    to_number = db.Column(db.String(32), nullable=False)
+    body = db.Column(db.String(480), nullable=False)
+    kind = db.Column(db.String(30), nullable=False)          # confirmation | reminder | alert
+    entity_type = db.Column(db.String(20))
+    entity_id = db.Column(db.Integer)
+    provider = db.Column(db.String(16))                      # sandbox | termii | twilio
+    status = db.Column(db.String(12), default="QUEUED", index=True)  # QUEUED|SENT|FAILED
+    provider_id = db.Column(db.String(80))
+    attempts = db.Column(db.Integer, default=0)
+    last_error = db.Column(db.String(400))
+    created_at = db.Column(db.DateTime, default=now_naive)
+    sent_at = db.Column(db.DateTime)
 
 
 # ---------------------------------------------------------------- corrective actions

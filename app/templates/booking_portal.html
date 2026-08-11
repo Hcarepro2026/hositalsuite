@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e5a8a">
+<title>Book a Visit — {{ org.name }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="portal-head">
+  <div style="font-size:2rem">📅</div>
+  <h1>{{ org.name }}</h1>
+  <div>Book a Hospital Visit</div>
+  {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}
+</div>
+<main class="wrap" style="max-width:560px">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="privacy-note">🔒 No account needed. We only ask for what the hospital needs
+    to prepare for your visit. You can cancel anytime with your booking reference.</div>
+
+  <form class="card pad-lg" method="post" action="/book/submit">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="loc" value="{{ qr_loc.code if qr_loc else '' }}">
+    <input type="hidden" name="idem" value="{{ idem }}">
+
+    <label>1 · Service / Department <span class="req">*</span></label>
+    <select name="department_id" required>
+      <option value="">— Select service —</option>
+      {% for d in depts %}
+      <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label>2 · Preferred date <span class="req">*</span></label>
+    <input type="date" name="appointment_date" min="{{ min_date }}" max="{{ max_date }}"
+           value="{{ form.get('appointment_date','') if form else '' }}" required>
+
+    <label>3 · Preferred time <span class="req">*</span></label>
+    <select name="appointment_time" required>
+      <option value="">— Select time —</option>
+      {% for s in slots %}
+      <option {{ 'selected' if form and form.get('appointment_time')==s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <div class="hint">Opening hours — the hospital will confirm if anything changes.</div>
+
+    <label>4 · Patient full name <span class="req">*</span></label>
+    <input type="text" name="patient_name" required autocomplete="name"
+           value="{{ form.get('patient_name','') if form else '' }}">
+
+    <label>5 · Phone number <span class="req">*</span></label>
+    <input type="tel" name="phone" required inputmode="tel" placeholder="e.g. 08012345678"
+           value="{{ form.get('phone','') if form else '' }}">
+
+    <button class="btn big mt" type="submit" style="width:100%">BOOK MY VISIT</button>
+  </form>
+
+  <div class="card mt center">
+    <a href="/book/status">Already booked? Check or cancel with your reference →</a><br>
+    <small class="muted">Prefer to make a complaint? <a href="/complaint">Complaint portal</a></small>
+  </div>
+
+  <div class="card mt">
+    <h3>Trouble booking online?</h3>
+    <p class="muted">Call the hospital directly: <b>{{ org.name }}</b> — or visit the reception desk.
+       Staff will book your visit for you.</p>
+  </div>
+</main>
+<div class="footer">Booking is free · You will receive a reference number · Please arrive 15 minutes early</div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

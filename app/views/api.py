@@ -61,6 +61,51 @@ def whatsapp_webhook():
 
 
 # ================================================================ USSD / gateway intake
+@csrf_exempt("api.ussd_booking")
+@bp.post("/ussd/booking")
+@rate_limit(limit=30, window=60.0)
+def ussd_booking():
+    """USSD aggregator intake for bookings (spec §5 USSD-ready)."""
+    from datetime import date as _date, timedelta
+    cfg_secret = current_app.config.get("USSD_SHARED_SECRET", "")
+    data = request.get_json(silent=True) or {}
+    if not cfg_secret or data.get("secret") != cfg_secret:
+        return jsonify(error="unauthorized"), 401
+    org = db.session.query(Organization).filter_by(code=data.get("hospital_code", "")).first()
+    if not org:
+        org = db.session.query(Organization).order_by(Organization.id).first()
+    dept = (db.session.query(Department)
+            .filter_by(org_id=org.id, active=True)
+            .filter(Department.name.ilike(f"%{data.get('department', '')}%")).first())
+    phone = (data.get("phone") or "").strip()
+    name = (data.get("name") or "").strip()
+    raw_date = (data.get("date") or "").strip()
+    slot = (data.get("time") or "").strip()
+    if not dept or not name or len(phone) < 7:
+        return jsonify(error="missing department, name or phone"), 422
+    try:
+        day = _date.fromisoformat(raw_date)
+    except ValueError:
+        return jsonify(error="invalid date"), 422
+    now = now_naive()
+    window = int(services.get_setting(org.id, "booking_window_days") or 30)
+    slots = services.get_setting(org.id, "booking_slots") or []
+    if day < now.date() or day > now.date() + timedelta(days=window) or slot not in slots:
+        return jsonify(error="date/time not available"), 422
+    if services.slot_is_full(org.id, dept.id, day, slot):
+        return jsonify(error="slot full"), 422
+    from ..models import Appointment
+    apt = Appointment(org_id=org.id, ref=services.next_appointment_ref(org, now),
+                      department_id=dept.id, appointment_date=day, appointment_time=slot,
+                      patient_name=name[:120], phone=phone, status="BOOKED", source="ussd")
+    db.session.add(apt)
+    db.session.flush()
+    audit("BOOKING_CREATED", "appointment", apt.id, {"ref": apt.ref, "source": "ussd"}, org_id=org.id)
+    db.session.commit()
+    return jsonify(ref=apt.ref, status="BOOKED",
+                   message=f"Booking confirmed: {day} at {slot}. Reference: {apt.ref}")
+
+
 @csrf_exempt("api.ussd_complaint")
 @bp.post("/ussd/complaint")
 @rate_limit(limit=30, window=60.0)
