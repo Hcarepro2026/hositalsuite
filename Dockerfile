@@ -1,0 +1,23 @@
+# Portable production deployment (fallback target per failure-matrix §40)
+FROM python:3.13-slim
+
+WORKDIR /srv/hospitalsuite
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8077
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY run.py start.sh ./
+RUN chmod +x start.sh
+
+# data directories (mount a volume in production to persist DB/uploads/backups
+# when using SQLite; with PostgreSQL only uploads/backups need persistence)
+RUN mkdir -p data/uploads data/reports data/backups
+
+EXPOSE 8077
+
+# gunicorn: production WSGI server (workers tunable via WEB_CONCURRENCY)
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8077} --workers ${WEB_CONCURRENCY:-2} --threads 4 --timeout 120 'app:create_app()'"]

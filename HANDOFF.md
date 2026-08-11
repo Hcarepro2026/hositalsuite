@@ -58,6 +58,16 @@ python run.py               # serves on http://0.0.0.0:8077
 ## What is deliberately NOT in git (safety)
 `data/` (live database, uploads, PDFs), `.secret_key`, session cookie files — see `.gitignore`.
 
+## Supabase status (updated 2026-08-11)
+- Founder's Supabase project exists: `db.zhhdhfllypkzvmukilwt.supabase.co` (free tier).
+- Connection string stored privately in `.env` (gitignored, never push it).
+- **Full test suite (28/28) verified green on PostgreSQL 17** — zero code changes needed.
+- The Arena workspace sandbox cannot open direct TCP to Supabase (web-only egress), so:
+  - workspace live preview runs on SQLite (`data/app.db`, persisted)
+  - production deployment (Render/Docker) connects to Supabase via `DATABASE_URL`
+- On any new host run: `python run.py dbcheck` then `python run.py seed`
+- See ROADMAP.md for the Wave A–D upgrade plan (booking, queue, feedback, Termii SMS, referrals, AI, attendance).
+
 ## Next steps (roadmap agreed with founder)
 1. **Database → Supabase (free PostgreSQL)**: create free project at supabase.com,
    get connection string, set `DATABASE_URL` (add `?sslmode=require`). App already supports it.

@@ -1,0 +1,21 @@
+# One-click deploy blueprint for Render.com (free tier for staging;
+# Render says free instances are not for production — upgrade when revenue arrives)
+services:
+  - type: web
+    name: hospital-suite
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 "app:create_app()"
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL          # paste your Supabase connection string (?sslmode=require)
+        sync: false
+      - key: PUBLIC_BASE_URL        # e.g. https://hospital-suite.onrender.com
+        sync: false
+      - key: WHATSAPP_MODE
+        value: sandbox
+      - key: PYTHON_VERSION
+        value: 3.13.14

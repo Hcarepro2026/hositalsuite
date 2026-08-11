@@ -177,6 +177,19 @@ def main():
         tick(app)
         print("Scheduler pass complete.")
         return
+    if len(sys.argv) > 1 and sys.argv[1] == "dbcheck":
+        # First command to run on any new host: verifies DATABASE_URL and creates tables.
+        os.environ["DISABLE_SCHEDULER"] = "1"
+        from app import create_app
+        from app.models import db
+        app = create_app(scheduler=False)
+        with app.app_context():
+            uri = str(db.engine.url)
+            print("Connecting to:", uri.split("@")[-1] if "@" in uri else uri)
+            db.session.execute(db.text("SELECT 1"))
+            db.create_all()
+            print("✅ Database reachable and schema ready.")
+        return
     if len(sys.argv) > 1 and sys.argv[1] == "backup":
         from app import create_app
         from app.scheduler import job_nightly_backup

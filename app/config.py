@@ -1,6 +1,13 @@
 import os
 from zoneinfo import ZoneInfo
 
+# Load private .env file if present (never committed to git)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+except ImportError:
+    pass
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
@@ -10,8 +17,10 @@ def _data_uri(default_rel: str) -> str:
     if not url:
         return "sqlite:///" + os.path.join(DATA_DIR, default_rel)
     if url.startswith("sqlite:///") and not url.startswith("sqlite:////"):
-        # make relative sqlite paths absolute inside DATA_DIR
-        return "sqlite:///" + os.path.join(DATA_DIR, url[len("sqlite:///"):])
+        rel = url[len("sqlite:///"):]
+        # relative path with a folder part (e.g. data/app.db) resolves from project root
+        base = BASE_DIR if os.path.dirname(rel) else DATA_DIR
+        return "sqlite:///" + os.path.join(base, rel)
     return url
 
 
