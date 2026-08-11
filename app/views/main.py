@@ -113,6 +113,34 @@ def notifications_inbox():
     return render_template("notifications.html", items=items)
 
 
+# ------------------------------------------------------------------ alert preferences (§19)
+@bp.get("/alert-settings")
+@require_login
+def alert_settings():
+    from ..models import UserPref
+    return render_template("alert_settings.html", prefs=UserPref.bundle(current_user.id))
+
+
+@bp.post("/alert-settings")
+@require_login
+def alert_settings_save():
+    from ..models import UserPref
+    f = request.form
+    UserPref.set(current_user.id, "voice_enabled", bool(f.get("voice_enabled")))
+    lvl = f.get("voice_min_level")
+    UserPref.set(current_user.id, "voice_min_level",
+                 lvl if lvl in ("standard", "urgent", "emergency") else "standard")
+    qs, qe = f.get("quiet_start") or "22:00", f.get("quiet_end") or "07:00"
+    UserPref.set(current_user.id, "quiet_start", qs)
+    UserPref.set(current_user.id, "quiet_end", qe)
+    UserPref.set(current_user.id, "push_enabled", bool(f.get("push_enabled")))
+    audit("ALERT_PREFS_UPDATED", "user", current_user.id,
+          {"voice": bool(f.get("voice_enabled")), "level": UserPref.get(current_user.id, "voice_min_level")})
+    db.session.commit()
+    flash("Alert preferences saved.", "success")
+    return redirect(url_for("main.alert_settings"))
+
+
 @bp.post("/notifications/read")
 @require_login
 def notifications_read():

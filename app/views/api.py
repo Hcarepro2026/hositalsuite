@@ -27,6 +27,50 @@ def health():
                    whatsapp_mode=whatsapp.mode())
 
 
+# ================================================================ live alerts (§19/§37)
+ALERT_TEMPLATES = {
+    "complaint_escalated": "emergency",
+    "critical_score": "emergency",
+    "inspection_overdue": "urgent",
+    "ca_overdue": "urgent",
+    "complaint_sla_warning": "standard",
+}
+
+
+@bp.get("/alerts/prefs")
+def alerts_prefs():
+    from flask_login import current_user
+    if not current_user.is_authenticated:
+        return jsonify(error="unauthenticated"), 401
+    from ..models import UserPref
+    return jsonify(UserPref.bundle(current_user.id))
+
+
+@bp.get("/alerts/poll")
+def alerts_poll():
+    """New alert-level notifications since ?after=<id> — drives toasts, browser
+    notifications and voice announcements (polling fallback per §22/§40)."""
+    from flask_login import current_user
+    if not current_user.is_authenticated:
+        return jsonify(error="unauthenticated"), 401
+    after = request.args.get("after", type=int) or 0
+    from ..models import AppNotification, UserPref
+    rows = (db.session.query(AppNotification)
+            .filter(AppNotification.user_id == current_user.id,
+                    AppNotification.channel == "inapp",
+                    AppNotification.id > after,
+                    AppNotification.template_key.in_(tuple(ALERT_TEMPLATES)))
+            .order_by(AppNotification.id).limit(10).all())
+    prefs = UserPref.bundle(current_user.id)
+    return jsonify({
+        "prefs": prefs,
+        "alerts": [{"id": r.id, "subject": r.subject, "body": r.body,
+                    "urgency": ALERT_TEMPLATES.get(r.template_key, "standard"),
+                    "at": r.created_at.strftime("%H:%M")} for r in rows],
+        "last_id": rows[-1].id if rows else after,
+    })
+
+
 # ================================================================ WhatsApp webhook
 @csrf_exempt("api.whatsapp_webhook")
 @bp.get("/whatsapp/webhook")

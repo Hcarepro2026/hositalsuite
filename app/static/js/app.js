@@ -178,6 +178,99 @@
     alert("You are offline. Your inspection has been SAVED LOCALLY and will sync automatically when connectivity returns.");
   };
 
+  /* ------------------------------------------------ live alert engine (§19): bell + voice + browser notifications */
+  window.hmsAlerts = {
+    lastId: parseInt(localStorage.getItem("hms-alert-last") || "0", 10),
+    prefs: { voice_enabled: true, voice_min_level: "standard", quiet_start: "22:00",
+             quiet_end: "07:00", push_enabled: false },
+    LEVELS: { standard: 0, urgent: 1, emergency: 2 },
+
+    inQuietHours: function () {
+      try {
+        var now = new Date();
+        var cur = now.getHours() * 60 + now.getMinutes();
+        var p = function (s) { var x = (s || "0:0").split(":"); return parseInt(x[0], 10) * 60 + parseInt(x[1] || 0, 10); };
+        var a = p(this.prefs.quiet_start), b = p(this.prefs.quiet_end);
+        return a <= b ? (cur >= a && cur < b) : (cur >= a || cur < b);
+      } catch (e) { return false; }
+    },
+
+    bell: function (urgency) {
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        var ctx = new Ctx();
+        var notes = urgency === "emergency" ? [[880, 0], [660, .18], [880, .36], [660, .54]]
+                  : urgency === "urgent" ? [[740, 0], [740, .2], [740, .4]]
+                  : [[660, 0], [880, .22]];
+        notes.forEach(function (n) {
+          var o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = "sine"; o.frequency.value = n[0];
+          g.gain.setValueAtTime(0.0001, ctx.currentTime + n[1]);
+          g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + n[1] + .02);
+          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + n[1] + .18);
+          o.connect(g); g.connect(ctx.destination);
+          o.start(ctx.currentTime + n[1]); o.stop(ctx.currentTime + n[1] + .2);
+        });
+      } catch (e) { /* sound is an enhancement */ }
+    },
+
+    speak: function (text, urgency) {
+      if (!this.prefs.voice_enabled) return;
+      if ((this.LEVELS[urgency] || 0) < (this.LEVELS[this.prefs.voice_min_level] || 0)) return;
+      if (this.inQuietHours()) return;
+      try {
+        if (!('speechSynthesis' in window)) return;
+        var u = new SpeechSynthesisUtterance(text);
+        u.rate = urgency === "emergency" ? 1.05 : 0.98;
+        u.lang = "en-NG";
+        window.speechSynthesis.speak(u);
+      } catch (e) { /* fall back silently to text */ }
+    },
+
+    toast: function (a) {
+      var zone = document.getElementById("toast-zone");
+      if (!zone) return;
+      var el = document.createElement("div");
+      el.className = "toast " + a.urgency;
+      el.innerHTML = "<div class='t-title'>" + a.subject + "</div><div class='t-body'>" + a.body + "</div>";
+      zone.appendChild(el);
+      setTimeout(function () { el.style.opacity = "0"; el.style.transition = "opacity .6s";
+        setTimeout(function () { el.remove(); }, 650); }, 9000);
+    },
+
+    notify: function (a) {
+      if (!this.prefs.push_enabled) return;
+      if (!('Notification' in window) || Notification.permission !== "granted") return;
+      try { new Notification(a.subject, { body: a.body, tag: "hms-" + a.id }); } catch (e) {}
+    },
+
+    poll: function () {
+      var self = this;
+      fetch("/api/v1/alerts/poll?after=" + self.lastId).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.prefs) self.prefs = data.prefs;
+          (data.alerts || []).forEach(function (a) {
+            self.toast(a);
+            self.notify(a);
+            if (!self.inQuietHours()) self.bell(a.urgency);
+            self.speak(a.urgency === "emergency" ? "Attention. " + a.body
+                     : a.urgency === "urgent" ? "Alert. " + a.body : a.body, a.urgency);
+          });
+          if (data.last_id && data.last_id > self.lastId) {
+            self.lastId = data.last_id;
+            localStorage.setItem("hms-alert-last", String(self.lastId));
+          }
+        }).catch(function () { /* offline — next pass */ });
+    },
+
+    start: function () {
+      var self = this;
+      self.poll();
+      setInterval(function () { self.poll(); }, 30000);
+    }
+  };
+
   /* ------------------------------------------------ draft autosave for inspection form */
   window.hmsDraft = function (form, key) {
     if (!form) return;

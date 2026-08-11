@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Alert settings{% endblock %}
+{% block content %}
+<h1>🔔 Voice &amp; Notification Alerts</h1>
+<p class="muted">Voice alerts are an enhancement — if your browser cannot speak,
+text notifications are always shown instead. Alerts respect your quiet hours.</p>
+
+<form class="card pad-lg" method="post" style="max-width:640px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <h2>🗣 Voice reminders (spoken aloud by your device)</h2>
+  <label class="row" style="gap:8px"><input type="checkbox" name="voice_enabled" value="1"
+    {{ 'checked' if prefs.voice_enabled }} style="width:auto"> Speak alerts aloud</label>
+  <label>Speak alerts of this urgency or higher</label>
+  <select name="voice_min_level">
+    <option value="standard" {{ 'selected' if prefs.voice_min_level=='standard' }}>Standard — all alerts</option>
+    <option value="urgent" {{ 'selected' if prefs.voice_min_level=='urgent' }}>Urgent — urgent &amp; emergency only</option>
+    <option value="emergency" {{ 'selected' if prefs.voice_min_level=='emergency' }}>Emergency — critical only</option>
+  </select>
+  <div class="hint">Examples: escalated complaint = emergency · overdue inspection = urgent ·
+  SLA warning = standard.</div>
+
+  <h2 class="mt">🌙 Quiet hours (no sound)</h2>
+  <div class="grid cols2">
+    <div><label>From</label><input type="time" name="quiet_start" value="{{ prefs.quiet_start }}"></div>
+    <div><label>Until</label><input type="time" name="quiet_end" value="{{ prefs.quiet_end }}"></div>
+  </div>
+
+  <h2 class="mt">📲 Browser notifications</h2>
+  <label class="row" style="gap:8px"><input type="checkbox" name="push_enabled" value="1"
+    {{ 'checked' if prefs.push_enabled }} style="width:auto"> Show browser/device notifications for alerts</label>
+  <button type="button" class="icon-btn mt" id="push-test">🔔 Test: grant permission &amp; send a test alert</button>
+
+  <button class="btn big mt">Save preferences</button>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('push-test').addEventListener('click', function () {
+  if (!('Notification' in window)) { alert('This browser does not support notifications. In-app alerts will be used.'); return; }
+  Notification.requestPermission().then(function (p) {
+    if (p === 'granted') {
+      new Notification('Hospital Suite — test alert', { body: 'Alerts will appear like this.', tag: 'hms-test' });
+    } else {
+      alert('Permission not granted — you will still receive in-app and voice alerts.');
+    }
+  });
+});
+</script>
+{% endblock %}

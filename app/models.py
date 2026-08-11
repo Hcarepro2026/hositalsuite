@@ -406,6 +406,51 @@ class AuditLog(db.Model):
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+# ---------------------------------------------------------------- user prefs (§19)
+class UserPref(db.Model):
+    """Per-user alert preferences: voice reminders, quiet hours, browser push."""
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), primary_key=True)
+    key = db.Column(db.String(40), primary_key=True)
+    value = db.Column(db.Text)
+
+    DEFAULTS = {
+        "voice_enabled": True,
+        "voice_min_level": "standard",   # standard | urgent | emergency
+        "quiet_start": "22:00",
+        "quiet_end": "07:00",
+        "push_enabled": False,
+    }
+
+    @staticmethod
+    def get(user_id: int, key: str):
+        row = db.session.get(UserPref, (user_id, key))
+        if row is not None:
+            return row.value
+        d = UserPref.DEFAULTS.get(key)
+        if isinstance(d, bool):
+            return d
+        return d
+
+    @staticmethod
+    def set(user_id: int, key: str, value):
+        row = db.session.get(UserPref, (user_id, key))
+        if row is None:
+            row = UserPref(user_id=user_id, key=key)
+            db.session.add(row)
+        row.value = str(value)
+
+    @staticmethod
+    def bundle(user_id: int) -> dict:
+        out = {}
+        for k, d in UserPref.DEFAULTS.items():
+            v = UserPref.get(user_id, k)
+            if isinstance(d, bool):
+                out[k] = str(v).lower() in ("true", "1", "on")
+            else:
+                out[k] = v
+        return out
+
+
 # ---------------------------------------------------------------- settings
 class Setting(db.Model):
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), primary_key=True)
