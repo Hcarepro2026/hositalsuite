@@ -153,7 +153,23 @@ All rules from the specification are implemented **and covered by automated test
 
 ---
 
-## 6. Security & privacy summary
+## 8. Scaling beyond the free tier
+
+The app runs with **1 web worker + threads** on purpose: an in-process scheduler
+delivers reminders, SLA escalations, WhatsApp/SMS retries and nightly backups, and it
+must run exactly once. When traffic grows:
+
+1. Move to a paid instance (Render Starter or a VPS with Docker — `Dockerfile` included).
+2. To run multiple web workers, start **one** dedicated scheduler process
+   (`python run.py tick` in a loop or a worker with the scheduler enabled) and set
+   `DISABLE_SCHEDULER=1` on all web workers.
+3. Move uploads/PDFs to object storage (Supabase Storage or any S3-compatible bucket)
+   when file volume grows — local disk on free tiers is ephemeral.
+4. Load-test before announcing capacity targets (`locust` recommended; see ROADMAP Wave D).
+
+---
+
+## 9. Security & privacy summary
 
 - Sessions: server-side, HttpOnly, SameSite=Lax, 10 h lifetime; CSRF token on every POST.
 - RBAC enforced **server-side** on every route (never frontend-only).

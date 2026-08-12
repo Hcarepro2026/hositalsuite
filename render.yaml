@@ -1,21 +1,35 @@
-# One-click deploy blueprint for Render.com (free tier for staging;
-# Render says free instances are not for production — upgrade when revenue arrives)
+# One-click Render Blueprint — https://render.com/docs/blueprint-spec
+# Free tier for the pilot; Render states free instances are not for production,
+# so upgrade to a paid instance once the hospital is paying.
+#
+# IMPORTANT: workers=1 on purpose. The app runs an in-process scheduler
+# (reminders, SLA escalation, WhatsApp/SMS retries, nightly backup). With more
+# than one worker those jobs would run once per worker and double-send.
+# Scale horizontally later by moving the scheduler to its own process
+# (set DISABLE_SCHEDULER=1 on web workers) — see README "Scaling".
 services:
   - type: web
     name: hospital-suite
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 "app:create_app()"
+    region: frankfurt            # choose the region closest to your patients
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    # 1 worker, 4 threads = scheduler runs exactly once, still handles concurrency
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 "app:create_app()"
     healthCheckPath: /api/v1/health
+    autoDeploy: true
     envVars:
-      - key: SECRET_KEY
-        generateValue: true
-      - key: DATABASE_URL          # paste your Supabase connection string (?sslmode=require)
-        sync: false
-      - key: PUBLIC_BASE_URL        # e.g. https://hospital-suite.onrender.com
-        sync: false
-      - key: WHATSAPP_MODE
-        value: sandbox
       - key: PYTHON_VERSION
-        value: 3.13.14
+        value: 3.12.7            # matches runtime.txt; app is 3.11+ compatible
+      - key: SECRET_KEY
+        generateValue: true      # Render generates a strong random key
+      - key: DATABASE_URL        # paste your Supabase connection string + ?sslmode=require
+        sync: false
+      - key: PUBLIC_BASE_URL     # set AFTER first deploy to https://<your-app>.onrender.com
+        sync: false
+      - key: TIMEZONE
+        value: Africa/Lagos
+      - key: WHATSAPP_MODE
+        value: sandbox           # switch to 'cloud' + credentials when Meta is approved
+      - key: SMS_MODE
+        value: sandbox           # switch to 'termii' + credentials when ready

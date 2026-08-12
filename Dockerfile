@@ -19,5 +19,8 @@ RUN mkdir -p data/uploads data/reports data/backups
 
 EXPOSE 8077
 
-# gunicorn: production WSGI server (workers tunable via WEB_CONCURRENCY)
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8077} --workers ${WEB_CONCURRENCY:-2} --threads 4 --timeout 120 'app:create_app()'"]
+# gunicorn: production WSGI server.
+# WEB_CONCURRENCY defaults to 1 because the in-process scheduler must run exactly
+# once; multiple workers would double-send reminders/escalations. When you scale
+# horizontally, run one scheduler process and set DISABLE_SCHEDULER=1 on web workers.
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8077} --workers ${WEB_CONCURRENCY:-1} --threads ${WEB_THREADS:-4} --timeout 120 'app:create_app()'"]
