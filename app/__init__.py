@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from flask import Flask, g, redirect, render_template, request, url_for
+from flask import Flask, g, render_template, request
 from flask_login import LoginManager
 
 from .config import Config
@@ -28,7 +28,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     db.init_app(app)
     login_manager.init_app(app)
 
-    from .security import csrf_protect, register_security_hooks
+    from .security import register_security_hooks
     from .views.auth import bp as auth_bp
     from .views.main import bp as main_bp
     from .views.inspections import bp as insp_bp
@@ -48,6 +48,20 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     register_security_hooks(app)
 
     with app.app_context():
+        # SQLite hardening: WAL lets the scheduler thread and web requests write
+        # concurrently without "database is locked" errors; busy_timeout makes
+        # writers wait instead of failing instantly.
+        if str(db.engine.url).startswith("sqlite"):
+            from sqlalchemy import event
+
+            @event.listens_for(db.engine, "connect")
+            def _sqlite_pragmas(dbapi_conn, _record):
+                cur = dbapi_conn.cursor()
+                cur.execute("PRAGMA journal_mode=WAL")
+                cur.execute("PRAGMA synchronous=NORMAL")
+                cur.execute("PRAGMA busy_timeout=15000")
+                cur.close()
+
         db.create_all()
         from .migrate import ensure_schema
         ensure_schema()

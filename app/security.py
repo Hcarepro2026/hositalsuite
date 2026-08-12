@@ -6,10 +6,9 @@ import os
 import re
 import secrets
 import time
-import uuid
 from collections import defaultdict, deque
 
-from flask import abort, g, redirect, render_template, request, session, url_for, flash
+from flask import abort, redirect, render_template, request, session, url_for
 from flask_login import current_user
 
 from .config import Config
@@ -80,6 +79,10 @@ class RateLimiter:
 
     def allow(self, key: str, limit: int, window: float) -> bool:
         now = time.monotonic()
+        # bound memory: drop stale keys occasionally
+        if len(self.hits) > 10000:
+            for k in [k for k, dq in self.hits.items() if not dq or now - dq[-1] > 600]:
+                del self.hits[k]
         dq = self.hits[key]
         while dq and now - dq[0] > window:
             dq.popleft()
@@ -175,6 +178,9 @@ def resolve_upload_path(rel_path: str) -> str | None:
 # ------------------------------------------------------------------ hooks
 def register_security_hooks(app):
     app.before_request(csrf_protect)
+
+    from .views.auth import enforce_pending_password_change
+    app.before_request(enforce_pending_password_change)
 
     @app.after_request
     def security_headers(resp):

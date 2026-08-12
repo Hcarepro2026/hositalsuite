@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 from .models import (Complaint, Department, DutyRoster, Inspection, Organization,
-                     QrLocation, Section, Setting, Unit, User, db, now_naive)
+                     Section, Setting, Unit, User, db, now_naive)
 from . import scoring
 
 # ------------------------------------------------------------------ settings

@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 import json
+import threading
 
 from flask import request
 
 from .models import AuditLog, db, now_naive
+
+# serialize chain construction within this process so concurrent requests
+# cannot read the same "last hash" and fork the chain
+_chain_lock = threading.Lock()
 
 
 def last_hash(org_id: int) -> str:
@@ -21,14 +26,17 @@ def audit(action: str, entity_type: str = None, entity_id: int = None,
     oid = org_id if org_id is not None else (u.org_id if u else None)
     detail_json = json.dumps(detail or {}, default=str, sort_keys=True)
     at = now_naive()
-    prev = last_hash(oid) if oid else "GENESIS"
-    h = AuditLog.chain_hash(prev, oid, uid, action, entity_type, entity_id, detail_json, at)
-    db.session.add(AuditLog(
-        org_id=oid, user_id=uid, action=action, entity_type=entity_type, entity_id=entity_id,
-        detail=detail_json, ip=(request.remote_addr if request else None),
-        user_agent=(request.user_agent.string[:250] if request else None),
-        at=at, prev_hash=prev, hash=h,
-    ))
+    with _chain_lock:
+        db.session.flush()   # include rows added in this transaction
+        prev = last_hash(oid) if oid else "GENESIS"
+        h = AuditLog.chain_hash(prev, oid, uid, action, entity_type, entity_id, detail_json, at)
+        db.session.add(AuditLog(
+            org_id=oid, user_id=uid, action=action, entity_type=entity_type, entity_id=entity_id,
+            detail=detail_json, ip=(request.remote_addr if request else None),
+            user_agent=(request.user_agent.string[:250] if request else None),
+            at=at, prev_hash=prev, hash=h,
+        ))
+        db.session.flush()
 
 
 def verify_chain(org_id: int) -> tuple[bool, int]:

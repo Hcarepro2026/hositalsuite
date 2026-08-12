@@ -17,12 +17,12 @@ import os
 import shutil
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 from . import notifications, scoring, services, whatsapp
 from .audit import audit
 from .models import (AppNotification, Complaint, CorrectiveAction, DutyRoster,
-                     Inspection, Organization, db, now_naive)
+                     Organization, db, now_naive)
 
 _started = False
 _lock = threading.Lock()

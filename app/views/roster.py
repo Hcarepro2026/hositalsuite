@@ -10,7 +10,7 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request,
 from flask_login import current_user
 
 from ..audit import audit
-from ..models import DutyRoster, Organization, User, db, now_naive
+from ..models import DutyRoster, User, db, now_naive
 from ..security import require_role
 
 bp = Blueprint("roster", __name__)

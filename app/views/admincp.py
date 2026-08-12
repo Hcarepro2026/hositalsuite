@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 import shutil
-from datetime import date
 
 from flask import (Blueprint, abort, flash, redirect, render_template, request,
                    send_file, url_for)
@@ -14,7 +13,7 @@ from ..audit import audit, verify_chain
 from ..config import Config
 from ..models import (AppNotification, AuditLog, ComplaintCategory, Department,
                       DutyRoster, Organization, QrLocation, ReportFile, Section,
-                      Setting, Unit, User, WhatsAppMessage, db, new_code, now_naive)
+                      Unit, User, WhatsAppMessage, db, new_code)
 from ..security import password_strength_errors, require_role, save_upload
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")

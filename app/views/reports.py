@@ -6,15 +6,15 @@ import io
 import os
 from datetime import date, datetime, timedelta
 
-from flask import (Blueprint, Response, abort, flash, redirect, render_template,
-                   request, send_file, url_for)
+from flask import (Blueprint, Response, abort, render_template,
+                   request, send_file)
 from flask_login import current_user
 
 from .. import pdfgen, scoring, services
 from ..audit import audit
 from ..config import Config
 from ..models import (Complaint, CorrectiveAction, Department, DutyRoster,
-                      Inspection, Organization, ReportFile, User, db, new_code,
+                      Inspection, Organization, ReportFile, db, new_code,
                       now_naive)
 from ..security import require_role
 
@@ -212,7 +212,7 @@ def department_report(dept_id: int):
         header = ["Date", "Ref", "Inspector", "Total /25", "Rating"]
         rows = [[i.duty_date.isoformat(), i.ref, i.inspector.name, i.total_score, i.rating]
                 for i in hist]
-        notes = [f"Criterion averages: " + ", ".join(
+        notes = ["Criterion averages: " + ", ".join(
             f"{scoring.CRITERIA[n]['title']}: {criterion_avgs[n]}" for n in range(1, 6)
             if criterion_avgs[n] is not None)] + (["Recurring: " + r for r in recurring] or [])
         path = os.path.join(Config.REPORT_DIR, f"dept-{dept.id}-{new_code(4)}.pdf")

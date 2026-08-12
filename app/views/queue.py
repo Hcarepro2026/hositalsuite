@@ -3,13 +3,12 @@ from __future__ import annotations
 
 import re
 import secrets
-from datetime import timedelta
 
-from flask import (Blueprint, abort, flash, jsonify, redirect, render_template,
+from flask import (Blueprint, abort, flash, redirect, render_template,
                    request, url_for)
 from flask_login import current_user
 
-from .. import services, sms as sms_engine
+from .. import sms as sms_engine
 from ..audit import audit
 from ..models import Appointment, Department, QueueTicket, db, now_naive
 from ..security import rate_limit, require_login

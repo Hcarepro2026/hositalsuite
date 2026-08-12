@@ -101,7 +101,10 @@ def portal_submit():
         depts = db.session.query(Department).filter_by(org_id=org.id, active=True).all()
         for e in errors:
             flash(e, "error")
-        return render_template("booking_portal.html", org=org, depts=depts, qr_loc=None,
+        # preserve the QR location tag on re-render
+        loc_code_err = (request.form.get("loc") or "").strip().upper()
+        qr_loc_err = db.session.query(QrLocation).filter_by(code=loc_code_err).first() if loc_code_err else None
+        return render_template("booking_portal.html", org=org, depts=depts, qr_loc=qr_loc_err,
                                min_date=now.date().isoformat(),
                                max_date=(now.date() + timedelta(days=int(
                                    services.get_setting(org.id, "booking_window_days") or 30))).isoformat(),
@@ -211,18 +214,5 @@ def staff_list():
                            today=now_naive().date())
 
 
-@bp.post("/bookings/<int:aid>/arrive")
-@require_login
-def staff_arrive(aid: int):
-    apt = db.session.get(Appointment, aid)
-    if not apt or apt.org_id != current_user.org_id:
-        abort(404)
-    if apt.status != "BOOKED":
-        flash("Only a booked appointment can be checked in.", "error")
-        return redirect(url_for("bookings.staff_list"))
-    apt.status = "ARRIVED"
-    apt.arrived_at = now_naive()
-    audit("BOOKING_ARRIVED", "appointment", apt.id, {"ref": apt.ref})
-    db.session.commit()
-    flash(f"{apt.patient_name} checked in.", "success")
-    return redirect(url_for("bookings.staff_list"))
+# Note: appointment check-in is handled by /bookings/<id>/checkin-queue
+# (see app/views/queue.py) which also issues the patient's queue ticket.

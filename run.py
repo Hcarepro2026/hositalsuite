@@ -14,8 +14,6 @@ import os
 import sys
 from datetime import timedelta
 
-from app.config import Config
-
 os.environ.setdefault("DISABLE_SCHEDULER", "0")
 
 
@@ -110,7 +108,7 @@ def seed(demo: bool = False):
 def _seed_demo(app, org, am1, am2, hod_med):
     """Optional evaluation data: historical inspections + one complaint."""
     from app import pdfgen, scoring, services
-    from app.models import (Complaint, ComplaintStatusHistory, Department, Inspection,
+    from app.models import (Department, Inspection,
                             InspectionScore, db, new_code, now_naive)
     from app.config import Config
     import os as _os

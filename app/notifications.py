@@ -11,7 +11,7 @@ from email.mime.text import MIMEText
 from flask import current_app
 
 from . import services, whatsapp
-from .models import AppNotification, User, db, now_naive
+from .models import AppNotification, User, db
 
 # Templates: (subject, body). Placeholders: {name},{hospital},{date},{ref},{dept},{time},{details}
 TEMPLATES = {

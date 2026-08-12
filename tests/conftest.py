@@ -74,6 +74,10 @@ def seeded(app):
         db.session.add(DutyRoster(org_id=org.id, duty_date=today, user_id=am.id))
         db.session.add(DutyRoster(org_id=org.id, duty_date=today + timedelta(days=1), user_id=am2.id))
 
+        # test users keep their strong test passwords (no forced change)
+        for u in (admin, md, am, am2, hod):
+            u.must_change_password = False
+
         db.session.commit()
         return {"org": org.id, "admin": admin.id, "md": md.id, "am": am.id, "am2": am2.id,
                 "hod": hod.id, "dept": dept.id}

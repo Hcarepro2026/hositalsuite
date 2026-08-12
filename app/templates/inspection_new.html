@@ -21,6 +21,7 @@
   <form id="insp-form" method="post" action="/inspections/submit" enctype="multipart/form-data">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="lat" id="lat"><input type="hidden" name="lng" id="lng">
+    <input type="hidden" name="started_ts" id="started-ts" value="">
 
     <div class="card mb">
       <h2>1 · Where did you inspect?</h2>
@@ -88,6 +89,7 @@
 <script>
 var CRITERIA = {{ criteria | tojson }};
 var GPS_MODE = "{{ gps_mode }}";
+document.getElementById('started-ts').value = Date.now();  // audit: time form was opened
 hmsDeptCascade(document.getElementById('dept'), document.getElementById('section'),
                document.getElementById('unit'), "{{ csrf_token() }}");
 hmsGps(GPS_MODE, document.getElementById('lat'), document.getElementById('lng'),
@@ -148,6 +150,7 @@ document.getElementById('insp-form').addEventListener('submit', function (e) {
   });
   data.lat = document.getElementById('lat').value || null;
   data.lng = document.getElementById('lng').value || null;
+  data.started_ts = document.getElementById('started-ts').value || null;
   hmsQueueSubmit('/inspections/submit', data, "{{ csrf_token() }}");
   return false;
 });

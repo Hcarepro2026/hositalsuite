@@ -15,6 +15,12 @@ COLUMNS = [
     ("complaint", "idempotency_key", "VARCHAR(40)"),
 ]
 
+# unique partial indexes — make idempotency race-proof at the DB level (§41)
+UNIQUE_INDEXES = [
+    ("uq_complaint_idem", "complaint", "org_id, idempotency_key", "idempotency_key IS NOT NULL"),
+    ("uq_appointment_idem", "appointment", "org_id, idempotency_key", "idempotency_key IS NOT NULL"),
+]
+
 
 def ensure_schema() -> None:
     insp = inspect(db.engine)
@@ -26,3 +32,9 @@ def ensure_schema() -> None:
         if column not in cols:
             with db.engine.begin() as conn:
                 conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {coltype}'))
+    for name, table, cols, where in UNIQUE_INDEXES:
+        if table not in existing_tables:
+            continue
+        with db.engine.begin() as conn:
+            conn.execute(text(
+                f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {table} ({cols}) WHERE {where}'))

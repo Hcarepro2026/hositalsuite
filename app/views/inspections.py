@@ -1,7 +1,6 @@
 """Inspection views: daily inspection wizard, list/detail, amendments, verification."""
 from __future__ import annotations
 
-import json
 import os
 
 from flask import (Blueprint, abort, flash, jsonify, redirect, render_template,
@@ -11,8 +10,8 @@ from flask_login import current_user
 from .. import notifications, pdfgen, scoring, services, whatsapp
 from ..audit import audit
 from ..config import Config
-from ..models import (CorrectiveAction, Department, DutyRoster, Inspection,
-                      InspectionScore, Organization, ReportFile, Unit, Section,
+from ..models import (CorrectiveAction, Department, Inspection,
+                      InspectionScore, Organization, ReportFile,
                       User, db, new_code, now_naive)
 from ..security import require_login, require_role, save_upload
 
@@ -121,6 +120,20 @@ def inspection_submit():
                         f"({scoring.CRITERIA[no]['title']}) because the score is {scores[no]}.")
         explanations[no] = expl
 
+    # --- started time: recorded when the inspector opened the form (client-sent,
+    # clamped server-side to today and never in the future)
+    started_at = now
+    try:
+        raw_ts = form.get("started_ts")
+        if raw_ts not in (None, ""):
+            from datetime import datetime as _dt
+            candidate = _dt.fromtimestamp(float(raw_ts) / 1000.0)
+            day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            if day_start <= candidate <= now:
+                started_at = candidate
+    except (TypeError, ValueError, OSError):
+        pass
+
     gps_mode = services.get_setting(current_user.org_id, "gps_mode")
     lat = form.get("lat", type=float) if hasattr(form, "get") and not isinstance(form, dict) else None
     lng = form.get("lng", type=float) if hasattr(form, "get") and not isinstance(form, dict) else None
@@ -160,7 +173,7 @@ def inspection_submit():
         gps_captured=(lat is not None and lng is not None),
         device_info=request.headers.get("User-Agent", "")[:280],
     )
-    insp.started_at = now  # single-screen wizard: start ≈ submit time
+    insp.started_at = started_at
     db.session.add(insp)
     db.session.flush()
 
@@ -343,7 +356,6 @@ def inspection_amend(insp_id: int):
         return redirect(url_for("inspections.inspection_detail", insp_id=insp_id))
 
     now = now_naive()
-    org = _my_org()
     new_scores = {}
     for no in range(1, 6):
         raw = request.form.get(f"score_{no}")

@@ -11,7 +11,7 @@ from .. import notifications, qrgen, services
 from ..audit import audit
 from ..config import Config
 from ..models import (Complaint, ComplaintCategory, ComplaintStatusHistory,
-                      Department, DutyRoster, Organization, QrLocation, db, now_naive)
+                      Department, Organization, QrLocation, db, now_naive)
 from ..security import rate_limit, require_login, resolve_upload_path, save_upload
 from .. import scoring
 
@@ -82,10 +82,13 @@ def portal_submit():
     if errors:
         depts = db.session.query(Department).filter_by(org_id=org.id, active=True).all()
         categories = db.session.query(ComplaintCategory).filter_by(org_id=org.id, active=True).all()
+        # preserve the QR location tag on re-render
+        loc_code_err = (request.form.get("loc") or "").strip().upper()
+        qr_loc_err = db.session.query(QrLocation).filter_by(code=loc_code_err).first() if loc_code_err else None
         for e in errors:
             flash(e, "error")
         return render_template("complaint_portal.html", org=org, depts=depts,
-                               categories=categories, qr_loc=None,
+                               categories=categories, qr_loc=qr_loc_err,
                                form=request.form), 422
 
     # ------- optional evidence (field 5b) — validated upload
@@ -298,7 +301,9 @@ def staff_extend_sla(cid: int):
         return redirect(url_for("complaints.staff_detail", cid=cid))
     from datetime import timedelta
     old_deadline = c.sla_deadline_at
-    c.sla_deadline_at = now_naive() + timedelta(hours=hours)
+    # an extension may only ever ADD time — never shorten the deadline
+    candidate = old_deadline + timedelta(hours=hours)
+    c.sla_deadline_at = max(candidate, now_naive() + timedelta(hours=hours))
     c.sla_extended_at = now_naive()
     audit("COMPLAINT_SLA_EXTENDED", "complaint", c.id,
           {"old_deadline": str(old_deadline), "new_deadline": str(c.sla_deadline_at),

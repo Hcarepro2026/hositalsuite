@@ -106,9 +106,12 @@ def test_staff_sees_bookings_and_checks_in(client, seeded):
     login(client, "am1")
     r = client.get("/bookings")
     assert apt.patient_name.encode() in r.data
-    client.post(f"/bookings/{apt.id}/arrive",
+    # check-in now issues a queue ticket as well (single redundant-free path)
+    client.post(f"/bookings/{apt.id}/checkin-queue",
                 data={"_csrf": csrf(client, "/bookings")}, follow_redirects=True)
     assert db.session.get(Appointment, apt.id).status == "ARRIVED"
+    from app.models import QueueTicket
+    assert db.session.query(QueueTicket).filter_by(appointment_id=apt.id).count() == 1
 
 
 def test_sms_provider_interface_fallback(app, seeded):
