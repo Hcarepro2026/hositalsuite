@@ -21,18 +21,24 @@
 {% if current_user.is_authenticated %}
 <nav class="nav">
   <a href="/" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
-  {% if current_user.role in ('ADMIN_MANAGER','SUPER_ADMIN') %}
-    <a href="/inspections/new" class="{{ 'active' if request.path.startswith('/inspections/new') }}">Today's Inspection</a>
+  {% if current_user.role in ('ADMIN_MANAGER','SUPER_ADMIN','MD_CEO') %}
+  <span class="dd {{ 'active' if request.path.startswith('/inspections') }}">
+    <button type="button" class="dd-btn" onclick="hmsToggleMenu(this)">🧑‍💼 Admin Manager ▾</button>
+    <div class="dd-menu">
+      <a href="/inspections/new">▶ Today's Inspection</a>
+      <a href="/inspections"> Inspection History</a>
+    </div>
+  </span>
   {% endif %}
-  <a href="/inspections" class="{{ 'active' if request.path == '/inspections' }}">Inspections</a>
   {% if current_user.role in ('SUPER_ADMIN','MD_CEO','ADMIN_MANAGER','HOD') %}
     <a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a>
     <a href="/queue" class="{{ 'active' if request.path == '/queue' }}">Queue</a>
     <a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a>
     <a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Feedback</a>
+    <a href="/dept-roster" class="{{ 'active' if request.path.startswith('/dept-roster') }}">Dept Roster</a>
     <a href="/corrective-actions" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>
   {% endif %}
-  <a href="/roster" class="{{ 'active' if request.path.startswith('/roster') }}">Duty Roster</a>
+  <a href="/roster" class="{{ 'active' if request.path == '/roster' or request.path.startswith('/roster/') }}">Duty Roster</a>
   {% if current_user.role in ('SUPER_ADMIN','MD_CEO') %}
     <a href="/reports" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>
   {% endif %}

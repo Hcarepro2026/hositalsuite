@@ -13,6 +13,8 @@ from .models import db
 # (table, column, sql_type)
 COLUMNS = [
     ("complaint", "idempotency_key", "VARCHAR(40)"),
+    ("department", "roster_mode", "VARCHAR(10) DEFAULT 'two_12h'"),
+    ("department", "roster_staff_per_shift", "INTEGER DEFAULT 1"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

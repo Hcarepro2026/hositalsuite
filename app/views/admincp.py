@@ -112,6 +112,34 @@ def user_create():
     return redirect(url_for("admin.users"))
 
 
+@bp.post("/users/<int:uid>/edit")
+@require_role(*SUPER)
+def user_edit(uid: int):
+    u = db.session.get(User, uid)
+    if not u or u.org_id != current_user.org_id:
+        abort(404)
+    name = (request.form.get("name") or "").strip()
+    role = request.form.get("role")
+    email = (request.form.get("email") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    if not name:
+        flash("Full name is required.", "error")
+        return redirect(url_for("admin.users"))
+    if role not in ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD"):
+        flash("Invalid role.", "error")
+        return redirect(url_for("admin.users"))
+    old = {"name": u.name, "role": u.role, "email": u.email, "phone": u.phone}
+    u.name = name
+    u.role = role
+    u.email = email or None
+    u.phone = phone or None
+    audit("USER_EDITED", "user", u.id, {"old": old, "new": {"name": name, "role": role,
+                                        "email": email, "phone": phone}})
+    db.session.commit()
+    flash(f"User {name} updated.", "success")
+    return redirect(url_for("admin.users"))
+
+
 @bp.post("/users/<int:uid>/toggle")
 @require_role(*SUPER)
 def user_toggle(uid: int):
@@ -168,25 +196,212 @@ def department_save():
     if not name:
         flash("Department name is required.", "error")
         return redirect(url_for("admin.structure"))
+    roster_mode = request.form.get("roster_mode")
+    if roster_mode not in ("two_12h", "24h"):
+        roster_mode = "two_12h"
+    try:
+        per_shift = max(1, min(2, int(request.form.get("roster_staff_per_shift") or 1)))
+    except ValueError:
+        per_shift = 1
     if dept_id:
         dept = db.session.get(Department, dept_id)
         if not dept or dept.org_id != current_user.org_id:
             abort(404)
         dept.name = name
         dept.hod_user_id = hod_id or None
-        audit("DEPARTMENT_UPDATED", "department", dept.id, {"name": name})
+        dept.roster_mode = roster_mode
+        dept.roster_staff_per_shift = per_shift
+        audit("DEPARTMENT_UPDATED", "department", dept.id,
+              {"name": name, "roster_mode": roster_mode, "staff_per_shift": per_shift})
     else:
         exists = db.session.query(Department).filter_by(org_id=current_user.org_id, name=name).first()
         if exists:
             flash("A department with that name already exists.", "error")
             return redirect(url_for("admin.structure"))
-        dept = Department(org_id=current_user.org_id, name=name, hod_user_id=hod_id or None)
+        dept = Department(org_id=current_user.org_id, name=name, hod_user_id=hod_id or None,
+                          roster_mode=roster_mode, roster_staff_per_shift=per_shift)
         db.session.add(dept)
         db.session.flush()
-        audit("DEPARTMENT_CREATED", "department", dept.id, {"name": name})
+        audit("DEPARTMENT_CREATED", "department", dept.id,
+              {"name": name, "roster_mode": roster_mode, "staff_per_shift": per_shift})
     db.session.commit()
     flash("Department saved.", "success")
     return redirect(url_for("admin.structure"))
+
+
+def _dept_referenced(d) -> str | None:
+    """Return a reason if the department has live data (block hard delete)."""
+    from ..models import (Appointment, Complaint, DeptRosterEntry, Inspection,
+                          PatientFeedback, QueueTicket)
+    checks = [
+        (Inspection.department_id, "inspections"), (Complaint.department_id, "complaints"),
+        (Appointment.department_id, "bookings"), (QueueTicket.department_id, "queue tickets"),
+        (PatientFeedback.department_id, "feedback"), (DeptRosterEntry.department_id, "roster entries"),
+    ]
+    for col, label in checks:
+        if db.session.query(col).filter(col == d.id).first() is not None:
+            return label
+    return None
+
+
+@bp.post("/structure/department/<int:did>/delete")
+@require_role(*SUPER)
+def department_delete(did: int):
+    d = db.session.get(Department, did)
+    if not d or d.org_id != current_user.org_id:
+        abort(404)
+    if d.sections:
+        flash("Delete its sections/units first, or use Suspend (deactivate) instead.", "error")
+        return redirect(url_for("admin.structure"))
+    why = _dept_referenced(d)
+    if why:
+        flash(f"This department has {why} attached — it cannot be deleted. Use Suspend instead.", "error")
+        return redirect(url_for("admin.structure"))
+    audit("DEPARTMENT_DELETED", "department", d.id, {"name": d.name})
+    db.session.delete(d)
+    db.session.commit()
+    flash(f"Department {d.name} deleted.", "success")
+    return redirect(url_for("admin.structure"))
+
+
+@bp.post("/structure/section/<int:sid>/edit")
+@require_role(*SUPER)
+def section_edit(sid: int):
+    s = db.session.get(Section, sid)
+    if not s or s.org_id != current_user.org_id:
+        abort(404)
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("Section name required.", "error")
+        return redirect(url_for("admin.structure"))
+    old = s.name
+    s.name = name
+    s.hod_user_id = request.form.get("hod_user_id", type=int) or None
+    audit("SECTION_EDITED", "section", sid, {"old": old, "new": name})
+    db.session.commit()
+    flash("Section updated.", "success")
+    return redirect(url_for("admin.structure"))
+
+
+@bp.post("/structure/section/<int:sid>/delete")
+@require_role(*SUPER)
+def section_delete(sid: int):
+    s = db.session.get(Section, sid)
+    if not s or s.org_id != current_user.org_id:
+        abort(404)
+    if s.units:
+        flash("Delete its units first.", "error")
+        return redirect(url_for("admin.structure"))
+    from ..models import Inspection
+    if db.session.query(Inspection).filter_by(section_id=s.id).first():
+        flash("Inspections reference this section — it cannot be deleted.", "error")
+        return redirect(url_for("admin.structure"))
+    audit("SECTION_DELETED", "section", sid, {"name": s.name})
+    db.session.delete(s)
+    db.session.commit()
+    flash("Section deleted.", "success")
+    return redirect(url_for("admin.structure"))
+
+
+@bp.post("/structure/unit/<int:uid_>/edit")
+@require_role(*SUPER)
+def unit_edit(uid_: int):
+    u = db.session.get(Unit, uid_)
+    if not u or u.org_id != current_user.org_id:
+        abort(404)
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("Unit name required.", "error")
+        return redirect(url_for("admin.structure"))
+    old = u.name
+    u.name = name
+    u.hod_user_id = request.form.get("hod_user_id", type=int) or None
+    audit("UNIT_EDITED", "unit", u.id, {"old": old, "new": name})
+    db.session.commit()
+    flash("Unit updated.", "success")
+    return redirect(url_for("admin.structure"))
+
+
+@bp.post("/structure/unit/<int:uid_>/delete")
+@require_role(*SUPER)
+def unit_delete(uid_: int):
+    u = db.session.get(Unit, uid_)
+    if not u or u.org_id != current_user.org_id:
+        abort(404)
+    from ..models import Inspection
+    if db.session.query(Inspection).filter_by(unit_id=u.id).first():
+        flash("Inspections reference this unit — it cannot be deleted.", "error")
+        return redirect(url_for("admin.structure"))
+    audit("UNIT_DELETED", "unit", u.id, {"name": u.name})
+    db.session.delete(u)
+    db.session.commit()
+    flash("Unit deleted.", "success")
+    return redirect(url_for("admin.structure"))
+
+
+@bp.post("/settings/categories/<int:cid>/toggle")
+@require_role(*SUPER)
+def category_toggle(cid: int):
+    c = db.session.get(ComplaintCategory, cid)
+    if not c or c.org_id != current_user.org_id:
+        abort(404)
+    c.active = not c.active
+    audit("CATEGORY_TOGGLED", "category", cid, {"name": c.name, "active": c.active})
+    db.session.commit()
+    return redirect(url_for("admin.settings"))
+
+
+@bp.post("/settings/categories/<int:cid>/delete")
+@require_role(*SUPER)
+def category_delete(cid: int):
+    c = db.session.get(ComplaintCategory, cid)
+    if not c or c.org_id != current_user.org_id:
+        abort(404)
+    from ..models import Complaint
+    if db.session.query(Complaint).filter_by(category=c.name).first():
+        flash("Complaints use this category — suspend it instead of deleting.", "error")
+        return redirect(url_for("admin.settings"))
+    audit("CATEGORY_DELETED", "category", cid, {"name": c.name})
+    db.session.delete(c)
+    db.session.commit()
+    flash("Category deleted.", "success")
+    return redirect(url_for("admin.settings"))
+
+
+@bp.post("/settings/locations/<int:lid>/edit")
+@require_role(*SUPER)
+def location_edit(lid: int):
+    l = db.session.get(QrLocation, lid)
+    if not l or l.org_id != current_user.org_id:
+        abort(404)
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("Location name required.", "error")
+        return redirect(url_for("admin.settings"))
+    old = l.name
+    l.name = name
+    audit("QR_LOCATION_EDITED", "qr_location", lid, {"old": old, "new": name})
+    db.session.commit()
+    flash("Location renamed.", "success")
+    return redirect(url_for("admin.settings"))
+
+
+@bp.post("/settings/locations/<int:lid>/delete")
+@require_role(*SUPER)
+def location_delete(lid: int):
+    l = db.session.get(QrLocation, lid)
+    if not l or l.org_id != current_user.org_id:
+        abort(404)
+    from ..models import Appointment, Complaint
+    if db.session.query(Complaint).filter_by(qr_location_id=l.id).first() or \
+       db.session.query(Appointment).filter_by(qr_location_id=l.id).first():
+        flash("Records reference this location — it cannot be deleted.", "error")
+        return redirect(url_for("admin.settings"))
+    audit("QR_LOCATION_DELETED", "qr_location", lid, {"name": l.name})
+    db.session.delete(l)
+    db.session.commit()
+    flash("Location deleted.", "success")
+    return redirect(url_for("admin.settings"))
 
 
 @bp.post("/structure/section")

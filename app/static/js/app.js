@@ -18,9 +18,23 @@
   window.addEventListener("offline", paintConn);
   paintConn();
 
+  /* ------------------------------------------------ nav dropdown */
+  window.hmsToggleMenu = function (btn) {
+    var dd = btn.closest(".dd");
+    var wasOpen = dd.classList.contains("open");
+    document.querySelectorAll(".dd.open").forEach(function (o) { o.classList.remove("open"); });
+    if (!wasOpen) dd.classList.add("open");
+  };
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest(".dd")) document.querySelectorAll(".dd.open").forEach(function (o) { o.classList.remove("open"); });
+  });
+
   /* ------------------------------------------------ voice-to-text (Web Speech API) */
   window.hmsVoice = {
     supported: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+    /* Accuracy fix: only read results from e.resultIndex onward, and commit
+       finals once — the old loop re-read ALL results on every event, which is
+       what caused repeated/duplicated words. */
     start: function (btn, targetId) {
       var target = document.getElementById(targetId);
       if (!target) return;
@@ -28,32 +42,101 @@
         alert("Voice-to-text is not supported in this browser. Please type your text instead.");
         return;
       }
-      if (btn._rec) { try { btn._rec.stop(); } catch (e) {} btn._rec = null; btn.classList.remove("recording"); btn.innerHTML = "🎤 Speak"; return; }
+      if (btn._rec) { try { btn._rec.stop(); } catch (e) {} return; }
       var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
       var rec = new Rec();
       rec.lang = btn.getAttribute("data-lang") || "en-NG";
       rec.continuous = true;
       rec.interimResults = true;
-      var base = target.value;
+      rec.maxAlternatives = 1;
+      var base = target.value.replace(/\s+$/, "");
+      var finals = "";
       btn.classList.add("recording");
       btn.innerHTML = "⏹ Stop";
+      btn._rec = rec;
       rec.onresult = function (e) {
-        var interim = "", final = "";
-        for (var i = 0; i < e.results.length; i++) {
+        var interim = "";
+        for (var i = e.resultIndex; i < e.results.length; i++) {   // ← start at resultIndex
           var r = e.results[i];
-          if (r.isFinal) final += r[0].transcript + " ";
+          if (r.isFinal) finals += r[0].transcript.trim() + " ";
           else interim += r[0].transcript;
         }
-        target.value = (base ? base + " " : "") + (final + interim).trim();
+        var merged = (base ? base + " " : "") + finals + interim;
+        target.value = merged.replace(/[ \t]+/g, " ").trim();
         target.dispatchEvent(new Event("input", { bubbles: true }));
       };
       rec.onerror = function (e) {
-        btn.classList.remove("recording"); btn.innerHTML = "🎤 Speak"; btn._rec = null;
+        if (e.error === "language-not-supported") {
+          try { rec.lang = "en-US"; rec.start(); } catch (err) { hmsVoice._stopBtn(btn); }
+          return;
+        }
+        hmsVoice._stopBtn(btn);
         if (e.error === "not-allowed") alert("Microphone permission denied. Please allow microphone access or type instead.");
+        if (e.error === "no-speech") alert("I didn't hear anything. Tap 🎤 and speak clearly close to the phone.");
       };
-      rec.onend = function () { btn.classList.remove("recording"); btn.innerHTML = "🎤 Speak"; btn._rec = null; };
-      btn._rec = rec;
-      try { rec.start(); } catch (e) { btn.classList.remove("recording"); btn.innerHTML = "🎤 Speak"; }
+      rec.onend = function () { hmsVoice._stopBtn(btn); };   // no auto-restart → no duplication
+      try { rec.start(); } catch (e) { hmsVoice._stopBtn(btn); }
+    },
+    _stopBtn: function (btn) {
+      btn.classList.remove("recording");
+      btn.innerHTML = "🎤 Speak";
+      btn._rec = null;
+    },
+
+    /* Louder, clearer spoken alerts (§19): full volume, best English voice,
+       layered bell at higher gain. Voice remains an enhancement, never a dependency. */
+    speak: function (text, urgency) {
+      var P = (window.hmsAlerts && window.hmsAlerts.prefs) ||
+              { voice_enabled: true, voice_min_level: "standard" };
+      if (!P.voice_enabled) return;
+      var LV = { standard: 0, urgent: 1, emergency: 2 };
+      if ((LV[urgency] || 0) < (LV[P.voice_min_level] || 0)) return;
+      if (this.inQuietHours()) return;
+      try {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();        // clear queue → no overlapping repeats
+        var u = new SpeechSynthesisUtterance(text);
+        u.volume = 1.0;                          // maximum
+        u.rate = urgency === "emergency" ? 1.0 : 0.92;   // slightly slower = clearer
+        u.pitch = 1.0;
+        var pick = function () {
+          var vs = window.speechSynthesis.getVoices();
+          var v = vs.filter(function (x) { return /^en/i.test(x.lang); })
+                    .sort(function (a, b) { return (b.lang === "en-NG") - (a.lang === "en-NG") ||
+                                                   (b.localService - a.localService); })[0];
+          if (v) u.voice = v;
+          window.speechSynthesis.speak(u);
+        };
+        if (window.speechSynthesis.getVoices().length) pick();
+        else { window.speechSynthesis.onvoiceschanged = pick; }
+      } catch (e) { /* fall back silently to text */ }
+    },
+
+    bell: function (urgency) {
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        if (!this._actx) this._actx = new Ctx();
+        var ctx = this._actx;
+        if (ctx.state === "suspended") ctx.resume();
+        var GAIN = 0.9;   // much louder than before (was 0.25)
+        var notes = urgency === "emergency" ? [[880, 0], [660, .22], [880, .44], [660, .66], [880, .88]]
+                  : urgency === "urgent" ? [[740, 0], [740, .25], [740, .5]]
+                  : [[660, 0], [880, .28]];
+        notes.forEach(function (n) {
+          // two detuned oscillators per note = fuller, clearer chime
+          [0, 3].forEach(function (det) {
+            var o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = det ? "triangle" : "sine";
+            o.frequency.value = n[0] + det;
+            g.gain.setValueAtTime(0.0001, ctx.currentTime + n[1]);
+            g.gain.exponentialRampToValueAtTime(GAIN, ctx.currentTime + n[1] + .02);
+            g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + n[1] + .24);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(ctx.currentTime + n[1]); o.stop(ctx.currentTime + n[1] + .28);
+          });
+        });
+      } catch (e) { /* sound is an enhancement */ }
     }
   };
 
@@ -196,36 +279,13 @@
     },
 
     bell: function (urgency) {
-      try {
-        var Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return;
-        var ctx = new Ctx();
-        var notes = urgency === "emergency" ? [[880, 0], [660, .18], [880, .36], [660, .54]]
-                  : urgency === "urgent" ? [[740, 0], [740, .2], [740, .4]]
-                  : [[660, 0], [880, .22]];
-        notes.forEach(function (n) {
-          var o = ctx.createOscillator(), g = ctx.createGain();
-          o.type = "sine"; o.frequency.value = n[0];
-          g.gain.setValueAtTime(0.0001, ctx.currentTime + n[1]);
-          g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + n[1] + .02);
-          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + n[1] + .18);
-          o.connect(g); g.connect(ctx.destination);
-          o.start(ctx.currentTime + n[1]); o.stop(ctx.currentTime + n[1] + .2);
-        });
-      } catch (e) { /* sound is an enhancement */ }
+      if (window.hmsVoice && window.hmsVoice.bell) { window.hmsVoice.bell(urgency); return; }
+      /* unreachable fallback kept for safety */
+      window.hmsVoice.bell(urgency);
     },
 
     speak: function (text, urgency) {
-      if (!this.prefs.voice_enabled) return;
-      if ((this.LEVELS[urgency] || 0) < (this.LEVELS[this.prefs.voice_min_level] || 0)) return;
-      if (this.inQuietHours()) return;
-      try {
-        if (!('speechSynthesis' in window)) return;
-        var u = new SpeechSynthesisUtterance(text);
-        u.rate = urgency === "emergency" ? 1.05 : 0.98;
-        u.lang = "en-NG";
-        window.speechSynthesis.speak(u);
-      } catch (e) { /* fall back silently to text */ }
+      if (window.hmsVoice && window.hmsVoice.speak) { window.hmsVoice.speak(text, urgency); return; }
     },
 
     toast: function (a) {

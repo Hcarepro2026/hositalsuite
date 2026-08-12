@@ -81,7 +81,18 @@
   <div class="card">
     <h2>Complaint categories</h2>
     {% for c in categories %}<div class="row spread">
-      <span>{{ c.name }} {% if not c.active %}<span class="pill gray">inactive</span>{% endif %}</span></div>{% endfor %}
+      <span>{{ c.name }} {% if not c.active %}<span class="pill gray">suspended</span>{% endif %}</span>
+      <span class="row">
+        <form method="post" action="/admin/settings/categories/{{ c.id }}/toggle">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small ghost">{{ 'Suspend' if c.active else 'Activate' }}</button>
+        </form>
+        <form method="post" action="/admin/settings/categories/{{ c.id }}/delete"
+              onsubmit="return confirm('Delete category {{ c.name }}?')">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small danger">Delete</button>
+        </form>
+      </span></div>{% endfor %}
     <form method="post" action="/admin/settings/categories" class="row mt">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <input type="text" name="name" placeholder="New category" required style="flex:1">
@@ -93,7 +104,21 @@
     <p class="hint">Print these QR codes and post them at each location. Scans are tagged with the location.</p>
     {% for l in locations %}<div class="row spread mb">
       <span>📍 {{ l.name }} <code>{{ l.code }}</code></span>
-      <a class="btn small secondary" href="/complaint/qr/{{ l.code }}.png" download="QR-{{ l.code }}.png">⬇ QR</a>
+      <span class="row">
+        <a class="btn small secondary" href="/complaint/qr/{{ l.code }}.png" download="QR-{{ l.code }}.png">⬇ QR</a>
+        <details style="display:inline-block"><summary class="btn small ghost" style="list-style:none">Rename</summary>
+          <form method="post" action="/admin/settings/locations/{{ l.id }}/edit" class="card mt">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <input type="text" name="name" value="{{ l.name }}" required>
+            <button class="btn small mt">Save</button>
+          </form>
+        </details>
+        <form method="post" action="/admin/settings/locations/{{ l.id }}/delete"
+              onsubmit="return confirm('Delete location {{ l.name }}?')">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small danger">Delete</button>
+        </form>
+      </span>
     </div>{% endfor %}
     <form method="post" action="/admin/settings/locations" class="row mt">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">

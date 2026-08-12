@@ -10,7 +10,8 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request,
 from flask_login import current_user
 
 from ..audit import audit
-from ..models import DutyRoster, User, db, now_naive
+from ..models import (DEPT_SHIFTS, Department, DeptRosterEntry, DutyRoster, User,
+                      db, now_naive)
 from ..security import require_role
 
 bp = Blueprint("roster", __name__)
@@ -245,3 +246,232 @@ def roster_import_confirm():
     session.pop("roster_import_preview", None)
     flash(f"Import complete: {added} entries added, {skipped} skipped.", "success")
     return redirect(url_for("roster.roster_view"))
+
+
+# ================================================================ DEPARTMENT ROSTERS (§upgrade)
+def _can_manage_dept(user, dept) -> bool:
+    return user.is_super or (user.is_hod and dept.hod_user_id == user.id)
+
+
+def _parse_day(raw: str):
+    return _parse_date(raw)
+
+
+@bp.get("/dept-roster/template")
+@require_role("SUPER_ADMIN", "HOD", "ADMIN_MANAGER", "MD_CEO")
+def dept_roster_template():
+    mode = request.args.get("mode", "two_12h")
+    shifts = [s[0] for s in DEPT_SHIFTS.get(mode, DEPT_SHIFTS["two_12h"])]
+    lines = ["Date,Shift,Staff1,Staff2"]
+    lines.append(f"2026-01-01,{shifts[0]},Full Name One,Full Name Two")
+    if len(shifts) > 1:
+        lines.append(f"2026-01-01,{shifts[1]},Full Name Three,")
+    from flask import Response
+    return Response("\n".join(lines) + "\n", mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=dept-roster-template-{mode}.csv"})
+
+
+@bp.get("/dept-roster")
+@require_role("SUPER_ADMIN", "HOD", "ADMIN_MANAGER", "MD_CEO")
+def dept_roster():
+    from ..models import DeptRosterEntry, User
+    depts = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True)
+    if current_user.is_hod:
+        depts = depts.filter(Department.hod_user_id == current_user.id)
+    depts = depts.order_by(Department.name).all()
+    dept_id = request.args.get("dept", type=int)
+    dept = None
+    if dept_id:
+        dept = db.session.get(Department, dept_id)
+        if not dept or dept.org_id != current_user.org_id or not _can_manage_dept(current_user, dept):
+            dept = depts[0] if depts else None
+    elif depts:
+        dept = depts[0]
+    month_offset = request.args.get("m", type=int) or 0
+    entries, month_label = [], now_naive().date().strftime("%B %Y")
+    if dept:
+        today = now_naive().date()
+        start = (today.replace(day=1) + timedelta(days=32 * month_offset)).replace(day=1)
+        end = (start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        month_label = start.strftime("%B %Y")
+        entries = (db.session.query(DeptRosterEntry)
+                   .filter(DeptRosterEntry.department_id == dept.id,
+                           DeptRosterEntry.duty_date >= start, DeptRosterEntry.duty_date <= end)
+                   .order_by(DeptRosterEntry.duty_date, DeptRosterEntry.shift).all())
+    staff = (db.session.query(User).filter_by(org_id=current_user.org_id, active=True)
+             .order_by(User.name).all())
+    return render_template("dept_roster.html", depts=depts, dept=dept, entries=entries,
+                           staff=staff, month_offset=month_offset, month_label=month_label,
+                           shifts=DEPT_SHIFTS,
+                           can_manage=bool(dept and _can_manage_dept(current_user, dept)))
+
+
+def _validate_dept_entry(org_id, dept, raw_date, shift, name1, name2):
+    """Returns (errors, day, staff1, staff2)."""
+    from ..models import User
+    errors = []
+    day = _parse_day(raw_date)
+    if not day:
+        errors.append("Invalid or missing date.")
+    allowed = [s[0] for s in DEPT_SHIFTS.get(dept.roster_mode or "two_12h", [])]
+    if shift not in allowed:
+        errors.append(f"Shift must be one of {', '.join(allowed)} for this department's roster system.")
+    staff1 = db.session.query(User).filter_by(org_id=org_id, name=name1.strip(), active=True).first() if name1.strip() else None
+    if not staff1:
+        errors.append(f"Unknown staff: {name1 or '(missing)'}")
+    staff2 = None
+    if (dept.roster_staff_per_shift or 1) >= 2 and name2.strip():
+        staff2 = db.session.query(User).filter_by(org_id=org_id, name=name2.strip(), active=True).first()
+        if not staff2:
+            errors.append(f"Unknown staff: {name2}")
+    elif name2.strip():
+        errors.append("This department is configured for ONE staff on duty per shift.")
+    if staff1 and staff2 and staff1.id == staff2.id:
+        errors.append("Staff1 and Staff2 must be different people.")
+    return errors, day, staff1, staff2
+
+
+@bp.post("/dept-roster/add")
+@require_role("SUPER_ADMIN", "HOD")
+def dept_roster_add():
+    from ..models import DeptRosterEntry
+    dept = db.session.get(Department, request.form.get("department_id", type=int) or 0)
+    if not dept or dept.org_id != current_user.org_id or not _can_manage_dept(current_user, dept):
+        abort(403)
+    errors, day, s1, s2 = _validate_dept_entry(
+        current_user.org_id, dept, request.form.get("duty_date", ""),
+        request.form.get("shift", ""), request.form.get("staff1", ""),
+        request.form.get("staff2", ""))
+    if not errors:
+        dup = (db.session.query(DeptRosterEntry)
+               .filter_by(department_id=dept.id, duty_date=day,
+                          shift=request.form.get("shift")).first())
+        if dup:
+            errors.append("An entry for this date & shift already exists — edit it instead.")
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        return redirect(url_for("roster.dept_roster", dept=dept.id))
+    db.session.add(DeptRosterEntry(org_id=current_user.org_id, department_id=dept.id,
+                                   duty_date=day, shift=request.form.get("shift"),
+                                   staff1_user_id=s1.id, staff2_user_id=s2.id if s2 else None,
+                                   source="manual", created_by=current_user.id))
+    audit("DEPT_ROSTER_ADD", "dept_roster", None,
+          {"dept": dept.name, "date": str(day), "shift": request.form.get("shift")})
+    db.session.commit()
+    flash(f"Roster entry added for {dept.name} ({day}, {request.form.get('shift')}).", "success")
+    return redirect(url_for("roster.dept_roster", dept=dept.id))
+
+
+@bp.post("/dept-roster/<int:rid>/edit")
+@require_role("SUPER_ADMIN", "HOD")
+def dept_roster_edit(rid: int):
+    from ..models import DeptRosterEntry
+    r = db.session.get(DeptRosterEntry, rid)
+    if not r or r.org_id != current_user.org_id or not _can_manage_dept(current_user, r.department):
+        abort(403)
+    errors, day, s1, s2 = _validate_dept_entry(
+        current_user.org_id, r.department, request.form.get("duty_date", ""),
+        request.form.get("shift", ""), request.form.get("staff1", ""),
+        request.form.get("staff2", ""))
+    if not errors:
+        dup = (db.session.query(DeptRosterEntry)
+               .filter(DeptRosterEntry.department_id == r.department_id,
+                       DeptRosterEntry.duty_date == day,
+                       DeptRosterEntry.shift == request.form.get("shift"),
+                       DeptRosterEntry.id != rid).first())
+        if dup:
+            errors.append("Another entry already covers this date & shift.")
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        return redirect(url_for("roster.dept_roster", dept=r.department_id))
+    old = (str(r.duty_date), r.shift, r.staff1.name, r.staff2.name if r.staff2 else None)
+    r.duty_date = day
+    r.shift = request.form.get("shift")
+    r.staff1_user_id = s1.id
+    r.staff2_user_id = s2.id if s2 else None
+    audit("DEPT_ROSTER_EDIT", "dept_roster", rid, {"old": old,
+          "new": (str(day), r.shift, s1.name, s2.name if s2 else None)})
+    db.session.commit()
+    flash("Roster entry updated.", "success")
+    return redirect(url_for("roster.dept_roster", dept=r.department_id))
+
+
+@bp.post("/dept-roster/<int:rid>/delete")
+@require_role("SUPER_ADMIN", "HOD")
+def dept_roster_delete(rid: int):
+    from ..models import DeptRosterEntry
+    r = db.session.get(DeptRosterEntry, rid)
+    if not r or r.org_id != current_user.org_id or not _can_manage_dept(current_user, r.department):
+        abort(403)
+    audit("DEPT_ROSTER_DELETE", "dept_roster", rid,
+          {"dept": r.department.name, "date": str(r.duty_date), "shift": r.shift})
+    db.session.delete(r)
+    db.session.commit()
+    flash("Roster entry deleted.", "success")
+    return redirect(url_for("roster.dept_roster", dept=r.department_id))
+
+
+@bp.post("/dept-roster/import")
+@require_role("SUPER_ADMIN", "HOD")
+def dept_roster_import():
+    """CSV/XLSX upload: Date,Shift,Staff1,Staff2 — validated with preview-less quick report."""
+    import csv as _csv, io as _io
+    dept = db.session.get(Department, request.form.get("department_id", type=int) or 0)
+    if not dept or dept.org_id != current_user.org_id or not _can_manage_dept(current_user, dept):
+        abort(403)
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("Choose a CSV or XLSX file.", "error")
+        return redirect(url_for("roster.dept_roster", dept=dept.id))
+    rows = []
+    name = file.filename.lower()
+    try:
+        if name.endswith(".csv"):
+            text = file.read().decode("utf-8-sig", errors="replace")
+            for row in _csv.DictReader(_io.StringIO(text)):
+                k = {(x or "").strip().lower(): (v or "").strip() for x, v in row.items()}
+                rows.append((k.get("date", ""), k.get("shift", ""), k.get("staff1", ""), k.get("staff2", "")))
+        elif name.endswith(".xlsx"):
+            from openpyxl import load_workbook
+            wb = load_workbook(file, read_only=True, data_only=True)
+            ws = wb.active
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if row and row[0]:
+                    d = row[0]
+                    rows.append((d.date().isoformat() if hasattr(d, "date") else str(d),
+                                 str(row[1] or ""), str(row[2] or ""), str(row[3] or "")))
+        else:
+            flash("Unsupported file type — use .csv or .xlsx.", "error")
+            return redirect(url_for("roster.dept_roster", dept=dept.id))
+    except Exception as exc:  # noqa: BLE001
+        flash(f"Could not read file: {str(exc)[:120]}", "error")
+        return redirect(url_for("roster.dept_roster", dept=dept.id))
+    added, skipped, problems = 0, 0, 0
+    from ..models import DeptRosterEntry
+    for raw_date, shift, n1, n2 in rows:
+        if shift.lower().startswith("date") or not raw_date:
+            skipped += 1
+            continue
+        errors, day, s1, s2 = _validate_dept_entry(current_user.org_id, dept, raw_date,
+                                                   shift.strip().upper(), n1, n2)
+        if errors:
+            problems += 1
+            continue
+        dup = db.session.query(DeptRosterEntry).filter_by(
+            department_id=dept.id, duty_date=day, shift=shift.strip().upper()).first()
+        if dup:
+            problems += 1
+            continue
+        db.session.add(DeptRosterEntry(org_id=current_user.org_id, department_id=dept.id,
+                                       duty_date=day, shift=shift.strip().upper(),
+                                       staff1_user_id=s1.id, staff2_user_id=s2.id if s2 else None,
+                                       source="import", created_by=current_user.id))
+        added += 1
+    audit("DEPT_ROSTER_IMPORTED", "dept_roster", None,
+          {"dept": dept.name, "added": added, "problems": problems})
+    db.session.commit()
+    flash(f"Import finished for {dept.name}: {added} added, {problems} rejected, {skipped} skipped.",
+          "success" if not problems else "info")
+    return redirect(url_for("roster.dept_roster", dept=dept.id))

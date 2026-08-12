@@ -15,7 +15,44 @@ Complaints are routed automatically to the most specific HOD configured.</p>
   <ul>
     {% for s in d.sections %}
     <li><b>{{ s.name }}</b>{% if s.hod %} <span class="muted">(HOD: {{ s.hod.name }})</span>{% endif %}
-      {% if s.units %}<ul>{% for u in s.units %}<li>{{ u.name }}{% if u.hod %} <span class="muted">(HOD: {{ u.hod.name }})</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+      <details style="display:inline-block"><summary class="btn small ghost" style="list-style:none">Edit</summary>
+        <form method="post" action="/admin/section/{{ s.id }}/edit" class="card mt">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <input type="text" name="name" value="{{ s.name }}">
+          <select name="hod_user_id" class="mt" style="margin-top:6px">
+            <option value="">— No HOD —</option>
+            {% for h in hods %}<option value="{{ h.id }}" {{ 'selected' if s.hod_user_id==h.id }}>{{ h.name }}</option>{% endfor %}
+          </select>
+          <button class="btn small mt">Save section</button>
+        </form>
+      </details>
+      <form method="post" action="/admin/section/{{ s.id }}/delete" style="display:inline"
+            onsubmit="return confirm('Delete section {{ s.name }}?')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn small danger">Delete</button>
+      </form>
+      {% if s.units %}<ul>
+        {% for u in s.units %}
+        <li>{{ u.name }}{% if u.hod %} <span class="muted">(HOD: {{ u.hod.name }})</span>{% endif %}
+          <details style="display:inline-block"><summary class="btn small ghost" style="list-style:none">Edit</summary>
+            <form method="post" action="/admin/unit/{{ u.id }}/edit" class="card mt">
+              <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+              <input type="text" name="name" value="{{ u.name }}">
+              <select name="hod_user_id" class="mt" style="margin-top:6px">
+                <option value="">— No HOD —</option>
+                {% for h in hods %}<option value="{{ h.id }}" {{ 'selected' if u.hod_user_id==h.id }}>{{ h.name }}</option>{% endfor %}
+              </select>
+              <button class="btn small mt">Save unit</button>
+            </form>
+          </details>
+          <form method="post" action="/admin/unit/{{ u.id }}/delete" style="display:inline"
+                onsubmit="return confirm('Delete unit {{ u.name }}?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="btn small danger">Delete</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>{% endif %}
     </li>
     {% endfor %}
   </ul>
@@ -23,10 +60,15 @@ Complaints are routed automatically to the most specific HOD configured.</p>
   <div class="row mt">
     <form method="post" action="/admin/structure/department/{{ d.id }}/toggle">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-      <button class="btn small ghost">{{ 'Deactivate' if d.active else 'Activate' }}</button>
+      <button class="btn small ghost">{{ 'Suspend' if d.active else 'Activate' }}</button>
+    </form>
+    <form method="post" action="/admin/structure/department/{{ d.id }}/delete"
+          onsubmit="return confirm('Permanently delete {{ d.name }}?')">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button class="btn small danger">Delete</button>
     </form>
     <details>
-      <summary class="btn small ghost" style="list-style:none">Edit / set HOD</summary>
+      <summary class="btn small ghost" style="list-style:none">Edit / HOD / roster system</summary>
       <form method="post" action="/admin/structure/department" class="card mt">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <input type="hidden" name="department_id" value="{{ d.id }}">
@@ -34,6 +76,14 @@ Complaints are routed automatically to the most specific HOD configured.</p>
         <select name="hod_user_id" class="mt" style="margin-top:8px">
           <option value="">— No HOD —</option>
           {% for h in hods %}<option value="{{ h.id }}" {{ 'selected' if d.hod_user_id==h.id }}>{{ h.name }}</option>{% endfor %}
+        </select>
+        <select name="roster_mode" class="mt" style="margin-top:8px">
+          <option value="two_12h" {{ 'selected' if (d.roster_mode or 'two_12h')=='two_12h' }}>Roster: two 12h shifts/day</option>
+          <option value="24h" {{ 'selected' if d.roster_mode=='24h' }}>Roster: 24h duty</option>
+        </select>
+        <select name="roster_staff_per_shift" class="mt" style="margin-top:8px">
+          <option value="1" {{ 'selected' if (d.roster_staff_per_shift or 1)==1 }}>1 staff on duty per shift</option>
+          <option value="2" {{ 'selected' if (d.roster_staff_per_shift or 1)==2 }}>2 staff on duty per shift</option>
         </select>
         <button class="btn small mt">Save</button>
       </form>

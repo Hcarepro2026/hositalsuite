@@ -87,6 +87,9 @@ class Department(db.Model):
     name = db.Column(db.String(120), nullable=False)
     hod_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     active = db.Column(db.Boolean, default=True, nullable=False)
+    # roster design for this department: two 12h shifts/day, or one 24h shift/day
+    roster_mode = db.Column(db.String(10), default="two_12h")      # two_12h | 24h
+    roster_staff_per_shift = db.Column(db.Integer, default=1)      # 1 or 2 on duty per shift
     sections = db.relationship("Section", backref="department", lazy="select",
                                cascade="all, delete-orphan", order_by="Section.name")
     hod = db.relationship("User", foreign_keys=[hod_user_id])
@@ -230,6 +233,32 @@ class ComplaintStatusHistory(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     at = db.Column(db.DateTime, default=now_naive)
     user = db.relationship("User")
+
+
+# ---------------------------------------------------------------- department rosters
+DEPT_SHIFTS = {
+    "two_12h": [("DAY", "07:00–19:00"), ("NIGHT", "19:00–07:00")],
+    "24h": [("24H", "07:00–07:00 (+1)")],
+}
+
+
+class DeptRosterEntry(db.Model):
+    """Department-level duty roster: 12h two-shift days or 24h duty, 1–2 staff."""
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=False, index=True)
+    duty_date = db.Column(db.Date, nullable=False, index=True)
+    shift = db.Column(db.String(6), nullable=False)              # DAY | NIGHT | 24H
+    staff1_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    staff2_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    source = db.Column(db.String(16), default="manual")
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime, default=now_naive)
+    department = db.relationship("Department")
+    staff1 = db.relationship("User", foreign_keys=[staff1_user_id])
+    staff2 = db.relationship("User", foreign_keys=[staff2_user_id])
+    __table_args__ = (db.UniqueConstraint("department_id", "duty_date", "shift",
+                                          name="uq_dept_roster_day_shift"),)
 
 
 # ---------------------------------------------------------------- bookings
