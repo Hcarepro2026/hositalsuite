@@ -66,6 +66,12 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
         from .migrate import ensure_schema
         ensure_schema()
 
+        # First-boot bootstrap on free hosts with no shell access (Render free):
+        # AUTO_SEED=1 seeds ONLY an empty database; credentials printed once to logs.
+        if os.environ.get("AUTO_SEED") == "1":
+            from .seeddata import auto_seed
+            auto_seed(app)
+
     @app.context_processor
     def inject_globals():
         from .security import csrf_token

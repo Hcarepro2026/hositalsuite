@@ -28,6 +28,14 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-key-change-me")
     SQLALCHEMY_DATABASE_URI = _data_uri("app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Resilient connections: validate before use (pool_pre_ping) and recycle
+    # before the Supabase pooler drops idle connections — prevents
+    # "SSL SYSCALL error: EOF detected" after idle periods.
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "pool_timeout": 30,
+    }
     TIMEZONE = ZoneInfo(os.environ.get("TIMEZONE", "Africa/Lagos"))
 
     UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")

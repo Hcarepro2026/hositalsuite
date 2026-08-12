@@ -89,17 +89,27 @@ postgresql://postgres.zhhdhfllypkzvmukilwt:[dmq@4Supabase]@aws-0-XXXX.pooler.sup
 
 ---
 
-## STEP 4 — Set up the hospital (first-time setup, 3 min)
+## STEP 4 — First-boot setup (automatic — 2 min)
 
-1. Open the **Render dashboard** → click your service → click the **Shell** tab
-2. Type this and press Enter:
+The **free Render plan has no Shell**, so the app seeds itself instead:
+
+1. In Render → **Environment**, make sure `AUTO_SEED` is set to `1`
+   (it is included in the repo's render.yaml; add it manually if missing).
+2. After the deploy goes **Live**, open **Logs** and search for
+   `FIRST-RUN SETUP COMPLETE`. Just below it you'll see the initial
+   usernames and passwords, e.g.:
    ```
-   python run.py seed
+   admin            / xK3…(random)
+   md               / …
    ```
-   This creates the hospital, departments and first user accounts.
-   **Write down the usernames/passwords it prints.**
-3. Now open your web address → **Sign in** as `admin` → then change the password
-   (Admin → Users → Reset password). Never keep the first password.
+3. 📋 **Copy the `admin` line.** Open your live site → sign in with it.
+4. The app will **force you to choose your own password** on first login —
+   do it now. (All starter accounts require this.)
+5. After login you can rename the hospital, logo and departments under
+   **Admin → Hospital Setup / Departments** to match your real hospital.
+
+> 🔐 Safety: seeding only happens on a completely empty database — restarting or
+> redeploying later will never reset your data or passwords.
 
 ---
 
@@ -135,6 +145,8 @@ Open these on your phone:
 | Build fails on Render | Click the failed build → copy the last red error line → send it to me |
 | App shows "Database error" | Re-check the DATABASE_URL you pasted — password and `?sslmode=require` included |
 | Log says `could not translate host name "…Supabase]…" ` | Your password's `@` wasn't converted to `%40` (or brackets/spaces left in). Re-paste using the CORRECT example in Step 1. |
+| Log says `SSL SYSCALL error: EOF detected` | Idle connection dropped by Supabase — fixed automatically by connection recycling (deploy latest code from GitHub). |
+| "Shell is not supported for free instance" | Correct — free plan has no shell. Use `AUTO_SEED=1` instead (Step 4); initial logins appear in the Logs. |
 | Page loads forever | Free tier cold start — wait 30 seconds and refresh |
 | Forgot admin password | Render → Shell tab → `python run.py seed` won't overwrite; ask me for a reset command |
 | Anything else | Render → **Logs** tab → copy the last lines → send to me |

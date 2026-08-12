@@ -29,6 +29,9 @@ services:
         sync: false
       - key: TIMEZONE
         value: Africa/Lagos
+      - key: AUTO_SEED
+        value: "1"               # seeds ONLY an empty database; prints initial
+                                 # logins once to the deploy log (free plan has no shell)
       - key: WHATSAPP_MODE
         value: sandbox           # switch to 'cloud' + credentials when Meta is approved
       - key: SMS_MODE
