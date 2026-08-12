@@ -83,6 +83,40 @@ def next_appointment_ref(org: Organization, when: datetime) -> str:
     return next_ref(org, "APT", Appointment, when.year)
 
 
+def insert_with_unique_ref(build, idem_lookup=None, max_tries: int = 10):
+    """Insert a record whose computed reference must be unique, retrying on
+    concurrent collisions. The DB UNIQUE constraint is the arbiter: if two
+    requests compute the same ref, one inserts and the other retries with a
+    fresh count. An idempotency-key collision returns the existing record
+    instead of creating a duplicate (spec §41).
+
+    `build` is a zero-arg callable returning the new (unflushed) object;
+    `idem_lookup` optionally returns the existing record on an idem collision.
+    Returns (object, created) — created is False when an existing record was
+    returned via an idempotency collision.
+    """
+    from sqlalchemy.exc import IntegrityError
+    last_exc = None
+    for attempt in range(max_tries):
+        try:
+            obj = build()
+            db.session.add(obj)
+            db.session.flush()
+            return obj, True
+        except IntegrityError as exc:
+            db.session.rollback()
+            last_exc = exc
+            msg = str(getattr(exc, "orig", exc))
+            if idem_lookup is not None and "idem" in msg:
+                existing = idem_lookup()
+                if existing is not None:
+                    return existing, False
+            if "ref" in msg and attempt < max_tries - 1:
+                continue   # ref collision — retry with a fresh reference
+            raise
+    raise last_exc
+
+
 def slot_is_full(org_id: int, department_id: int, day: date, slot: str) -> bool:
     from .models import Appointment
     cap = int(get_setting(org_id, "booking_capacity_per_slot") or 20)

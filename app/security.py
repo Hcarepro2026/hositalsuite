@@ -99,8 +99,13 @@ def rate_limit(limit: int = 10, window: float = 60.0, key_extra: str = ""):
     def deco(fn):
         @functools.wraps(fn)
         def wrapper(*a, **kw):
+            from flask import current_app
+            # RATE_LIMIT_SCALE relaxes limits for capacity/load testing only.
+            # Default 1 = production limits. NEVER set high in real deployments.
+            scale = int(current_app.config.get("RATE_LIMIT_SCALE", 1) or 1)
+            effective = limit * scale
             key = f"{request.endpoint}|{request.remote_addr}|{key_extra}"
-            if not _limiter.allow(key, limit, window):
+            if not _limiter.allow(key, effective, window):
                 return render_template("error.html", code=429,
                                        message="Too many requests. Please wait a moment and try again."), 429
             return fn(*a, **kw)

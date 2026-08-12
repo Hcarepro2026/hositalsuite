@@ -31,3 +31,4 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+loadtest/results/*.csv

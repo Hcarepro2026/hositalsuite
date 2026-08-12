@@ -151,43 +151,54 @@ def inspection_submit():
 
     evald = scoring.evaluate(scores)
 
-    insp = Inspection(
-        org_id=current_user.org_id,
-        ref=services.next_inspection_ref(org, now),
-        verify_code=new_code(10),
-        inspector_id=current_user.id,
-        duty_date=today,
-        department_id=dept_id,
-        section_id=section_id,
-        unit_id=unit_id,
-        status="SUBMITTED",
-        submitted_at=now,
-        total_score=evald["total"],
-        percent=evald["percent"],
-        rating=evald["rating"],
-        critical_count=evald["critical_count"],
-        poor_count=evald["poor_count"],
-        gps_mode=gps_mode,
-        lat=lat,
-        lng=lng,
-        gps_captured=(lat is not None and lng is not None),
-        device_info=request.headers.get("User-Agent", "")[:280],
-    )
-    insp.started_at = started_at
-    db.session.add(insp)
-    db.session.flush()
-
+    # upload evidence first (file side-effects must not repeat on ref-collision retry)
+    evidence_paths = {}
     for no in range(1, 6):
-        evidence_path = None
+        evidence_paths[no] = None
         if not api_mode:
             ev = request.files.get(f"evidence_{no}")
             if ev and ev.filename:
                 path, err = save_upload(ev, "inspections")
                 if not err:
-                    evidence_path = path
-        db.session.add(InspectionScore(inspection_id=insp.id, criterion_no=no,
-                                       score=scores[no], explanation=explanations[no] or None,
-                                       evidence_path=evidence_path))
+                    evidence_paths[no] = path
+
+    def _build_insp():
+        obj = Inspection(
+            org_id=current_user.org_id,
+            ref=services.next_inspection_ref(org, now),
+            verify_code=new_code(10),
+            inspector_id=current_user.id,
+            duty_date=today,
+            department_id=dept_id,
+            section_id=section_id,
+            unit_id=unit_id,
+            status="SUBMITTED",
+            started_at=started_at,
+            submitted_at=now,
+            total_score=evald["total"],
+            percent=evald["percent"],
+            rating=evald["rating"],
+            critical_count=evald["critical_count"],
+            poor_count=evald["poor_count"],
+            gps_mode=gps_mode,
+            lat=lat,
+            lng=lng,
+            gps_captured=(lat is not None and lng is not None),
+            device_info=request.headers.get("User-Agent", "")[:280],
+        )
+        db.session.add(obj)
+        db.session.flush()
+        for no in range(1, 6):
+            db.session.add(InspectionScore(inspection_id=obj.id, criterion_no=no,
+                                           score=scores[no], explanation=explanations[no] or None,
+                                           evidence_path=evidence_paths[no]))
+        return obj
+
+    try:
+        insp, _created = services.insert_with_unique_ref(_build_insp)
+    except Exception:
+        db.session.rollback()
+        return fail("The system is very busy right now. Your inspection was NOT saved — please submit again.")
     db.session.flush()
 
     audit("INSPECTION_SUBMITTED", "inspection", insp.id,

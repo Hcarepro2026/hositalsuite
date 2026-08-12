@@ -114,21 +114,32 @@ def portal_submit():
     loc_code = (request.form.get("loc") or "").strip().upper()
     qr_loc = db.session.query(QrLocation).filter_by(code=loc_code).first() if loc_code else None
 
-    apt = Appointment(
-        org_id=org.id,
-        ref=services.next_appointment_ref(org, now),
-        idempotency_key=idem or None,
-        department_id=dept.id,
-        appointment_date=day,
-        appointment_time=slot,
-        patient_name=name[:120],
-        phone=phone,
-        status="BOOKED",
-        source="qr" if qr_loc else "link",
-        qr_location_id=qr_loc.id if qr_loc else None,
-    )
-    db.session.add(apt)
-    db.session.flush()
+    def _build_apt():
+        return Appointment(
+            org_id=org.id,
+            ref=services.next_appointment_ref(org, now),
+            idempotency_key=idem or None,
+            department_id=dept.id,
+            appointment_date=day,
+            appointment_time=slot,
+            patient_name=name[:120],
+            phone=phone,
+            status="BOOKED",
+            source="qr" if qr_loc else "link",
+            qr_location_id=qr_loc.id if qr_loc else None,
+        )
+
+    try:
+        apt, apt_created = services.insert_with_unique_ref(
+            _build_apt,
+            idem_lookup=(lambda: db.session.query(Appointment)
+                         .filter_by(org_id=org.id, idempotency_key=idem).first()) if idem else None)
+    except Exception:
+        db.session.rollback()
+        flash("The system is very busy right now. Please try booking again.", "error")
+        return redirect(url_for("bookings.portal"))
+    if not apt_created:
+        return redirect(url_for("bookings.portal_thanks", ref=apt.ref))
     audit("BOOKING_CREATED", "appointment", apt.id,
           {"ref": apt.ref, "dept": dept.name, "date": str(day), "slot": slot}, org_id=org.id)
 

@@ -57,6 +57,10 @@ class Config:
 
     USSD_SHARED_SECRET = os.environ.get("USSD_SHARED_SECRET", "")
 
+    # Load/capacity testing only: scales rate-limit thresholds (default 1 = production).
+    # Set high (e.g. 100000) during load tests to measure raw serving capacity.
+    RATE_LIMIT_SCALE = int(os.environ.get("RATE_LIMIT_SCALE", "1") or 1)
+
     # SMS provider interface (§38): sandbox | termii | twilio | disabled
     SMS_MODE = os.environ.get("SMS_MODE", "sandbox")
     TERMII_API_KEY = os.environ.get("TERMII_API_KEY", "")

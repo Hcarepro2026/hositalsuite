@@ -104,24 +104,37 @@ def portal_submit():
     qr_loc = db.session.query(QrLocation).filter_by(code=loc_code).first() if loc_code else None
 
     sla_hours = int(services.get_setting(org.id, "sla_hours") or 24)
-    c = Complaint(
-        org_id=org.id,
-        ref=services.next_complaint_ref(org, now),
-        idempotency_key=idem or None,
-        department_id=dept.id,
-        category=category,
-        description=description,
-        phone=phone,
-        contact_method=contact_method,
-        attachment_path=attachment_path,
-        source="qr" if qr_loc else "link",
-        qr_location_id=qr_loc.id if qr_loc else None,
-        status="NEW",
-        sla_hours=sla_hours,
-        sla_deadline_at=scoring.sla_deadline(now, sla_hours),
-    )
-    db.session.add(c)
-    db.session.flush()
+
+    def _build():
+        return Complaint(
+            org_id=org.id,
+            ref=services.next_complaint_ref(org, now),
+            idempotency_key=idem or None,
+            department_id=dept.id,
+            category=category,
+            description=description,
+            phone=phone,
+            contact_method=contact_method,
+            attachment_path=attachment_path,
+            source="qr" if qr_loc else "link",
+            qr_location_id=qr_loc.id if qr_loc else None,
+            status="NEW",
+            sla_hours=sla_hours,
+            sla_deadline_at=scoring.sla_deadline(now, sla_hours),
+        )
+
+    try:
+        c, c_created = services.insert_with_unique_ref(
+            _build,
+            idem_lookup=(lambda: db.session.query(Complaint)
+                         .filter_by(org_id=org.id, idempotency_key=idem).first()) if idem else None)
+    except Exception:
+        db.session.rollback()
+        flash("The system is very busy right now. Your complaint was NOT lost — please press submit again.",
+              "error")
+        return redirect(url_for("complaints.portal"))
+    if not c_created:
+        return redirect(url_for("complaints.portal_thanks", ref=c.ref))
     db.session.add(ComplaintStatusHistory(complaint_id=c.id, from_status=None, to_status="NEW",
                                           note="Submitted via public portal"))
     audit("COMPLAINT_SUBMITTED", "complaint", c.id,
