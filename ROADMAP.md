@@ -26,7 +26,7 @@ the patient-journey half (book → queue → feedback → refer) is the main bui
 
 | Constraint (§) | Status | Action |
 |---|---|---|
-| 2,000 requests/min (§39) | ❌ not tested; dev server + in-memory limiter | gunicorn workers, PostgreSQL + pooling, locust load tests at 100/500/1k/2k, document tested capacity, graceful degradation |
+| 2,000 requests/min (§39) | ✅ TESTED & PASSED at 4,000/min — see LOAD_TEST_REPORT.md (0% failures, concurrency bug found & fixed) | gunicorn, PostgreSQL tested; scaling path documented |
 | Tenant isolation + RLS (§25) | ⚠️ app-layer only | Migrate to Supabase PostgreSQL, add RLS policies on tenant tables, keep app-layer scoping as defence-in-depth |
 | Notification providers (§38) | ❌ no SMS | Provider interface: Termii primary, Twilio fallback, never hard-coded |
 | Async resilience (§39) | ⚠️ WhatsApp send partially in-request | 100% of third-party calls → background job queue; submissions always succeed instantly |
@@ -70,8 +70,9 @@ the patient-journey half (book → queue → feedback → refer) is the main bui
     monthly report PDF/CSV.
 
 ### WAVE D — Scale, docs & production gate (Priority 7–8 + §47)
-12. **Load campaign**: locust tests at 100/500/1,000/2,000 req/min, caching, indexes, pooling,
-    document TESTED capacity; chaos tests per §47 failure list.
+12. **Load campaign**: ✅ DONE — locust at 2,000 & 4,000 req/min on SQLite + PostgreSQL 17,
+    0% failures, graceful degradation at 2× overload; found & fixed a ref-number race.
+    Re-run against real Supabase after deploy (same scripts).
 13. **SaaS readiness**: branch layer, tenant branding, onboarding — after pilot validation (§25 "only after core stable").
 14. **Documentation**: Founder's Guide (zero-jargon), Deployment Guide, API docs, privacy policy/terms templates,
     backup/recovery runbook.
