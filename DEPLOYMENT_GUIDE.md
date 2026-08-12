@@ -24,11 +24,32 @@
 3. Scroll to **Connection string** → select the **URI** tab
 4. You'll see something like:
    `postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres`
-5. Replace `[YOUR-PASSWORD]` with your database password (the one you gave me)
-6. **Add this to the very end:** `?sslmode=require`
 
-   Your final string should look like:
-   `postgresql://postgres:YOURPASSWORD@db.xxxxx.supabase.co:5432/postgres?sslmode=require`
+### ⚠️ THE MOST IMPORTANT PART — special characters in your password
+
+Web addresses can't contain a raw `@` or square brackets inside the password.
+**Every `@` in your password must be typed as `%40`** (that's the web-standard
+code for @). Delete any `[` `]` characters completely.
+
+| Your password contains | In the link you must type |
+|---|---|
+| `@` | `%40` |
+| `[` or `]` | *(delete it)* |
+| space | *(delete it — no spaces anywhere in the line)* |
+
+**Example** (password `dmq@4Supabase`):
+
+✅ CORRECT (one line, no spaces, no brackets):
+```
+postgresql://postgres:dmq%404Supabase@db.zhhdhfllypkzvmukilwt.supabase.co:5432/postgres?sslmode=require
+```
+
+❌ WRONG (raw @ and brackets confuse the app):
+```
+postgresql://postgres:[dmq@4Supabase]@db.zhhdhfllypkzvmukilwt.supabase.co:5432/postgres
+```
+
+5. Finish the line with `?sslmode=require` (already shown above).
 
 📋 **Copy it somewhere safe — you'll paste it in Step 3.**
 
@@ -110,6 +131,7 @@ Open these on your phone:
 |---|---|
 | Build fails on Render | Click the failed build → copy the last red error line → send it to me |
 | App shows "Database error" | Re-check the DATABASE_URL you pasted — password and `?sslmode=require` included |
+| Log says `could not translate host name "…Supabase]…" ` | Your password's `@` wasn't converted to `%40` (or brackets/spaces left in). Re-paste using the CORRECT example in Step 1. |
 | Page loads forever | Free tier cold start — wait 30 seconds and refresh |
 | Forgot admin password | Render → Shell tab → `python run.py seed` won't overwrite; ask me for a reset command |
 | Anything else | Render → **Logs** tab → copy the last lines → send to me |
