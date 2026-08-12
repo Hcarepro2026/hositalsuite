@@ -21,15 +21,18 @@
 
 1. Go to **https://supabase.com** → sign in → click your project
 2. Click the ⚙️ **gear icon** (Settings) on the left → click **Database**
-3. Scroll to **Connection string** → select the **URI** tab
-4. You'll see something like:
-   `postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres`
+3. Scroll to **Connection string**. You'll see three tabs:
+   *Direct connection / Session pooler / Transaction pooler*.
+   ⚠️ **Click "Session pooler"** (NOT "Direct connection" — the direct address
+   often can't be reached from Render).
+4. Copy the **URI** line. It looks like:
+   `postgresql://postgres.zhhd...:[YOUR-PASSWORD]@aws-0-XXXX.pooler.supabase.com:5432/postgres`
 
 ### ⚠️ THE MOST IMPORTANT PART — special characters in your password
 
 Web addresses can't contain a raw `@` or square brackets inside the password.
-**Every `@` in your password must be typed as `%40`** (that's the web-standard
-code for @). Delete any `[` `]` characters completely.
+**Every `@` in your password must be typed as `%40`** (the web-standard code for @).
+Delete any `[` `]` characters and any spaces.
 
 | Your password contains | In the link you must type |
 |---|---|
@@ -41,12 +44,12 @@ code for @). Delete any `[` `]` characters completely.
 
 ✅ CORRECT (one line, no spaces, no brackets):
 ```
-postgresql://postgres:dmq%404Supabase@db.zhhdhfllypkzvmukilwt.supabase.co:5432/postgres?sslmode=require
+postgresql://postgres.zhhdhfllypkzvmukilwt:dmq%404Supabase@aws-0-XXXX.pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
 ❌ WRONG (raw @ and brackets confuse the app):
 ```
-postgresql://postgres:[dmq@4Supabase]@db.zhhdhfllypkzvmukilwt.supabase.co:5432/postgres
+postgresql://postgres.zhhdhfllypkzvmukilwt:[dmq@4Supabase]@aws-0-XXXX.pooler.supabase.com:5432/postgres
 ```
 
 5. Finish the line with `?sslmode=require` (already shown above).
