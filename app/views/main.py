@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user
 
 from .. import scoring, services
@@ -51,19 +51,30 @@ def _kpi(org_id: int) -> dict:
         CorrectiveAction.org_id == org_id,
         CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE"))).all()
 
-    from ..models import Appointment, PatientFeedback, QueueTicket
+    from ..models import Appointment, PatientFeedback, QueueTicket, ReferralEvent
     bookings_today = db.session.query(Appointment).filter_by(
         org_id=org_id, appointment_date=today, status="BOOKED").count()
     queue_waiting = db.session.query(QueueTicket).filter_by(
         org_id=org_id, queue_date=today, status="WAITING").count()
     fb_all = db.session.query(PatientFeedback).filter_by(org_id=org_id).all()
     satisfaction_avg = round(sum(f.rating for f in fb_all) / len(fb_all), 1) if fb_all else None
+    since30 = now - timedelta(days=30)
+    referral_books_30d = (db.session.query(ReferralEvent)
+                          .filter(ReferralEvent.org_id == org_id,
+                                  ReferralEvent.kind == "book",
+                                  ReferralEvent.created_at >= since30).count())
+    repeat_visits_30d = (db.session.query(Appointment)
+                         .filter(Appointment.org_id == org_id,
+                                 Appointment.is_repeat.is_(True),
+                                 Appointment.created_at >= since30).count())
 
     return {
         "bookings_today": bookings_today,
         "queue_waiting": queue_waiting,
         "satisfaction_avg": satisfaction_avg,
         "feedback_count": len(fb_all),
+        "referral_books_30d": referral_books_30d,
+        "repeat_visits_30d": repeat_visits_30d,
         "today": st,
         "total_inspections": total_inspections,
         "avg_score": avg_score,
@@ -79,6 +90,31 @@ def _kpi(org_id: int) -> dict:
         "cas_open": cas_open,
         "heatmap": services.heatmap_data(org_id, days=14),
     }
+
+
+@bp.get("/branding/logo")
+def branding_logo():
+    """Public hospital logo — used on every page, including login and patient portals."""
+    import os
+    from ..config import Config
+    from ..models import Organization
+    org = None
+    try:
+        if current_user.is_authenticated:
+            org = db.session.get(Organization, current_user.org_id)
+    except Exception:
+        org = None
+    if org is None:
+        org = db.session.query(Organization).order_by(Organization.id).first()
+    if not org or not org.logo_path:
+        abort(404)
+    path = org.logo_path
+    candidates = [path, os.path.join(Config.UPLOAD_DIR, path),
+                  os.path.join(Config.UPLOAD_DIR, os.path.basename(path))]
+    full = next((p for p in candidates if p and os.path.isfile(p)), None)
+    if not full:
+        abort(404)
+    return send_file(full, max_age=3600)
 
 
 @bp.get("/")

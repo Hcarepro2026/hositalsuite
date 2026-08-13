@@ -26,6 +26,17 @@
     <div class="notice" style="border-left-color:var(--green);background:var(--green-bg)">
       <b>Resolution:</b> {{ complaint.resolution_notes }}</div>
   {% endif %}
+  <h3>Messages from the hospital</h3>
+  {% set msgs = complaint.history | selectattr('patient_message') | list %}
+  {% for h in msgs %}
+      <div class="notice" style="text-align:left">
+        <small class="muted">{{ h.at.strftime('%d %b %Y %H:%M') }}</small><br>
+        {{ h.patient_message }}
+      </div>
+  {% endfor %}
+  {% if not msgs %}
+    <p class="hint">No messages yet. When the hospital updates this complaint, the message will appear here and on your phone.</p>
+  {% endif %}
   <p class="hint">Detailed complaint content is kept confidential and visible only to authorised hospital staff.</p>
 </div>
 {% endif %}

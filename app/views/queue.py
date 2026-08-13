@@ -90,6 +90,8 @@ def join_submit():
     )
     db.session.add(t)
     db.session.flush()
+    from .. import referrals as refeng
+    refeng.stamp_queue(org.id)
     audit("QUEUE_JOINED", "queue_ticket", t.id, {"code": t.code}, org_id=org.id)
     db.session.commit()
     return redirect(url_for("queue.ticket_page", key=t.access_key))

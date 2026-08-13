@@ -39,6 +39,10 @@ class PatientUser(HttpUser):
     def booking_portal(self):
         self.client.get("/book", name="/book (portal)")
 
+    @task(2)
+    def referral_book_entry(self):
+        self.client.get("/book?r=LOADTEST", name="/book?r= (referral entry)")
+
     @task(6)
     def feedback_portal(self):
         self.client.get("/feedback", name="/feedback (portal)")
@@ -110,3 +114,7 @@ class StaffUser(HttpUser):
     @task(1)
     def feedbacks(self):
         self.client.get("/feedbacks", name="/feedbacks (staff)")
+
+    @task(1)
+    def referrals(self):
+        self.client.get("/referrals", name="/referrals (staff)")

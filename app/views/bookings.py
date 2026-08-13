@@ -8,7 +8,7 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request,
                    url_for)
 from flask_login import current_user
 
-from .. import notifications, services, sms as sms_engine
+from .. import notifications, referrals as refeng, services, sms as sms_engine
 from ..audit import audit
 from ..models import (Appointment, Department, Organization, QrLocation, db,
                       now_naive)
@@ -32,11 +32,17 @@ def portal():
         return render_template("error.html", code=503, message="System not configured yet."), 503
     loc_code = (request.args.get("loc") or "").strip().upper()
     qr_loc = db.session.query(QrLocation).filter_by(code=loc_code).first() if loc_code else None
+    ref_code = refeng.code_from_request()
+    if ref_code and refeng.find_active(org.id, ref_code):
+        refeng.remember(ref_code)
+    else:
+        ref_code = ""
     depts = (db.session.query(Department)
              .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
     today = now_naive().date()
     window = int(services.get_setting(org.id, "booking_window_days") or 30)
     return render_template("booking_portal.html", org=org, depts=depts, qr_loc=qr_loc,
+                           ref_code=ref_code,
                            min_date=today.isoformat(),
                            max_date=(today + timedelta(days=window)).isoformat(),
                            slots=services.get_setting(org.id, "booking_slots") or [],
@@ -105,6 +111,7 @@ def portal_submit():
         loc_code_err = (request.form.get("loc") or "").strip().upper()
         qr_loc_err = db.session.query(QrLocation).filter_by(code=loc_code_err).first() if loc_code_err else None
         return render_template("booking_portal.html", org=org, depts=depts, qr_loc=qr_loc_err,
+                               ref_code=(request.form.get("r") or ""),
                                min_date=now.date().isoformat(),
                                max_date=(now.date() + timedelta(days=int(
                                    services.get_setting(org.id, "booking_window_days") or 30))).isoformat(),
@@ -140,8 +147,10 @@ def portal_submit():
         return redirect(url_for("bookings.portal"))
     if not apt_created:
         return redirect(url_for("bookings.portal_thanks", ref=apt.ref))
+    refeng.stamp_booking(org.id, apt, code=request.form.get("r"))
     audit("BOOKING_CREATED", "appointment", apt.id,
-          {"ref": apt.ref, "dept": dept.name, "date": str(day), "slot": slot}, org_id=org.id)
+          {"ref": apt.ref, "dept": dept.name, "date": str(day), "slot": slot,
+           "repeat": bool(apt.is_repeat), "referral_id": apt.referral_id}, org_id=org.id)
 
     # confirmation through available channels (§5) — patient SMS first
     confirm_body = (f"{org.name}: Your visit is booked for {day.strftime('%a %d %b')} at {slot} "

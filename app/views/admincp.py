@@ -61,11 +61,15 @@ def hospital_save():
         org.name = name
     if code and len(code) <= 12 and code.isalnum():
         org.code = code
+    org.email = (request.form.get("email") or "").strip() or None
+    org.phone = (request.form.get("phone") or "").strip() or None
+    org.phone_alt = (request.form.get("phone_alt") or "").strip() or None
+    org.address = (request.form.get("address") or "").strip() or None
     file = request.files.get("logo")
     if file and file.filename:
         path, err = save_upload(file, "logos")
         if not err:
-            org.logo_path = os.path.join(Config.UPLOAD_DIR, path)
+            org.logo_path = path   # relative path so every page can serve it
     audit("HOSPITAL_UPDATED", "organization", org.id, {"name": org.name, "code": org.code})
     db.session.commit()
     flash("Hospital profile updated.", "success")
@@ -232,11 +236,12 @@ def department_save():
 def _dept_referenced(d) -> str | None:
     """Return a reason if the department has live data (block hard delete)."""
     from ..models import (Appointment, Complaint, DeptRosterEntry, Inspection,
-                          PatientFeedback, QueueTicket)
+                          PatientFeedback, QueueTicket, Referral)
     checks = [
         (Inspection.department_id, "inspections"), (Complaint.department_id, "complaints"),
         (Appointment.department_id, "bookings"), (QueueTicket.department_id, "queue tickets"),
         (PatientFeedback.department_id, "feedback"), (DeptRosterEntry.department_id, "roster entries"),
+        (Referral.department_id, "referral links"),
     ]
     for col, label in checks:
         if db.session.query(col).filter(col == d.id).first() is not None:
@@ -625,6 +630,14 @@ POSTER_SERVICES = {
                   "Low ratings reach management immediately; high ratings help us improve"],
         "path": "/feedback",
     },
+    "referral": {
+        "title": "Recommend Us to Family",
+        "subtitle": "Share good care — no account, no pressure, no prizes",
+        "steps": ["Scan the QR code with your phone camera",
+                  "Share the page with a friend or family member who needs care",
+                  "They can book a visit in one minute — the hospital will know you sent them"],
+        "path": "/r/",
+    },
 }
 
 
@@ -646,6 +659,11 @@ def posters_download():
     locs = db.session.query(QrLocation).filter_by(org_id=org.id).order_by(QrLocation.name).all()
     posters = []
     base = _Cfg.PUBLIC_BASE_URL.rstrip("/")
+    hospital_code = None
+    if "referral" in wanted:
+        from .. import referrals as refeng
+        hospital_code = refeng.ensure_hospital_referral(org).code
+        db.session.commit()
     for svc_key in wanted:
         svc = POSTER_SERVICES[svc_key]
         if svc_key in ("complaint", "booking") and locs:
@@ -656,6 +674,9 @@ def posters_download():
                     "url": f"{base}{svc['path']}?loc={loc.code}",
                     "steps": svc["steps"],
                 })
+        elif svc_key == "referral":
+            posters.append({"title": svc["title"], "subtitle": svc["subtitle"],
+                            "url": f"{base}/r/{hospital_code}", "steps": svc["steps"]})
         else:
             posters.append({"title": svc["title"], "subtitle": svc["subtitle"],
                             "url": f"{base}{svc['path']}", "steps": svc["steps"]})

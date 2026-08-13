@@ -10,8 +10,13 @@
 <div class="login-wrap">
   <div class="card login-card pad-lg">
     <div class="center mb">
-      <div style="font-size:2.4rem">🏥</div>
-      <h1 style="margin:4px 0 2px">Hospital Admin Manager Suite</h1>
+      {% if hospital and hospital.logo_path %}
+        <img src="/branding/logo" alt="{{ hospital.name }}"
+             style="height:64px;width:64px;object-fit:contain;background:#fff;border-radius:12px;padding:4px">
+      {% else %}
+        <div style="font-size:2.4rem">🏥</div>
+      {% endif %}
+      <h1 style="margin:4px 0 2px">{{ hospital.name if hospital else 'Hospital Admin Manager Suite' }}</h1>
       <div class="muted">Inspection · Monitoring · Complaints</div>
     </div>
     {% with messages = get_flashed_messages(with_categories=true) %}

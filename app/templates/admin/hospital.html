@@ -2,6 +2,7 @@
 {% block title %}Hospital setup{% endblock %}
 {% block content %}
 <h1>Hospital Setup</h1>
+<p class="muted">This name, logo and contact details appear on every page — staff screens, patient portals, and printed reports.</p>
 <form class="card pad-lg" method="post" action="/admin/hospital" enctype="multipart/form-data" style="max-width:640px">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   <label>Hospital name</label>
@@ -10,9 +11,23 @@
   <input type="text" name="code" value="{{ org.code }}" maxlength="12"
          pattern="[A-Za-z0-9]+" title="Letters and numbers only">
   <div class="hint">e.g. HOSP produces refs like HOSP-INS-2026-000001 and HOSP-CMP-2026-000001</div>
-  <label>Logo (appears on PDF reports)</label>
+
+  <label>Email address</label>
+  <input type="email" name="email" value="{{ org.email or '' }}" placeholder="info@hospital.ng">
+  <label>Phone number</label>
+  <input type="tel" name="phone" value="{{ org.phone or '' }}" placeholder="e.g. 08012345678">
+  <label>Other phone (optional)</label>
+  <input type="tel" name="phone_alt" value="{{ org.phone_alt or '' }}" placeholder="e.g. 014611000">
+  <label>Location / address</label>
+  <input type="text" name="address" value="{{ org.address or '' }}"
+         placeholder="e.g. 12 Marina Road, Lagos Island, Lagos">
+
+  <label>Logo (appears on every page and on PDF reports)</label>
   <input type="file" name="logo" accept="image/jpeg,image/png,image/webp">
-  {% if org.logo_path %}<p class="hint">Current logo: <code>{{ org.logo_path }}</code></p>{% endif %}
+  {% if org.logo_path %}
+  <p class="hint mt">Current logo:</p>
+  <img src="/branding/logo" alt="Hospital logo" style="max-height:72px;max-width:180px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px">
+  {% endif %}
   <button class="btn mt">Save</button>
 </form>
 {% endblock %}

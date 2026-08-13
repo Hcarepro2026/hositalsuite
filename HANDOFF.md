@@ -1,7 +1,7 @@
 # HANDOFF — Hospital Admin Manager Suite ("Patient Experience OS")
 
 > **Read this first** if you are a new chat session or a new developer.
-> Everything below is verified fact as of 2026-08-12. The repo is the source of truth:
+> Everything below is verified fact as of 2026-08-13. The repo is the source of truth:
 > **https://github.com/Hcarepro2026/hositalsuite** (branch `main`).
 
 ---
@@ -65,7 +65,7 @@
 6. Multi-tenant: `org_id` on every table; RLS deferred; app-layer scoping enforced.
 7. AI must stay **administrative & advisory, never clinical** (when AI features get built).
 
-## 4. What is built (all tested; **82/82 tests**, green on SQLite + PostgreSQL 17)
+## 4. What is built (all tested; **104/104 tests**, green on SQLite)
 
 - **Core**: auth (scrypt, RBAC 4 roles, forced password change, MFA-ready), CSRF, per-IP rate limits,
   hash-chained audit trail (`app/audit.py`, thread-safe), safe uploads (magic bytes), idempotency keys.
@@ -75,7 +75,9 @@
   status history, attachments, staff queue/detail, HOD actions).
 - **Bookings** (`/book`, slots+capacity, refs, SMS confirmation, status/cancel, check-in→queue ticket),
   **Queue** (tickets, staff call/serve/no-show, privacy-safe display screen with voice announcement),
-  **Feedback** (stars→service recovery; high ratings→book-again/refer prompts).
+  **Feedback** (stars→service recovery; 4–5★ issue a personal trackable share-link + QR),
+  **Referrals** (`/r/<code>` landing, hospital-wide + staff-named QR, click/book analytics,
+  own-link is a repeat visit not a conversion, no prizes; staff board `/referrals`).
 - **Rosters**: Admin Manager roster (manual + CSV/XLSX import w/ validation preview) and
   **Department rosters** (HOD-managed own dept / super admin all; modes: two 12h shifts or 24h duty;
   1–2 staff per shift; add/edit/delete/import/templates; unique date+shift).
@@ -89,7 +91,7 @@
 - **i18n**: EN/Yorùbá/Hausa/Igbo on patient portals incl. voice-to-text language tags (`app/i18n.py`,
   `/lang/<code>`), best-effort translations flagged for community validation.
 - **Management**: executive dashboard (KPIs, heatmap, Management Attention, satisfaction),
-  department performance + recurring-issue detection, 8 report types (PDF+CSV), report archive,
+  department performance + recurring-issue detection, 9 report types (PDF+CSV, incl. referrals), report archive,
   QR Poster Pack generator (`/admin/posters`), admin control center, audit UI with chain verify.
 - **Ops**: Dockerfile, render.yaml, `run.py` CLI (seed/demo/tick/backup/dbcheck), AUTO_SEED bootstrap,
   nightly SQLite backups, `dbcheck` migration helper (`app/migrate.py`).
@@ -98,15 +100,14 @@
 
 ```bash
 pip3 install -r requirements.txt
-python -m pytest tests/ -q            # 82 tests
+python -m pytest tests/ -q            # 99 tests
 DATABASE_URL="postgresql://hms:hms_test_pw@127.0.0.1:5432/hms_test" python -m pytest tests/ -q
 bash start.sh                          # workspace preview on :8077 (SQLite demo data)
 python run.py seed | demo | tick | backup | dbcheck
 ```
 
-## 6. PENDING MENU (founder chooses; from their last session)
+## 6. PENDING MENU (founder chooses)
 
-- 🅱️ 1. **Referral engine** (trackable links/QR + referral analytics)
 - 🅱️ 2. **AI service-recovery** (classify urgency/sentiment/category; free-tier AI + rule-based fallback; advisory only)
 - 🅱️ 3. **MD/CEO satisfaction dashboard** (deeper analytics)
 - 🅲 4. **Attendance + geo-fencing** (tamper-resistant, manual-correction workflow)

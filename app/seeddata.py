@@ -163,6 +163,27 @@ def _seed_demo(app, org, am1, am2):
                 insp.pdf_path = pdf_path
             except Exception:
                 pass
+        # sample referral activity so the staff board is not empty in demo
+        from .models import Appointment, PatientFeedback, Referral, ReferralEvent
+        from . import referrals as refeng
+        hosp = refeng.ensure_hospital_referral(org)
+        fb = PatientFeedback(org_id=org.id, rating=5, comment="Demo: nurses were kind.",
+                             phone="08030001111", status="NEW")
+        db.session.add(fb)
+        db.session.flush()
+        personal = refeng.issue_patient_referral(org, fb, referrer_phone="08030001111",
+                                                 referrer_name="Demo Patient")
+        refeng.record_event(hosp, "click")
+        refeng.record_event(personal, "click")
+        day = today + timedelta(days=2)
+        apt = Appointment(
+            org_id=org.id, ref=services.next_appointment_ref(org, now_naive()),
+            department_id=depts[0].id, appointment_date=day, appointment_time="10:00",
+            patient_name="Demo Referred Guest", phone="08030002222",
+            status="BOOKED", source="referral", referral_id=personal.id, is_repeat=False)
+        db.session.add(apt)
+        db.session.flush()
+        refeng.record_event(personal, "book", appointment_id=apt.id)
         db.session.commit()
 
 

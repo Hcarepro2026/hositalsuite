@@ -349,6 +349,45 @@ def compliance_report():
     return send_file(path, as_attachment=True, mimetype="application/pdf")
 
 
+# ------------------------------------------------------------------ referrals (§14)
+@bp.get("/referrals")
+@require_role("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER")
+def referrals_report():
+    from .. import referrals as refeng
+    fmt = request.args.get("format", "csv")
+    stats = refeng.analytics(current_user.org_id, days=365)
+    header = ["Code", "Kind", "Source", "Label", "Active", "Created",
+              "Clicks", "Bookings", "Feedback", "Queue"]
+    rows = []
+    for row in stats["rows"]:
+        r = row["referral"]
+        rows.append([
+            r.code, r.kind, r.source, r.note or "",
+            "yes" if r.active else "no",
+            r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
+            row["clicks"], row["books"], row["feedback"], row["queue"],
+        ])
+    if fmt == "csv":
+        return _csv_response(header, rows, "referrals-report.csv")
+    org = _org()
+    notes = [
+        f"Share-links issued: {stats['codes']} ({stats['active']} active)",
+        f"Clicks (all time in this export window): {stats['clicks']}",
+        f"Bookings attributed to a share-link: {stats['books']}",
+        f"Conversion rate: {stats['conversion']}%",
+        f"Repeat visits (same phone booked again): {stats['repeats']}",
+        "No prizes or incentives are offered — this is attribution only.",
+    ]
+    path = os.path.join(Config.REPORT_DIR, f"referrals-{new_code(4)}.pdf")
+    code = new_code(10)
+    pdfgen.build_summary_pdf(org, "Referral & Repeat-Visit Report",
+                             now_naive().strftime("%d %B %Y"),
+                             header, rows, path, notes=notes, verify_code=code)
+    _archive_pdf("referrals", "Referral Report", path, code)
+    db.session.commit()
+    return send_file(path, as_attachment=True, mimetype="application/pdf")
+
+
 # ------------------------------------------------------------------ archive
 @bp.get("/archive/<int:rid>/download")
 @require_role(*MGR)

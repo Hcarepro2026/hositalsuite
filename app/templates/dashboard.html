@@ -27,16 +27,16 @@
     </div>
   </div>
   {% if current_user.is_am and kpi.today.duty and kpi.today.duty.id == current_user.id and kpi.today.state != 'completed' %}
-    <a class="btn big mt" href="/inspections/new">▶ Start Today's Inspection</a>
+    <a class="btn big mt" href="/inspections#today">▶ Start Today's Inspection</a>
   {% endif %}
 </div>
 
 {# ---------------- quick actions (Admin Manager UX: 4 big buttons) ---------------- #}
 {% if current_user.role in ('ADMIN_MANAGER',) %}
 <div class="btn-row grid cols2 mb">
-  <a class="btn" href="/inspections/new">📋 TODAY'S INSPECTION</a>
+  <a class="btn" href="/inspections#today">📋 TODAY'S INSPECTION</a>
   <a class="btn secondary" href="/roster">🗓 DUTY ROSTER</a>
-  <a class="btn secondary" href="/inspections">📁 PREVIOUS INSPECTIONS</a>
+  <a class="btn secondary" href="/inspections#history">📁 PREVIOUS INSPECTIONS</a>
   <a class="btn secondary" href="/corrective-actions?mine=1">🛠 CORRECTIVE ACTIONS</a>
 </div>
 {% endif %}
@@ -63,6 +63,12 @@
   <div class="kpi {{ 'good' if kpi.satisfaction_avg and kpi.satisfaction_avg >= 4 else ('warn' if kpi.satisfaction_avg else 'gray') }}">
     <div class="v">{{ kpi.satisfaction_avg if kpi.satisfaction_avg else '—' }}</div>
     <div class="l">Satisfaction /5 ({{ kpi.feedback_count }})</div></div>
+  <div class="kpi {{ 'good' if kpi.referral_books_30d else 'info' }}">
+    <div class="v">{{ kpi.referral_books_30d }}</div>
+    <div class="l">Referred bookings (30d)</div></div>
+  <div class="kpi info">
+    <div class="v">{{ kpi.repeat_visits_30d }}</div>
+    <div class="l">Repeat visits (30d)</div></div>
 </div>
 
 {# ---------------- Management Attention ---------------- #}

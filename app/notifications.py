@@ -138,3 +138,57 @@ def md_ceos(org_id: int) -> list[User]:
 
 def super_admins(org_id: int) -> list[User]:
     return db.session.query(User).filter_by(org_id=org_id, role="SUPER_ADMIN", active=True).all()
+
+
+# ------------------------------------------------------------------ patient (no login) — SMS + WhatsApp
+def patient_update_text(event: str, hospital: str, ref: str, extra: str = "") -> str:
+    extra = (extra or "").strip()
+    extra_bit = f" {extra}" if extra else ""
+    texts = {
+        "received": (
+            f"{hospital} received your complaint. Reference: {ref}. "
+            f"We are looking into it. Keep this number — you can check progress anytime."
+        ),
+        "acknowledged": (
+            f"{hospital}: Your complaint {ref} has been acknowledged. Our team is working on it."
+        ),
+        "progress": (
+            f"{hospital}: An update on your complaint {ref}.{extra_bit}"
+        ),
+        "resolved": (
+            f"{hospital}: Your complaint {ref} has been resolved.{extra_bit} Thank you."
+        ),
+        "closed": (
+            f"{hospital}: Your complaint {ref} is now closed. Thank you for telling us."
+        ),
+        "escalated": (
+            f"{hospital}: Your complaint {ref} has been sent to hospital management for urgent attention."
+        ),
+    }
+    return texts.get(event, f"{hospital}: An update on your complaint {ref}.{extra_bit}")
+
+
+def notify_complaint_patient(org, complaint, event: str, extra: str = "") -> str:
+    """Send the patient an acknowledgment / outcome on WhatsApp and SMS.
+
+    Patients have no login, so the same words are also stored on the complaint
+    history and shown on the public status page (their in-app inbox).
+    Returns the message text.
+    """
+    hospital = getattr(org, "name", None) or "The hospital"
+    body = patient_update_text(event, hospital, complaint.ref, extra)
+    db.session.add(AppNotification(
+        org_id=org.id, user_id=None, channel="inapp",
+        template_key=f"patient_{event}", subject=f"Complaint {complaint.ref}",
+        body=body, entity_type="complaint", entity_id=complaint.id, status="SENT"))
+    phone = (complaint.phone or "").strip()
+    if phone and phone.lower() not in ("not provided", "n/a", "-"):
+        from . import sms as sms_engine
+        from . import whatsapp
+        sms_engine.queue_sms(org.id, phone, body, kind="alert",
+                             entity_type="complaint", entity_id=complaint.id)
+        whatsapp.queue_message(org.id, phone, body, kind="alert",
+                               entity_type="complaint", entity_id=complaint.id)
+        from .tasks import dispatch_delivery
+        dispatch_delivery()
+    return body

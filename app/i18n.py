@@ -77,6 +77,56 @@ STRINGS: dict[str, dict[str, str]] = {
                      "ha": "Duba matsayin ƙorafinka", "ig": "Lelee ọnọdụ mkpesa gị"},
     "booking_confirmed": {"en": "Your visit is booked!", "yo": "A ti fipamọ́ ìbẹ̀wò rẹ!",
                           "ha": "An ajiyace ziyararka!", "ig": "Edebiela nleta gị!"},
+    "refer_landing_title": {
+        "en": "A friend recommended this hospital",
+        "yo": "Ọ̀rẹ́ kan dá ilé ìwòsàn yìí lẹ́yìn",
+        "ha": "Wani aboki ya ba da shawarar wannan asibiti",
+        "ig": "Enyi tụrụ aro ụlọ ọgwụ a",
+    },
+    "refer_landing_sub": {
+        "en": "No account needed. Book a visit in about a minute — we only ask for what the hospital needs to prepare for you.",
+        "yo": "Kò sí àkọọ́lẹ̀ tí a nílò. Ṣàkóso ìbẹ̀wò ní ìṣẹ́jú kan.",
+        "ha": "Ba a buƙatar asusu. Yi rajistar ziyara cikin minti ɗaya.",
+        "ig": "Achọghị akaụntụ. Debie nleta n'otu nkeji.",
+    },
+    "refer_friend_said": {
+        "en": "Someone who was cared for here thought you might need us too.",
+        "yo": "Ẹni tí a tọ́jú níbí rò pé ìwọ náà lè nílò wa.",
+        "ha": "Wanda aka kula da shi a nan ya yi tunanin za ka iya buƙatar mu.",
+        "ig": "Onye e lekọtara ebe a chere na ị nwekwara ike ịchọ anyị.",
+    },
+    "refer_book_cta": {
+        "en": "BOOK A VISIT",
+        "yo": "ṢÀKÓSO ÌBẸ̀WÒ",
+        "ha": "YI RAJISTAR ZIYARA",
+        "ig": "DEBIE NLETA",
+    },
+    "refer_share_hint": {
+        "en": "Your personal share-link",
+        "yo": "Ìtọ́kasí rẹ fún pínpín",
+        "ha": "Hanyar raba naka",
+        "ig": "Njikọ nke gị ịkekọrịta",
+    },
+    "refer_copy": {"en": "Copy or share this link", "yo": "Dàákọ tàbí pín ìtọ́kasí yìí",
+                   "ha": "Kwafa ko raba wannan hanyar", "ig": "Detuo ma ọ bụ kekọrịta njikọ a"},
+    "refer_qr_hint": {
+        "en": "A friend can scan this with their phone camera.",
+        "yo": "Ọ̀rẹ́ lè ṣe àyẹ̀wò kóòdù yìí pẹ̀lú fóònù wọn.",
+        "ha": "Aboki zai iya duba wannan da kyamarar wayarsa.",
+        "ig": "Enyi nwere ike sọghee nke a na igwefoto ekwentị ha.",
+    },
+    "refer_no_pressure": {
+        "en": "No prizes. No pressure. Just a kind way to point someone toward good care.",
+        "yo": "Kò sí ẹ̀bùn, kò sí ìyànjú. Ọ̀nà àánú ni láti tọ́ ẹnìkan sí ìtọ́jú dáadáa.",
+        "ha": "Babu kyauta, babu tilastawa. Hanya ce ta nuna wa wani kula mai kyau.",
+        "ig": "Enweghị ihe nrite, enweghị nrụgide. Ọ bụ naanị ụzọ ịkọwa ebe ezi nlekọta dị.",
+    },
+    "refer_welcome": {
+        "en": "A friend sent you — welcome",
+        "yo": "Ọ̀rẹ́ rán ọ́ — ẹ kú àbọ̀",
+        "ha": "Aboki ne ya aiko ka — barka da zuwa",
+        "ig": "Enyi zigara gị — nnọọ",
+    },
 }
 
 

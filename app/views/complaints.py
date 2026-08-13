@@ -135,8 +135,10 @@ def portal_submit():
         return redirect(url_for("complaints.portal"))
     if not c_created:
         return redirect(url_for("complaints.portal_thanks", ref=c.ref))
+    ack = notifications.patient_update_text("received", org.name, c.ref)
     db.session.add(ComplaintStatusHistory(complaint_id=c.id, from_status=None, to_status="NEW",
-                                          note="Submitted via public portal"))
+                                          note="Submitted via public portal",
+                                          patient_message=ack))
     audit("COMPLAINT_SUBMITTED", "complaint", c.id,
           {"ref": c.ref, "dept": dept.name, "category": category, "source": c.source}, org_id=org.id)
 
@@ -156,6 +158,7 @@ def portal_submit():
         notifications.notify(org.id, hod, "complaint_new_hod", ctx, channels=["inapp", "whatsapp", "email"],
                              entity_type="complaint", entity_id=c.id)
     db.session.commit()
+    notifications.notify_complaint_patient(org, c, "received")
     return redirect(url_for("complaints.portal_thanks", ref=c.ref))
 
 
@@ -163,7 +166,16 @@ def portal_submit():
 def portal_thanks():
     ref = request.args.get("ref", "")
     org = _default_org()
-    return render_template("complaint_thanks.html", ref=ref, org=org)
+    complaint = db.session.query(Complaint).filter_by(ref=ref).first() if ref else None
+    ack = None
+    if complaint:
+        for h in reversed(list(complaint.history or [])):
+            if h.patient_message:
+                ack = h.patient_message
+                break
+        if not ack:
+            ack = notifications.patient_update_text("received", org.name if org else "The hospital", ref)
+    return render_template("complaint_thanks.html", ref=ref, org=org, complaint=complaint, ack=ack)
 
 
 @bp.get("/complaint/status")
@@ -266,6 +278,8 @@ def staff_update(cid: int):
     action = request.form.get("action_type")
     old_status = c.status
 
+    extra = ""
+    event = None
     if action == "acknowledge":
         if c.status != "NEW":
             flash("Only NEW complaints can be acknowledged.", "error")
@@ -273,6 +287,7 @@ def staff_update(cid: int):
         c.status = "ACKNOWLEDGED"
         c.acknowledged_at = now_naive()
         note = "Acknowledged"
+        event = "acknowledged"
     elif action == "progress":
         action_taken = (request.form.get("action_taken") or "").strip()
         if not action_taken:
@@ -282,6 +297,8 @@ def staff_update(cid: int):
         c.action_taken = (c.action_taken + "\n" if c.action_taken else "") + \
             f"[{now_naive():%d %b %H:%M}] {action_taken}"
         note = "Action recorded"
+        extra = action_taken[:200]
+        event = "progress"
     elif action == "resolve":
         notes = (request.form.get("resolution_notes") or "").strip()
         if not notes:
@@ -291,22 +308,30 @@ def staff_update(cid: int):
         c.resolution_notes = notes
         c.resolved_at = now_naive()
         note = "Resolved"
+        extra = notes[:200]
+        event = "resolved"
     elif action == "close":
         if c.status != "RESOLVED":
             flash("Only RESOLVED complaints can be closed.", "error")
             return redirect(url_for("complaints.staff_detail", cid=cid))
         c.status = "CLOSED"
         note = "Closed"
+        event = "closed"
     else:
         flash("Unknown action.", "error")
         return redirect(url_for("complaints.staff_detail", cid=cid))
 
+    org = db.session.get(Organization, c.org_id)
+    pmsg = notifications.patient_update_text(event, org.name, c.ref, extra) if event else None
     db.session.add(ComplaintStatusHistory(complaint_id=c.id, from_status=old_status,
-                                          to_status=c.status, note=note, user_id=current_user.id))
+                                          to_status=c.status, note=note, user_id=current_user.id,
+                                          patient_message=pmsg))
     audit("COMPLAINT_UPDATED", "complaint", c.id,
           {"old_status": old_status, "new_status": c.status, "note": note})
     db.session.commit()
-    flash(f"Complaint updated to {c.status}.", "success")
+    if event:
+        notifications.notify_complaint_patient(org, c, event, extra)
+    flash(f"Complaint updated to {c.status}. The patient has been notified.", "success")
     return redirect(url_for("complaints.staff_detail", cid=cid))
 
 

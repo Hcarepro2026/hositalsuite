@@ -11,7 +11,12 @@
 <div class="offline-banner" id="offline-banner">📴 OFFLINE — DATA SAVED LOCALLY. You can keep working; entries sync when you're back online.</div>
 <div class="online-banner" id="online-banner">✅ Back online</div>
 <div class="topbar">
-  <a class="brand" href="/">🏥 {% if current_user.is_authenticated %}Hospital Suite{% else %}Hospital Admin Manager Suite{% endif %}</a>
+  <a class="brand" href="/">
+    {% if hospital and hospital.logo_path %}
+      <img class="brand-logo" src="/branding/logo" alt="">
+    {% else %}🏥{% endif %}
+    <span>{{ hospital.name if hospital else 'Hospital Suite' }}</span>
+  </a>
   <span class="conn" id="conn-chip">ONLINE</span>
   {% if current_user.is_authenticated %}
   <span class="who">{{ current_user.name.split()[0] }}<br>
@@ -22,19 +27,14 @@
 <nav class="nav">
   <a href="/" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
   {% if current_user.role in ('ADMIN_MANAGER','SUPER_ADMIN','MD_CEO') %}
-  <span class="dd {{ 'active' if request.path.startswith('/inspections') }}">
-    <button type="button" class="dd-btn" onclick="hmsToggleMenu(this)">🧑‍💼 Admin Manager ▾</button>
-    <div class="dd-menu">
-      <a href="/inspections/new">▶ Today's Inspection</a>
-      <a href="/inspections"> Inspection History</a>
-    </div>
-  </span>
+  <a href="/inspections" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>
   {% endif %}
   {% if current_user.role in ('SUPER_ADMIN','MD_CEO','ADMIN_MANAGER','HOD') %}
     <a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a>
     <a href="/queue" class="{{ 'active' if request.path == '/queue' }}">Queue</a>
     <a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a>
     <a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Feedback</a>
+    <a href="/referrals" class="{{ 'active' if request.path.startswith('/referrals') }}">Referrals</a>
     <a href="/dept-roster" class="{{ 'active' if request.path.startswith('/dept-roster') }}">Dept Roster</a>
     <a href="/corrective-actions" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>
   {% endif %}
@@ -59,7 +59,16 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-<div class="footer">Hospital Admin Manager Suite v{{ app_version }} · secure · audited · mobile-first</div>
+<div class="footer">
+  {% if hospital %}
+    <b>{{ hospital.name }}</b>
+    {% if hospital.address %} · {{ hospital.address }}{% endif %}
+    {% if hospital.phone %} · {{ hospital.phone }}{% endif %}
+    {% if hospital.email %} · {{ hospital.email }}{% endif %}
+    <br>
+  {% endif %}
+  Hospital Admin Manager Suite v{{ app_version }} · secure · audited · mobile-first
+</div>
 <div id="toast-zone" aria-live="polite"></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% if current_user.is_authenticated %}

@@ -13,7 +13,7 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request,
                    url_for)
 from flask_login import current_user
 
-from .. import notifications, scoring, services
+from .. import notifications, referrals as refeng, scoring, services
 from ..audit import audit
 from ..models import (Complaint, ComplaintCategory, ComplaintStatusHistory,
                       Department, Organization, PatientFeedback, db, now_naive)
@@ -69,6 +69,7 @@ def portal_submit():
                          source="qr" if request.form.get("loc") else "link")
     db.session.add(fb)
     db.session.flush()
+    refeng.stamp_feedback(org.id, fb)
     audit("FEEDBACK_SUBMITTED", "feedback", fb.id, {"rating": rating}, org_id=org.id)
 
     # ---- service recovery: low ratings route instantly to the complaint pipeline
@@ -110,16 +111,32 @@ def portal_submit():
         db.session.commit()
         return redirect(url_for("feedback.portal_thanks", rating=rating, ref=c.ref))
 
+    # High ratings unlock a personal, trackable share-link (§14). No prizes.
+    extra = {}
+    if rating >= refeng.HIGH_RATING:
+        link = refeng.issue_patient_referral(
+            org, fb, department_id=dept.id if dept else None,
+            referrer_phone=phone or None)
+        extra["code"] = link.code
     db.session.commit()
-    return redirect(url_for("feedback.portal_thanks", rating=rating))
+    return redirect(url_for("feedback.portal_thanks", rating=rating, **extra))
 
 
 @bp.get("/feedback/thanks")
 def portal_thanks():
     rating = request.args.get("rating", type=int) or 5
     ref = request.args.get("ref", "")
+    code = (request.args.get("code") or "").strip().upper()
     org = _default_org()
-    return render_template("feedback_thanks.html", rating=rating, ref=ref, org=org)
+    referral = None
+    share_url = wa = None
+    if org and code:
+        referral = refeng.find_any(org.id, code)
+        if referral:
+            share_url = refeng.share_url(referral)
+            wa = refeng.whatsapp_share_url(org.name, share_url)
+    return render_template("feedback_thanks.html", rating=rating, ref=ref, org=org,
+                           referral=referral, share_url=share_url, wa=wa)
 
 
 # ================================================================ STAFF

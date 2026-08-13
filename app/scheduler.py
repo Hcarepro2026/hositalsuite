@@ -121,9 +121,11 @@ def job_complaint_sla(app):
                 c.status = "ESCALATED"
                 c.escalated_at = now
                 from .models import ComplaintStatusHistory
+                pmsg = notifications.patient_update_text("escalated", org.name, c.ref)
                 db.session.add(ComplaintStatusHistory(complaint_id=c.id, from_status=old_status,
                                                       to_status="ESCALATED",
-                                                      note="Automatic escalation — HOD SLA expired"))
+                                                      note="Automatic escalation — HOD SLA expired",
+                                                      patient_message=pmsg))
                 audit("COMPLAINT_ESCALATED", "complaint", c.id,
                       {"reason": "SLA expired", "deadline": str(c.sla_deadline_at)}, org_id=org.id)
                 ctx = {"ref": c.ref, "dept": c.department.name, "hospital": org.name}
@@ -140,6 +142,7 @@ def job_complaint_sla(app):
                 if duty:
                     notifications.notify(org.id, duty, "complaint_escalated", ctx,
                                          channels=["inapp"], entity_type="complaint", entity_id=c.id)
+                notifications.notify_complaint_patient(org, c, "escalated")
             else:
                 # 4-hour warning, once
                 remaining = (c.sla_deadline_at - now).total_seconds() / 3600
