@@ -76,6 +76,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     def inject_globals():
         from .security import csrf_token
         from .services import org_settings_bundle
+        from . import i18n
         bundle = {}
         u = getattr(g, "_login_user", None) or (request and getattr(request, "_cached_user", None))
         try:
@@ -85,7 +86,10 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
             u = None
         if u is not None:
             bundle = org_settings_bundle(u.org_id)
-        return dict(csrf_token=csrf_token, settings=bundle, app_version="1.0.0")
+        lang = i18n.get_lang()
+        return dict(csrf_token=csrf_token, settings=bundle, app_version="1.0.0",
+                    _=i18n.translate, lang=lang, langs=i18n.LANGS,
+                    speech_lang=i18n.speech_tag(lang))
 
     @app.errorhandler(404)
     def not_found(e):

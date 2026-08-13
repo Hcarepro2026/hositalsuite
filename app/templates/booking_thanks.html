@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card pad-lg center" style="max-width:520px;margin:30px auto">
   <div style="font-size:3rem">✅</div>
-  <h1>Your visit is booked!</h1>
+  <h1>{{ _('booking_confirmed') }}</h1>
   {% if apt %}
   <p><b>{{ apt.department.name }}</b><br>
      {{ apt.appointment_date.strftime('%A, %d %B %Y') }} at <b>{{ apt.appointment_time }}</b></p>
@@ -15,6 +15,6 @@
   </div>
   <p class="hint">A confirmation SMS is on its way to your phone. Please arrive 15 minutes early.</p>
   <a class="btn secondary mt" href="/book/status?ref={{ ref }}">Check booking status</a>
-  <a class="btn ghost mt" href="/queue/join">🧍 Join today's queue instead</a>
+  <a class="btn ghost mt" href="/queue/join">🧍 {{ _('q_title') }}</a>
 </div>
 {% endblock %}

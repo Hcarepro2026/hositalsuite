@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -19,7 +19,8 @@
 <div class="portal-head">
   <div style="font-size:2rem">⭐</div>
   <h1>{{ org.name }}</h1>
-  <div>How was your experience?</div>
+  <div>{{ _('fb_title') }}</div>
+  {% include "_langbar.html" %}
 </div>
 <main class="wrap" style="max-width:560px">
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -31,7 +32,7 @@
   <form class="card pad-lg" method="post" action="/feedback/submit">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
 
-    <label style="margin-top:0">1 · Rate your experience <span class="req">*</span></label>
+    <label style="margin-top:0">1 · {{ _('fb_title') }} <span class="req">*</span></label>
     <div class="stars">
       {% for s in (1,2,3,4,5) %}
       <label><input type="radio" name="rating" value="{{ s }}" required><span>⭐<b style="font-size:1.1rem">&nbsp;{{ s }}</b></span></label>
@@ -45,15 +46,15 @@
       {% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
     </select>
 
-    <label>3 · What can we improve? (optional — type or speak)</label>
+    <label>3 · {{ _('fb_improve') }}</label>
     <textarea name="comment" id="fb-comment" placeholder="Tell us what happened…"></textarea>
-    <button type="button" class="mic-btn" data-lang="en-NG"
-            onclick="hmsVoice.start(this,'fb-comment')">🎤 Speak your feedback</button>
+    <button type="button" class="mic-btn" data-lang="{{ speech_lang }}"
+            onclick="hmsVoice.start(this,'fb-comment')">🎤 {{ _('speak') }}</button>
 
-    <label>4 · Phone (optional — only if you'd like us to follow up)</label>
+    <label>4 · {{ _('f_phone') }}</label>
     <input type="tel" name="phone" inputmode="tel" placeholder="e.g. 08012345678">
 
-    <button class="btn big mt" type="submit" style="width:100%">SEND FEEDBACK</button>
+    <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_feedback') }}</button>
   </form>
 </main>
 <div class="footer">Every rating is read by management · Low ratings trigger immediate follow-up</div>

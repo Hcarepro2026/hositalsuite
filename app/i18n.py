@@ -1,0 +1,95 @@
+"""Lightweight i18n: English + Nigerian languages (Yoruba, Hausa, Igbo).
+
+Design (§34): patient-facing strings live in one table; staff screens stay
+English for now. Translations are best-effort — flag them for community
+validation before wide rollout. Voice-to-text uses the matching BCP-47 tag
+so patients can DICTATE in their language where the device supports it.
+"""
+from __future__ import annotations
+
+from flask import session
+
+LANGS = {
+    "en": {"name": "English", "speech": "en-NG"},
+    "yo": {"name": "Yorùbá", "speech": "yo-NG"},
+    "ha": {"name": "Hausa", "speech": "ha-NG"},
+    "ig": {"name": "Igbo", "speech": "ig-NG"},
+}
+
+STRINGS: dict[str, dict[str, str]] = {
+    "tagline": {
+        "en": "Patient & Visitor Portal",
+        "yo": "Àtẹ fún aláìsàn àti àbẹ̀wò",
+        "ha": "Ƙofar marasa lafiya da baƙi",
+        "ig": "Ọnụ ụzọ ndị ọrịa na ndị ọbịa",
+    },
+    "privacy": {
+        "en": "Please do not include sensitive medical details — only what we need to help you.",
+        "yo": "Jọ̀wọ́ má ṣe fi ìsọfúnni ìlera tó ní ìmọ̀lára sílẹ̀ — ohun tí a nílò láti ràn ọ́ lọ́wọ́ nìkan.",
+        "ha": "Da fatan kar a saka bayanin lafiya mai mahimmanci — abin da muke bukata don taimaka muku kawai.",
+        "ig": "Biko etinyela ozi ahụike nwere mmetụta — naanị ihe anyị chọrọ iji nyere gị aka.",
+    },
+    "f_dept": {"en": "Department / Unit concerned", "yo": "Ẹ̀ka/Ẹyọ tí ọ̀rọ̀ náà kan",
+               "ha": "Sashen da ƙorafin ya shafa", "ig": "Ngalaba mkpesa a metụtara"},
+    "f_cat": {"en": "Complaint category", "yo": "Irú ẹ̀dùn", "ha": "Nau'in ƙorafi", "ig": "Ụdị mkpesa"},
+    "f_desc": {"en": "Describe the complaint", "yo": "àlàyé ẹ̀dùn rẹ", "ha": "Bayyana ƙorafinka",
+               "ig": "Kọwaa mkpesa gị"},
+    "f_phone": {"en": "Phone number", "yo": "Nọ́mbà fóònù", "ha": "Lambar waya", "ig": "Nọmba ekwentị"},
+    "f_attach": {"en": "Optional: photo & preferred contact", "yo": "Àṣàyàn: fọ́tò àti ọ̀nà ìkàn sí",
+                 "ha": "Na zaɓi: hoto da hanyar tuntuɓa", "ig": "Nhọrọ: foto na ụzọ ịkpọtụrụ"},
+    "btn_complaint": {"en": "SUBMIT COMPLAINT", "yo": "FI Ẹ̀DÙN SÍLẸ̀", "ha": "AIKA ƘORAFI", "ig": "ZIPU MKPESA"},
+    "speak": {"en": "Speak", "yo": "Sọ", "ha": "Yi magana", "ig": "Kwuo"},
+    "received": {"en": "Your complaint has been received.", "yo": "A gbà ẹ̀dùn rẹ.",
+                 "ha": "An karɓi ƙorafinka.", "ig": "A natara mkpesa gị."},
+    "ref_no": {"en": "Your reference number", "yo": "Nọ́mbà ìtọ́kasí rẹ",
+               "ha": "Lambar tambayarka", "ig": "Nọmba ntụaka gị"},
+    "check_status": {"en": "Check status", "yo": "Wo ipò rẹ", "ha": "Duba matsayi", "ig": "Lelee ọnọdụ"},
+    "book_title": {"en": "Book a Hospital Visit", "yo": "Ṣàkóso ìbẹ̀wò sí ilé ìwòsàn",
+                   "ha": "Yi rajistar ziyarar asibiti", "ig": "Debie oge nleta ụlọ ọgwụ"},
+    "f_service": {"en": "Service / Department", "yo": "Iṣẹ́/Ẹ̀ka", "ha": "Sabis / Sashe", "ig": "Ọrụ / Ngalaba"},
+    "f_date": {"en": "Preferred date", "yo": "Ọjọ́ tí o fẹ́", "ha": "Ranar da kake so", "ig": "Ụbọchị ị chọrọ"},
+    "f_time": {"en": "Preferred time", "yo": "Àkókò tí o fẹ́", "ha": "Lokacin da kake so", "ig": "Oge ị chọrọ"},
+    "f_name": {"en": "Patient full name", "yo": "Orúkọ aláìsàn ní kíkún",
+               "ha": "Cikakken sunan mara lafiya", "ig": "Aha onye ọrịa n'uju"},
+    "btn_book": {"en": "BOOK MY VISIT", "yo": "FIPAMỌ́ ÌBẸ̀WÒ MI", "ha": "AJIYACE ZIYARATA", "ig": "DEBIE NLETA M"},
+    "fb_title": {"en": "How was your experience?", "yo": "Báwo ni ìrírí rẹ rí?",
+                 "ha": "Ta yaya kwarewarka ta kasance?", "ig": "Kedu ka ahụmịhe gị dịrị?"},
+    "fb_improve": {"en": "What can we improve?", "yo": "Kí ni a lè mú dára síi?",
+                   "ha": "Me za mu iya gyarawa?", "ig": "Gịnị ka anyị nwere ime ka ọ ka mma?"},
+    "btn_feedback": {"en": "SEND FEEDBACK", "yo": "FI ÈSÌ RÁNṢẸ́", "ha": "AIKA RA'AYI", "ig": "ZIPU NZAGHACHI"},
+    "q_title": {"en": "Join the Queue", "yo": "Darapọ̀ mọ́ ìlà", "ha": "Shiga jerin jira", "ig": "Sonyere n'ahịrị"},
+    "btn_queue": {"en": "GET MY QUEUE NUMBER", "yo": "GBA NỌ́MBÀ ÌLÀ MI",
+                  "ha": "SAMO LAMBAR JIRA TA", "ig": "NWETA NỌMBA AHỊRỊ M"},
+    "thanks_good": {"en": "We're glad you had a good experience!",
+                    "yo": "A yọ̀ pé o ní ìrírí dáadáa!",
+                    "ha": "Muna farin ciki da kyakkyawar kwarewa!",
+                    "ig": "Anyị nwere obi ụtọ na ahụmịhe gị dị mma!"},
+    "sorry": {"en": "We're sorry — and we're on it.", "yo": "A dábìnín — a sì ń ṣe nípa rẹ̀.",
+              "ha": "Muna ba da haƙuri — muna magance shi.", "ig": "Anyị na-arịọ mgbaghara — anyị na-edozi ya."},
+    "book_again": {"en": "BOOK ANOTHER VISIT", "yo": "ṢÀKÓSO ÌBẸ̀WÒ MÌÍ",
+                   "ha": "YI WATA ZIYARA", "ig": "DEBIE NLETA ỌZỌ"},
+    "refer": {"en": "REFER A FRIEND OR FAMILY MEMBER", "yo": "DARÍ Ọ̀RẸ́ TÀBI ẸBÍ SÍBẸ̀",
+              "ha": "KAI ƊAN UWA KO ABOKI", "ig": "KPỌTA ENYI MA Ọ BỤ ONYE EZINỤLỌ"},
+    "no_account": {"en": "No account needed", "yo": "Kò sí àkọọ́lẹ̀ tí a nílò",
+                   "ha": "Ba a buƙatar asusu", "ig": "Achọghị akaụntụ"},
+    "language": {"en": "Language", "yo": "Èdè", "ha": "Harshe", "ig": "Asụsụ"},
+    "status_title": {"en": "Check your complaint status", "yo": "Wo ipò ẹ̀dùn rẹ",
+                     "ha": "Duba matsayin ƙorafinka", "ig": "Lelee ọnọdụ mkpesa gị"},
+    "booking_confirmed": {"en": "Your visit is booked!", "yo": "A ti fipamọ́ ìbẹ̀wò rẹ!",
+                          "ha": "An ajiyace ziyararka!", "ig": "Edebiela nleta gị!"},
+}
+
+
+def get_lang() -> str:
+    lang = session.get("lang", "en")
+    return lang if lang in LANGS else "en"
+
+
+def translate(key: str, lang: str | None = None) -> str:
+    lang = lang or get_lang()
+    entry = STRINGS.get(key, {})
+    return entry.get(lang) or entry.get("en") or key
+
+
+def speech_tag(lang: str | None = None) -> str:
+    return LANGS.get(lang or get_lang(), LANGS["en"])["speech"]

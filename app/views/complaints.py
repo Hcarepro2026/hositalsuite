@@ -185,6 +185,18 @@ def portal_status():
 
 
 # ================================================================ QR CODES
+@bp.get("/lang/<code>")
+def set_lang(code: str):
+    """Public language switch (session cookie), then return to the page you came from."""
+    from flask import session as flask_session
+    if code in ("en", "yo", "ha", "ig"):
+        flask_session["lang"] = code
+    back = request.args.get("next") or request.referrer or "/complaint"
+    if not back.startswith("/"):
+        back = "/complaint"
+    return redirect(back)
+
+
 @bp.get("/complaint/qr/<code>.png")
 def qr_png(code: str):
     loc = db.session.query(QrLocation).filter_by(code=code.upper()).first()

@@ -2,7 +2,7 @@
 {% block title %}Booking status{% endblock %}
 {% block content %}
 <div class="wrap" style="max-width:560px;margin:0 auto;padding:0">
-<h1>Check or cancel a booking</h1>
+<h1>{{ _('check_status') }}</h1>
 <form class="card mb" method="get" action="/book/status">
   <label>Booking reference</label>
   <input type="text" name="ref" value="{{ ref }}" placeholder="e.g. HOSP-APT-2026-000001" required>

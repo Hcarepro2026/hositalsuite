@@ -123,7 +123,7 @@ def test_offline_json_sync_submission(client, seeded):
 def test_complaint_flow_routing_and_escalation(client, seeded, app):
     # 1) public portal opens WITHOUT login
     r = client.get("/complaint")
-    assert r.status_code == 200 and b"Complaint Portal" in r.data
+    assert r.status_code == 200 and b"Visitor Portal" in r.data
 
     # 2) validation errors
     r = client.post("/complaint/submit", data={"_csrf": csrf(client, "/complaint"),

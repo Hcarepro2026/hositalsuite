@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -11,7 +11,8 @@
 <div class="portal-head">
   <div style="font-size:2rem">🧍</div>
   <h1>{{ org.name }}</h1>
-  <div>Join the Queue — no account needed</div>
+  <div>{{ _('q_title') }} — {{ _('no_account') }}</div>
+  {% include "_langbar.html" %}
 </div>
 <main class="wrap" style="max-width:560px">
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -22,18 +23,18 @@
   <form class="card pad-lg" method="post" action="/queue/join">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="loc" value="{{ loc or '' }}">
-    <label>1 · Department / Service <span class="req">*</span></label>
+    <label>1 · {{ _('f_dept') }} <span class="req">*</span></label>
     <select name="department_id" required>
       <option value="">— Select department —</option>
       {% for d in depts %}
       <option value="{{ d.id }}" {{ 'selected' if pre == d.id }}>{{ d.name }}</option>
       {% endfor %}
     </select>
-    <label>2 · Patient name <span class="req">*</span></label>
+    <label>2 · {{ _('f_name') }} <span class="req">*</span></label>
     <input type="text" name="patient_name" required>
-    <label>3 · Phone (optional — for an SMS when it's your turn)</label>
+    <label>3 · {{ _('f_phone') }} (SMS)</label>
     <input type="tel" name="phone" inputmode="tel" placeholder="e.g. 08012345678">
-    <button class="btn big mt" type="submit" style="width:100%">GET MY QUEUE NUMBER</button>
+    <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_queue') }}</button>
   </form>
 </main>
 <div class="footer">Your queue number works all day · Check it anytime with your private link</div>

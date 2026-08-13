@@ -63,7 +63,7 @@
 <div id="toast-zone" aria-live="polite"></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% if current_user.is_authenticated %}
-<script>hmsAlerts.start();</script>
+<script>hmsVoice.alertLang = "{{ speech_lang }}"; hmsAlerts.start();</script>
 {% endif %}
 {% block scripts %}{% endblock %}
 </body>

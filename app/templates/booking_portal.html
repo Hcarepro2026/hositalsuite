@@ -1,17 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0e5a8a">
-<title>Book a Visit — {{ org.name }}</title>
+<title>{{ _('book_title') }} — {{ org.name }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
 <div class="portal-head">
   <div style="font-size:2rem">📅</div>
   <h1>{{ org.name }}</h1>
-  <div>Book a Hospital Visit</div>
+  <div>{{ _('book_title') }}</div>
+  {% include "_langbar.html" %}
   {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}
 </div>
 <main class="wrap" style="max-width:560px">
@@ -27,7 +28,7 @@
     <input type="hidden" name="loc" value="{{ qr_loc.code if qr_loc else '' }}">
     <input type="hidden" name="idem" value="{{ idem }}">
 
-    <label>1 · Service / Department <span class="req">*</span></label>
+    <label>1 · {{ _('f_service') }} <span class="req">*</span></label>
     <select name="department_id" required>
       <option value="">— Select service —</option>
       {% for d in depts %}
@@ -35,11 +36,11 @@
       {% endfor %}
     </select>
 
-    <label>2 · Preferred date <span class="req">*</span></label>
+    <label>2 · {{ _('f_date') }} <span class="req">*</span></label>
     <input type="date" name="appointment_date" min="{{ min_date }}" max="{{ max_date }}"
            value="{{ form.get('appointment_date','') if form else '' }}" required>
 
-    <label>3 · Preferred time <span class="req">*</span></label>
+    <label>3 · {{ _('f_time') }} <span class="req">*</span></label>
     <select name="appointment_time" required>
       <option value="">— Select time —</option>
       {% for s in slots %}
@@ -48,15 +49,15 @@
     </select>
     <div class="hint">Opening hours — the hospital will confirm if anything changes.</div>
 
-    <label>4 · Patient full name <span class="req">*</span></label>
+    <label>4 · {{ _('f_name') }} <span class="req">*</span></label>
     <input type="text" name="patient_name" required autocomplete="name"
            value="{{ form.get('patient_name','') if form else '' }}">
 
-    <label>5 · Phone number <span class="req">*</span></label>
+    <label>5 · {{ _('f_phone') }} <span class="req">*</span></label>
     <input type="tel" name="phone" required inputmode="tel" placeholder="e.g. 08012345678"
            value="{{ form.get('phone','') if form else '' }}">
 
-    <button class="btn big mt" type="submit" style="width:100%">BOOK MY VISIT</button>
+    <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_book') }}</button>
   </form>
 
   <div class="card mt center">

@@ -66,8 +66,13 @@
         target.dispatchEvent(new Event("input", { bubbles: true }));
       };
       rec.onerror = function (e) {
+        if (e.error === "language-not-supported" && rec.lang !== "en-NG") {
+          try { rec.lang = "en-NG"; rec.start(); } catch (err) { hmsVoice._stopBtn(btn); }
+          return;
+        }
         if (e.error === "language-not-supported") {
-          try { rec.lang = "en-US"; rec.start(); } catch (err) { hmsVoice._stopBtn(btn); }
+          hmsVoice._stopBtn(btn);
+          alert("Voice input in this language is not supported on this phone — please type instead.");
           return;
         }
         hmsVoice._stopBtn(btn);
@@ -96,6 +101,7 @@
         if (!('speechSynthesis' in window)) return;
         window.speechSynthesis.cancel();        // clear queue → no overlapping repeats
         var u = new SpeechSynthesisUtterance(text);
+        u.lang = this.alertLang || "en-NG";      // speak in the user's chosen language
         u.volume = 1.0;                          // maximum
         u.rate = urgency === "emergency" ? 1.0 : 0.92;   // slightly slower = clearer
         u.pitch = 1.0;

@@ -2,7 +2,7 @@
 {% block title %}Complaint status{% endblock %}
 {% block content %}
 <div class="wrap" style="max-width:560px;margin:0 auto;padding:0">
-<h1>Check complaint status</h1>
+<h1>{{ _('status_title') }}</h1>
 <form class="card mb" method="get" action="/complaint/status">
   <label>Complaint reference number</label>
   <input type="text" name="ref" value="{{ ref }}" placeholder="e.g. HOSP-CMP-2026-000001" required>
