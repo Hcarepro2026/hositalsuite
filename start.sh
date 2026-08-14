@@ -6,4 +6,4 @@ cd "$(dirname "$0")"
 export SECRET_KEY="$(cat .secret_key 2>/dev/null || echo workspace-dev-key)"
 export PORT=8077
 export DATABASE_URL="sqlite:///data/app.db"
-exec python run.py
+exec python -u run.py

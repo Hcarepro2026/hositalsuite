@@ -435,6 +435,20 @@ class AuditLog(db.Model):
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+# ---------------------------------------------------------------- self-service password reset
+class PasswordReset(db.Model):
+    """Single-use, short-lived OTP for self-service 'forgot password' (§burden off admin)."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    otp_hash = db.Column(db.String(256), nullable=False)
+    channel = db.Column(db.String(12), default="sms")            # sms | email
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    used_at = db.Column(db.DateTime)
+    attempts = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=now_naive)
+    user = db.relationship("User")
+
+
 # ---------------------------------------------------------------- user prefs (§19)
 class UserPref(db.Model):
     """Per-user alert preferences: voice reminders, quiet hours, browser push."""
