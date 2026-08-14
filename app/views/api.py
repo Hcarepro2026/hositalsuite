@@ -179,6 +179,8 @@ def ussd_booking():
                       patient_name=name[:120], phone=phone, status="BOOKED", source="ussd")
     db.session.add(apt)
     db.session.flush()
+    from .. import referrals as refeng
+    refeng.stamp_booking(org.id, apt, code=data.get("referral_code") or "")
     audit("BOOKING_CREATED", "appointment", apt.id, {"ref": apt.ref, "source": "ussd"}, org_id=org.id)
     db.session.commit()
     return jsonify(ref=apt.ref, status="BOOKED",
@@ -221,8 +223,10 @@ def ussd_complaint():
                   sla_hours=sla_hours, sla_deadline_at=scoring.sla_deadline(now, sla_hours))
     db.session.add(c)
     db.session.flush()
+    from .. import notifications as _notes
+    ack = _notes.patient_update_text("received", org.name, c.ref)
     db.session.add(ComplaintStatusHistory(complaint_id=c.id, from_status=None, to_status="NEW",
-                                          note="Submitted via USSD"))
+                                          note="Submitted via USSD", patient_message=ack))
     audit("COMPLAINT_SUBMITTED", "complaint", c.id, {"ref": c.ref, "source": "ussd"}, org_id=org.id)
 
     from .. import notifications
@@ -237,5 +241,6 @@ def ussd_complaint():
         notifications.notify(org.id, hod, "complaint_new_hod", ctx, channels=["inapp"],
                              entity_type="complaint", entity_id=c.id)
     db.session.commit()
+    notifications.notify_complaint_patient(org, c, "received")
     return jsonify(ref=c.ref, status="NEW",
                    message=f"Your complaint has been received. Reference: {c.ref}")

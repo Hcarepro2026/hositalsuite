@@ -37,13 +37,14 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.queue import bp as queue_bp
     from .views.feedback import bp as fb_bp
     from .views.chat import bp as chat_bp
+    from .views.referrals import bp as ref_bp
     from .views.roster import bp as roster_bp
     from .views.admincp import bp as admin_bp
     from .views.reports import bp as reports_bp
     from .views.api import bp as api_bp
 
     for blueprint in (auth_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
-                      chat_bp, roster_bp, admin_bp, reports_bp, api_bp):
+                      chat_bp, ref_bp, roster_bp, admin_bp, reports_bp, api_bp):
         app.register_blueprint(blueprint)
 
     register_security_hooks(app)
@@ -92,9 +93,18 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
         if u is not None:
             bundle = org_settings_bundle(u.org_id)
         lang = i18n.get_lang()
-        return dict(csrf_token=csrf_token, settings=bundle, app_version="1.0.0",
+        hospital = None
+        try:
+            from .models import Organization
+            if u is not None:
+                hospital = db.session.get(Organization, u.org_id)
+            if hospital is None:
+                hospital = db.session.query(Organization).order_by(Organization.id).first()
+        except Exception:
+            hospital = None
+        return dict(csrf_token=csrf_token, settings=bundle, app_version="1.1.0",
                     _=i18n.translate, lang=lang, langs=i18n.LANGS,
-                    speech_lang=i18n.speech_tag(lang))
+                    speech_lang=i18n.speech_tag(lang), hospital=hospital)
 
     @app.errorhandler(404)
     def not_found(e):

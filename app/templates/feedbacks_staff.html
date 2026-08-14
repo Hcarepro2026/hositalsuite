@@ -2,7 +2,8 @@
 {% block title %}Patient feedback{% endblock %}
 {% block content %}
 <div class="spread mb"><h1 style="margin:0">Patient Feedback &amp; Satisfaction</h1>
-  <a class="btn small secondary" href="/feedback">⭐ Public feedback page</a></div>
+  <a class="btn small secondary" href="/feedback">⭐ Public feedback page</a>
+  <a class="btn small ghost" href="/referrals">💌 Referrals</a></div>
 
 <div class="grid cols3 mb">
   <div class="kpi {{ 'good' if avg and avg >= 4 else ('warn' if avg and avg >= 3 else 'bad') }}">

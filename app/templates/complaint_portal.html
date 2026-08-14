@@ -9,8 +9,7 @@
 </head>
 <body>
 <div class="portal-head">
-  <div style="font-size:2rem">🏥</div>
-  <h1>{{ org.name }}</h1>
+  {% include "_brand_mark.html" %}
   <div>{{ _('tagline') }}</div>
   {% include "_langbar.html" %}
   {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}

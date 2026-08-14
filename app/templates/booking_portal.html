@@ -9,11 +9,11 @@
 </head>
 <body>
 <div class="portal-head">
-  <div style="font-size:2rem">📅</div>
-  <h1>{{ org.name }}</h1>
-  <div>{{ _('book_title') }}</div>
+  {% include "_brand_mark.html" %}
+  <div>📅 {{ _('book_title') }}</div>
   {% include "_langbar.html" %}
   {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}
+  {% if ref_code %}<div class="mt"><span class="pill green">💌 {{ _('refer_welcome') }}</span></div>{% endif %}
 </div>
 <main class="wrap" style="max-width:560px">
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -26,6 +26,7 @@
   <form class="card pad-lg" method="post" action="/book/submit">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="loc" value="{{ qr_loc.code if qr_loc else '' }}">
+    <input type="hidden" name="r" value="{{ ref_code|default('') }}">
     <input type="hidden" name="idem" value="{{ idem }}">
 
     <label>1 · {{ _('f_service') }} <span class="req">*</span></label>

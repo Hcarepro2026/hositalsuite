@@ -22,10 +22,8 @@ def _my_org():
     return db.session.get(Organization, current_user.org_id)
 
 
-# ------------------------------------------------------------------ new inspection
-@bp.get("/inspections/new")
-@require_role("ADMIN_MANAGER", "SUPER_ADMIN")
-def inspection_new():
+def _admin_manager_page():
+    """One Admin Manager screen: today's inspection + history. No sub-menus."""
     now = now_naive()
     today = now.date()
     duty = services.on_duty(current_user.org_id, today)
@@ -36,10 +34,48 @@ def inspection_new():
     depts = (db.session.query(Department)
              .filter_by(org_id=current_user.org_id, active=True).order_by(Department.name).all())
     gps_mode = services.get_setting(current_user.org_id, "gps_mode")
-    return render_template("inspection_new.html", duty=duty, is_on_duty=is_on_duty,
-                           existing=existing, depts=depts, gps_mode=gps_mode,
-                           criteria=scoring.CRITERIA, today=today,
-                           device=request.headers.get("User-Agent", "")[:280])
+    q = (db.session.query(Inspection)
+         .filter_by(org_id=current_user.org_id, status="SUBMITTED"))
+    dept = request.args.get("dept", type=int)
+    inspector = request.args.get("inspector", type=int)
+    rating = request.args.get("rating")
+    date_from = request.args.get("from")
+    date_to = request.args.get("to")
+    if dept:
+        q = q.filter(Inspection.department_id == dept)
+    if inspector:
+        q = q.filter(Inspection.inspector_id == inspector)
+    if rating:
+        q = q.filter(Inspection.rating == rating)
+    if date_from:
+        from datetime import date as _d
+        try:
+            q = q.filter(Inspection.duty_date >= _d.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        from datetime import date as _d
+        try:
+            q = q.filter(Inspection.duty_date <= _d.fromisoformat(date_to))
+        except ValueError:
+            pass
+    items = q.order_by(Inspection.duty_date.desc(), Inspection.submitted_at.desc()).limit(300).all()
+    inspectors = db.session.query(User).filter_by(org_id=current_user.org_id, role="ADMIN_MANAGER").all()
+    show_form = current_user.role in ("ADMIN_MANAGER", "SUPER_ADMIN")
+    return render_template(
+        "admin_manager.html", duty=duty, is_on_duty=is_on_duty, existing=existing,
+        depts=depts, gps_mode=gps_mode, criteria=scoring.CRITERIA, today=today,
+        items=items, inspectors=inspectors, args=request.args, show_form=show_form,
+        ratings=["EXCELLENT", "GOOD", "FAIR / NEEDS IMPROVEMENT", "POOR", "CRITICAL"],
+        device=request.headers.get("User-Agent", "")[:280])
+
+
+# ------------------------------------------------------------------ Admin Manager (single page)
+@bp.get("/admin-manager")
+@bp.get("/inspections/new")
+@require_role("ADMIN_MANAGER", "SUPER_ADMIN")
+def inspection_new():
+    return _admin_manager_page()
 
 
 @bp.post("/inspections/departments/<int:dept_id>/children")
@@ -277,38 +313,7 @@ def inspection_submit():
 @bp.get("/inspections")
 @require_login
 def inspection_list():
-    q = (db.session.query(Inspection)
-         .filter_by(org_id=current_user.org_id, status="SUBMITTED"))
-    dept = request.args.get("dept", type=int)
-    inspector = request.args.get("inspector", type=int)
-    rating = request.args.get("rating")
-    date_from = request.args.get("from")
-    date_to = request.args.get("to")
-    if dept:
-        q = q.filter(Inspection.department_id == dept)
-    if inspector:
-        q = q.filter(Inspection.inspector_id == inspector)
-    if rating:
-        q = q.filter(Inspection.rating == rating)
-    if date_from:
-        from datetime import date as _d
-        try:
-            q = q.filter(Inspection.duty_date >= _d.fromisoformat(date_from))
-        except ValueError:
-            pass
-    if date_to:
-        from datetime import date as _d
-        try:
-            q = q.filter(Inspection.duty_date <= _d.fromisoformat(date_to))
-        except ValueError:
-            pass
-    items = q.order_by(Inspection.duty_date.desc(), Inspection.submitted_at.desc()).limit(300).all()
-    depts = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True).all()
-    inspectors = db.session.query(User).filter_by(org_id=current_user.org_id, role="ADMIN_MANAGER").all()
-    return render_template("inspection_list.html", items=items, depts=depts, inspectors=inspectors,
-                           args=request.args, today=now_naive().date(),
-                           ratings=["EXCELLENT", "GOOD", "FAIR / NEEDS IMPROVEMENT",
-                                    "POOR", "CRITICAL"])
+    return _admin_manager_page()
 
 
 @bp.get("/inspections/<int:insp_id>")

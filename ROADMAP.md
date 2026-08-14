@@ -57,8 +57,9 @@ the patient-journey half (book → queue → feedback → refer) is the main bui
 > happens on the deployed host (workspace egress is web-only).
 
 ### WAVE B — Retention, referral & AI (Priority 2)
-7. **Referral engine** (§14): referral link/QR per satisfied patient, source/code tracking, "Book another visit" prompt,
-   repeat-visit indicators. No aggressive incentives.
+7. **Referral engine** (§14): ✅ COMPLETE (2026-08-13) — personal link/QR after 4–5★ feedback,
+   hospital-wide + staff-named codes, `/r/<code>` landing, click/book/repeat analytics,
+   own-link ≠ conversion, PDF/CSV report, poster pack. No prizes.
 8. **AI service-recovery engine** (§8): classify urgency/category/department/sentiment/repeats from complaints & feedback;
    free-tier AI provider with **rule-based fallback** (our existing rules become the fallback); advisory only (§44).
 9. **AI management insights** (§24): narrative summaries that always show the underlying data.
@@ -91,7 +92,7 @@ Billing/SSO/native apps/EMR/complex AI agents/loyalty points — untouched until
 
 ## 5. DEFINITION OF DONE for pilot (§50 MVP)
 
-Patient: QR/Web access ✅ · Booking (A) · Queue (A) · Complaint ✅ · Feedback (A) · Referral (B)
+Patient: QR/Web access ✅ · Booking (A) · Queue (A) · Complaint ✅ · Feedback (A) · Referral (B) ✅
 Hospital: Dashboard ✅ · Complaint mgmt ✅ · HOD assignment ✅ · SLA ✅ · Escalation ✅
 Admin Manager: Inspection ✅ · 5 criteria ✅ · Voice/text explanation ✅ · PDF ✅ · Roster ✅ · Reminders ✅
 Management: Dashboard ✅ · Reports ✅ · Alerts ✅

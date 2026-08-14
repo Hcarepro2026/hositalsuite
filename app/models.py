@@ -41,6 +41,10 @@ class Organization(db.Model):
     code = db.Column(db.String(12), unique=True, nullable=False)       # e.g. HOSP
     name = db.Column(db.String(160), nullable=False)
     logo_path = db.Column(db.String(300))
+    email = db.Column(db.String(160))
+    phone = db.Column(db.String(32))
+    phone_alt = db.Column(db.String(32))
+    address = db.Column(db.String(300))
     created_at = db.Column(db.DateTime, default=now_naive)
 
 
@@ -230,6 +234,7 @@ class ComplaintStatusHistory(db.Model):
     from_status = db.Column(db.String(16))
     to_status = db.Column(db.String(16), nullable=False)
     note = db.Column(db.Text)
+    patient_message = db.Column(db.String(480))   # shown to the patient (status page)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     at = db.Column(db.DateTime, default=now_naive)
     user = db.relationship("User")
@@ -276,8 +281,10 @@ class Appointment(db.Model):
     patient_name = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(32), nullable=False)
     status = db.Column(db.String(12), default="BOOKED", nullable=False, index=True)
-    source = db.Column(db.String(12), default="link")       # qr | link | ussd | staff
+    source = db.Column(db.String(12), default="link")       # qr | link | ussd | staff | referral
     qr_location_id = db.Column(db.Integer, db.ForeignKey("qr_location.id"))
+    referral_id = db.Column(db.Integer, index=True)         # inbound: which share-link brought this booking
+    is_repeat = db.Column(db.Boolean, default=False, nullable=False)  # same phone booked before
     created_at = db.Column(db.DateTime, default=now_naive)
     arrived_at = db.Column(db.DateTime)
     cancelled_at = db.Column(db.DateTime)
@@ -296,6 +303,7 @@ class PatientFeedback(db.Model):
     source = db.Column(db.String(12), default="link")
     status = db.Column(db.String(12), default="NEW", index=True)   # NEW | ROUTED
     complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"))
+    referral_id = db.Column(db.Integer, index=True)         # inbound: arrived via a share-link
     created_at = db.Column(db.DateTime, default=now_naive)
     department = db.relationship("Department")
     complaint = db.relationship("Complaint")
@@ -322,6 +330,45 @@ class QueueTicket(db.Model):
     served_at = db.Column(db.DateTime)
     department = db.relationship("Department")
     appointment = db.relationship("Appointment")
+
+
+# ---------------------------------------------------------------- referrals (§14)
+REFERRAL_KINDS = ("patient", "hospital", "staff")
+REFERRAL_SOURCES = ("feedback", "booking", "staff", "poster", "link")
+REFERRAL_EVENT_KINDS = ("click", "book", "feedback", "queue")
+
+
+class Referral(db.Model):
+    """A shareable, trackable link/QR. No prizes, no pressure — just attribution."""
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(16), unique=True, nullable=False, index=True)
+    kind = db.Column(db.String(12), default="patient", nullable=False)   # patient | hospital | staff
+    source = db.Column(db.String(12), default="link")                    # feedback | booking | staff | poster | link
+    feedback_id = db.Column(db.Integer, db.ForeignKey("patient_feedback.id"))
+    appointment_id = db.Column(db.Integer, db.ForeignKey("appointment.id"))
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"))
+    referrer_name = db.Column(db.String(120))
+    referrer_phone = db.Column(db.String(32))
+    note = db.Column(db.String(200))                       # staff label, e.g. "Ward A poster"
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_naive)
+    last_clicked_at = db.Column(db.DateTime)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    department = db.relationship("Department")
+    origin_feedback = db.relationship("PatientFeedback", foreign_keys=[feedback_id])
+
+
+class ReferralEvent(db.Model):
+    """One row per click / booking / feedback / queue join attributed to a code."""
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    referral_id = db.Column(db.Integer, db.ForeignKey("referral.id"), nullable=False, index=True)
+    kind = db.Column(db.String(12), nullable=False, index=True)   # click | book | feedback | queue
+    appointment_id = db.Column(db.Integer, db.ForeignKey("appointment.id"))
+    feedback_id = db.Column(db.Integer, db.ForeignKey("patient_feedback.id"))
+    created_at = db.Column(db.DateTime, default=now_naive, index=True)
+    referral = db.relationship("Referral", backref="events")
 
 
 # ---------------------------------------------------------------- SMS delivery

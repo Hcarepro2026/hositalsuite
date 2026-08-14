@@ -5,8 +5,8 @@ Catches 500s, template errors and broken variables anywhere in the app.
 from datetime import timedelta
 
 from app.models import (Appointment, Complaint, CorrectiveAction, DutyRoster,
-                        Inspection, PatientFeedback, QrLocation, QueueTicket, db,
-                        now_naive)
+                        Inspection, PatientFeedback, QrLocation, QueueTicket,
+                        Referral, db, now_naive)
 
 from conftest import csrf, login
 
@@ -68,11 +68,13 @@ def test_admin_crawl(client, app, seeded):
     comp = db.session.query(Complaint).first()
     dept_report_id = seeded["dept"]
     loc = db.session.query(QrLocation).first()
+    ref = db.session.query(Referral).first()
     paths = [
         "/", "/inspections", "/inspections/new", f"/inspections/{insp.id}",
         "/complaints", "/complaints?status=OPEN&escalated=1", f"/complaints/{comp.id}",
         "/corrective-actions", "/corrective-actions?mine=1", "/roster", "/roster/import",
         "/reports", "/bookings", "/queue", "/queue/screen", "/feedbacks",
+        "/referrals",
         "/notifications", "/alert-settings",
         "/admin", "/admin/hospital", "/admin/users", "/admin/structure", "/admin/settings",
         "/admin/notifications", "/admin/audit", "/admin/audit?action=COMPLAINT",
@@ -80,6 +82,8 @@ def test_admin_crawl(client, app, seeded):
         f"/reports/departments/{dept_report_id}",
         f"/verify/{insp.verify_code}",
         f"/complaint/qr/{loc.code}.png",
+        f"/r/{ref.code}",
+        f"/r/{ref.code}.png",
     ]
     for p in paths:
         _assert_ok(client.get(p), p)
@@ -104,6 +108,9 @@ def test_admin_pdf_exports(client, app, seeded):
         f"/reports/departments/{seeded['dept']}?format=pdf",
         f"/reports/departments/{seeded['dept']}?format=csv",
         "/admin/posters/download?services=complaint,booking,queue,feedback",
+        "/reports/referrals?format=csv",
+        "/reports/referrals?format=pdf",
+        "/admin/posters/download?services=referral",
     ]
     for p in exports:
         r = client.get(p)
@@ -119,7 +126,7 @@ def test_md_crawl(client, app, seeded):
     login(client, "md")
     comp = db.session.query(Complaint).first()
     for p in ["/", "/reports", "/complaints", f"/complaints/{comp.id}", "/inspections",
-              "/corrective-actions", "/feedbacks", "/roster", "/bookings", "/queue",
+              "/corrective-actions", "/feedbacks", "/referrals", "/roster", "/bookings", "/queue",
               "/notifications", "/alert-settings"]:
         _assert_ok(client.get(p), p)
     # MD must NOT reach super-admin pages
@@ -131,7 +138,8 @@ def test_am_crawl(client, app, seeded):
     _setup_world(client, app, seeded)
     login(client, "am1")
     for p in ["/", "/inspections/new", "/inspections", "/complaints", "/bookings", "/queue",
-              "/corrective-actions", "/feedbacks", "/roster", "/notifications", "/alert-settings"]:
+              "/corrective-actions", "/feedbacks", "/referrals", "/roster", "/notifications",
+              "/alert-settings"]:
         _assert_ok(client.get(p), p)
     assert client.get("/admin").status_code == 403
 
@@ -141,7 +149,7 @@ def test_hod_crawl(client, app, seeded):
     login(client, "hod1")
     comp = db.session.query(Complaint).first()
     for p in ["/", "/complaints", f"/complaints/{comp.id}", "/corrective-actions",
-              "/bookings", "/queue", "/feedbacks", "/roster", "/notifications"]:
+              "/bookings", "/queue", "/feedbacks", "/referrals", "/roster", "/notifications"]:
         _assert_ok(client.get(p), p)
     for p in ["/admin", "/inspections/new"]:
         assert client.get(p).status_code == 403, f"HOD reached {p}"

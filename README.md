@@ -13,6 +13,7 @@ environments (NDPR-aware, low-connectivity tolerant, WhatsApp-first delivery).
 | **Patient booking** | Public QR/web/USSD booking: service + date + time slot + name + phone → reference like `HOSP-APT-2026-000001`, SMS confirmation (Termii/Twilio/sandbox), capacity-limited slots, patient self-service status check & cancellation, staff check-in that issues a queue ticket. |
 | **Queue management** | Digital queue numbers per department, private ticket status page (position + estimated wait), staff queue control (call next / served / no-show), privacy-safe public display screen (numbers only, never names) with zero-cost browser voice announcement, SMS "you're next", USSD join. |
 | **Patient feedback** | ⭐ 1–5 rating + optional voice/text comment. Low ratings are **instantly routed into the complaint/service-recovery pipeline** (AM on duty + HOD notified, SLA applies). Positive ratings unlock "Book another visit" + "Refer a friend" prompts. Satisfaction KPI on the executive dashboard. |
+| **Referrals** | Happy patients (4–5★) get a personal share-link + QR (`/r/CODE`). Friends who open it can book in one minute. The hospital sees clicks, bookings and returning patients. Hospital-wide poster QR included. **No prizes, no pressure.** |
 | **Daily inspection** | The rostered Admin Manager scores **exactly five criteria** (1–5 each, max 25). Scores of **1 or 2 force a mandatory explanation** (typed or voice-to-text). One review screen → **SUBMIT INSPECTION** locks the record. |
 | **PDF report** | Generated instantly on submission: hospital branding, ref number, five scores, explanations, total/percent/rating, findings, **verification QR + code**. Archived permanently. |
 | **WhatsApp delivery** | Report is sent to the MD/CEO over the **official WhatsApp Business Cloud API** (Media upload + document message). Status pipeline Generated → Sending → Delivered → Failed with retries and audit. |
@@ -22,7 +23,7 @@ environments (NDPR-aware, low-connectivity tolerant, WhatsApp-first delivery).
 | **Routing & SLA** | Every complaint auto-routes to the **Admin Manager on duty + the affected HOD**. Configurable SLA; on expiry the system **automatically escalates to the MD/CEO** and marks the complaint `ESCALATED` (audit-logged, never silently reset). |
 | **Corrective actions** | Finding → required action → owner → deadline → statuses OPEN/IN_PROGRESS/COMPLETED/OVERDUE/VERIFIED, with evidence upload and management verification. |
 | **Analytics** | Executive dashboard, 14-day heatmap, department trends, recurring-problem detection ("Equipment… scored 1–2 in 6 of the last 10 inspections"), Management Attention list. |
-| **Reports** | Daily / weekly / monthly / department / complaint / escalation / corrective-action / compliance — **PDF + CSV**, digital archive with verification codes. |
+| **Reports** | Daily / weekly / monthly / department / complaint / escalation / corrective-action / compliance / **referrals** — **PDF + CSV**, digital archive with verification codes. |
 | **Audit & security** | Hash-chained tamper-evident audit trail, RBAC (4 roles), CSRF, rate limiting, password policy, validated uploads, tenant org-id on every record. |
 
 ### The five criteria (fixed by design)
@@ -84,7 +85,7 @@ hospitalsuite/
 │   ├── views/              # auth, dashboards, inspections, complaints, roster, admin, reports, api
 │   ├── templates/          # mobile-first server-rendered UI (no external CDN dependencies)
 │   └── static/             # design-system CSS + voice/offline/GPS JS
-└── tests/                  # 28 automated tests (unit + end-to-end)
+└── tests/                  # 99 automated tests (unit + end-to-end)
 ```
 
 **Stack:** Python 3.13 · Flask 3 · SQLAlchemy 2 · SQLite (dev) / PostgreSQL (prod) ·
@@ -133,7 +134,7 @@ The same routing/SLA/escalation pipeline applies.
 ## 5. Business rules — verified
 
 All rules from the specification are implemented **and covered by automated tests**
-(`python -m pytest tests/ -q` → **28 passed**):
+(`python -m pytest tests/ -q` → **99 passed**):
 
 - Exactly five criteria; scores 1–5; total/percent/rating bands ✔
 - Score 1 or 2 → submission blocked until explanation exists (form + API) ✔
@@ -150,6 +151,7 @@ All rules from the specification are implemented **and covered by automated test
 - Roster import: missing names, invalid dates, duplicates (in-file and vs DB) all rejected with preview ✔
 - RBAC (HOD ≠ admin), CSRF required, login rate-limited, audit chain tamper-evident ✔
 - USSD intake authenticated and wired to the same pipeline ✔
+- High ratings (4–5★) issue a personal trackable share-link + QR; friend bookings are attributed; own-link is a repeat visit, not a conversion; no prizes ✔
 
 ---
 

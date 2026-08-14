@@ -17,9 +17,8 @@
 </head>
 <body>
 <div class="portal-head">
-  <div style="font-size:2rem">⭐</div>
-  <h1>{{ org.name }}</h1>
-  <div>{{ _('fb_title') }}</div>
+  {% include "_brand_mark.html" %}
+  <div>⭐ {{ _('fb_title') }}</div>
   {% include "_langbar.html" %}
 </div>
 <main class="wrap" style="max-width:560px">
