@@ -4,12 +4,12 @@ from __future__ import annotations
 
 def seed_global_kb(app) -> int:
     from ..models import KnowledgeArticle, db
-    from . import kb_core, kb_depts, kb_extra
+    from . import kb_core, kb_depts, kb_extra, kb_extended, kb_part5, kb_part6, kb_part7
     with app.app_context():
         if db.session.query(KnowledgeArticle).filter_by(org_id=None).first():
             return 0
         count = 0
-        for entry in list(kb_core.KB) + list(kb_depts.KB) + list(kb_extra.KB):
+        for entry in list(kb_core.KB) + list(kb_depts.KB) + list(kb_extra.KB) + list(kb_extended.KB) + list(kb_part5.KB) + list(kb_part6.KB) + list(kb_part7.KB):
             db.session.add(KnowledgeArticle(
                 org_id=None, scope="global", status="approved",
                 category=entry["cat"], intent=entry["intent"],
@@ -18,6 +18,6 @@ def seed_global_kb(app) -> int:
                 ha=entry.get("ha"), ig=entry.get("ig"), cta=entry.get("cta")))
             count += 1
         db.session.commit()
-        kws = sum(len(e["kw"]) for e in list(kb_core.KB) + list(kb_depts.KB) + list(kb_extra.KB))
+        kws = sum(len(e["kw"]) for e in list(kb_core.KB) + list(kb_depts.KB) + list(kb_extra.KB) + list(kb_extended.KB) + list(kb_part5.KB) + list(kb_part6.KB) + list(kb_part7.KB))
         print(f"[KB] seeded {count} global intents / {kws} keyword triggers")
         return count

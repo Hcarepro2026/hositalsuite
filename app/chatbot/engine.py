@@ -84,6 +84,9 @@ def answer(text: str, lang: str = "en", org_id=None):
         action = "book"
     elif best.intent in ("complaint_start", "bill_dispute"):
         action = "complaint"
-    elif best.intent in ("emergency_general", "emergency_chest", "anc_danger"):
+    elif best.intent in ("emergency_general", "emergency_chest", "anc_danger",
+                         "labour_signs", "newborn_jaundice"):
         action = "emergency"
+    elif best.intent == "human_handoff":
+        action = "handoff"
     return {"text": out, "article": best, "confidence": float(best_score), "action": action}
