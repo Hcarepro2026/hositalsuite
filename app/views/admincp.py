@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import shutil
 
-from flask import (Blueprint, abort, flash, redirect, render_template, request,
+from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request,
                    send_file, url_for)
 from flask_login import current_user
 
@@ -752,6 +752,19 @@ def health():
 
 
 # ================================================================ KB / chatbot admin (§SaaS)
+@bp.post("/kb/sync")
+@require_role(*SUPER)
+def kb_sync():
+    """Ship newly-added global dialogues to this deployment (no edits lost)."""
+    from ..chatbot.seed_kb import seed_global_kb
+    added = seed_global_kb(current_app)
+    audit("KB_GLOBAL_SYNC", "kb", None, {"added": added})
+    db.session.commit()
+    flash(f"Global library updated — {added} new dialogue(s) added." if added
+          else "Global library is already up to date.", "success")
+    return redirect(url_for("admin.kb_list", scope="global"))
+
+
 @bp.get("/kb")
 @require_role(*SUPER_MD)
 def kb_list():
