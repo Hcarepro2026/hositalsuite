@@ -65,7 +65,7 @@
 6. Multi-tenant: `org_id` on every table; RLS deferred; app-layer scoping enforced.
 7. AI must stay **administrative & advisory, never clinical** (when AI features get built).
 
-## 4. What is built (all tested; **104/104 tests**, green on SQLite)
+## 4. What is built (all tested; **116/116 tests**, green on SQLite + PostgreSQL 17)
 
 - **Core**: auth (scrypt, RBAC 4 roles, forced password change, MFA-ready), CSRF, per-IP rate limits,
   hash-chained audit trail (`app/audit.py`, thread-safe), safe uploads (magic bytes), idempotency keys.
@@ -90,6 +90,13 @@
   (quiet hours, min-urgency prefs at `/alert-settings`), premium token-based CSS design system.
 - **i18n**: EN/Yorùbá/Hausa/Igbo on patient portals incl. voice-to-text language tags (`app/i18n.py`,
   `/lang/<code>`), best-effort translations flagged for community validation.
+- **Patient Assistant chatbot** (`/chat` + `/api/chat`): premium multilingual dialogue library
+  (`app/chatbot/kb_*.py`, **119 intents / ~1,059 triggers**), retrieval engine with clinical
+  guardrail (never diagnoses) + handoff/complaint/emergency actions; multi-tenant KB
+  (global master org_id NULL + tenant pending-approval + promote-to-global), KB admin at
+  `/admin/kb` with "Update global library" idempotent sync (`app/chatbot/seed_kb.py`).
+- **Self-service password reset** (`/forgot-password`, phone OTP) + **referral engine**
+  (`/referrals`, from the parallel session) — both merged; see merge commit history.
 - **Management**: executive dashboard (KPIs, heatmap, Management Attention, satisfaction),
   department performance + recurring-issue detection, 9 report types (PDF+CSV, incl. referrals), report archive,
   QR Poster Pack generator (`/admin/posters`), admin control center, audit UI with chain verify.
@@ -100,7 +107,7 @@
 
 ```bash
 pip3 install -r requirements.txt
-python -m pytest tests/ -q            # 99 tests
+python -m pytest tests/ -q            # 116 tests
 DATABASE_URL="postgresql://hms:hms_test_pw@127.0.0.1:5432/hms_test" python -m pytest tests/ -q
 bash start.sh                          # workspace preview on :8077 (SQLite demo data)
 python run.py seed | demo | tick | backup | dbcheck
