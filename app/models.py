@@ -435,6 +435,71 @@ class AuditLog(db.Model):
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+# ---------------------------------------------------------------- chatbot knowledge base (§SaaS)
+KB_STATUSES = ("approved", "pending", "rejected")
+
+
+class KnowledgeArticle(db.Model):
+    """Multi-tenant dialogue library.
+
+    org_id NULL  -> global master library (shared by every tenant)
+    org_id set   -> tenant-specific dialogue; status 'pending' until approved.
+    Learning loop: unanswered chats + thumbs feed reports; admins may promote a
+    good tenant answer to the global master (with approval).
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), index=True)  # NULL = global
+    category = db.Column(db.String(40), nullable=False, index=True)
+    intent = db.Column(db.String(60), nullable=False, index=True)
+    keywords = db.Column(db.Text, nullable=False)          # newline/comma-separated triggers
+    en = db.Column(db.Text, nullable=False)                # premium English
+    pidgin = db.Column(db.Text)                            # Nigerian Pidgin
+    yo = db.Column(db.Text)
+    ha = db.Column(db.Text)
+    ig = db.Column(db.Text)
+    cta = db.Column(db.String(200))                        # soft call-to-action
+    clinical_safe = db.Column(db.Boolean, default=True)    # False = refuse/redirect template
+    scope = db.Column(db.String(8), default="global")      # global | tenant
+    status = db.Column(db.String(10), default="approved", index=True)
+    submitted_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    approved_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    hit_count = db.Column(db.Integer, default=0)
+    thumbs_up = db.Column(db.Integer, default=0)
+    thumbs_down = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=now_naive)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+
+
+class ChatSession(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), index=True)
+    lang = db.Column(db.String(4), default="en")
+    channel = db.Column(db.String(12), default="web")       # web | whatsapp
+    started_at = db.Column(db.DateTime, default=now_naive)
+    ended_at = db.Column(db.DateTime)
+    handed_off = db.Column(db.Boolean, default=False)
+
+
+class ChatMessage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("chat_session.id"), index=True)
+    role = db.Column(db.String(8), nullable=False)          # user | bot
+    text = db.Column(db.Text, nullable=False)
+    intent = db.Column(db.String(60))
+    confidence = db.Column(db.Float)
+    article_id = db.Column(db.Integer, db.ForeignKey("knowledge_article.id"))
+    unanswered = db.Column(db.Boolean, default=False)
+    at = db.Column(db.DateTime, default=now_naive)
+
+
+class ChatFeedback(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey("chat_message.id"), index=True)
+    article_id = db.Column(db.Integer, db.ForeignKey("knowledge_article.id"))
+    rating = db.Column(db.String(4), nullable=False)        # up | down
+    at = db.Column(db.DateTime, default=now_naive)
+
+
 # ---------------------------------------------------------------- self-service password reset
 class PasswordReset(db.Model):
     """Single-use, short-lived OTP for self-service 'forgot password' (§burden off admin)."""

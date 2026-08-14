@@ -728,3 +728,122 @@ def health():
     except OSError:
         pass
     return render_template("admin/health.html", info=info)
+
+
+# ================================================================ KB / chatbot admin (§SaaS)
+@bp.get("/kb")
+@require_role(*SUPER_MD)
+def kb_list():
+    from ..models import KnowledgeArticle
+    q = db.session.query(KnowledgeArticle)
+    scope = request.args.get("scope")
+    if scope == "global":
+        q = q.filter(KnowledgeArticle.org_id.is_(None))
+    elif scope == "tenant":
+        q = q.filter(KnowledgeArticle.org_id == current_user.org_id)
+    elif scope == "pending":
+        q = q.filter(KnowledgeArticle.status == "pending")
+    else:
+        q = q.filter(db.or_(KnowledgeArticle.org_id.is_(None),
+                            KnowledgeArticle.org_id == current_user.org_id))
+    items = q.order_by(KnowledgeArticle.category, KnowledgeArticle.intent).limit(400).all()
+    return render_template("admin/kb.html", items=items, scope=scope or "all")
+
+
+@bp.post("/kb/add")
+@require_role(*SUPER_MD)
+def kb_add():
+    from ..models import KnowledgeArticle
+    f = request.form
+    intent = (f.get("intent") or "").strip()
+    en = (f.get("en") or "").strip()
+    if not intent or not en:
+        flash("Intent and English response are required.", "error")
+        return redirect(url_for("admin.kb_list"))
+    is_super = current_user.is_super
+    db.session.add(KnowledgeArticle(
+        org_id=None if (is_super and f.get("scope") == "global") else current_user.org_id,
+        scope="global" if (is_super and f.get("scope") == "global") else "tenant",
+        status="approved" if is_super else "pending",
+        category=(f.get("category") or "general").strip(),
+        intent=intent,
+        keywords=(f.get("keywords") or "").replace(",", "\n"),
+        en=en, pidgin=f.get("pidgin") or None, yo=f.get("yo") or None,
+        ha=f.get("ha") or None, ig=f.get("ig") or None, cta=f.get("cta") or None,
+        submitted_by=current_user.id,
+        approved_by=current_user.id if is_super else None))
+    audit("KB_ADDED", "kb", None, {"intent": intent, "scope": f.get("scope")})
+    db.session.commit()
+    flash("Dialogue added." if is_super else
+          "Dialogue submitted — pending approval before it goes live.", "success")
+    return redirect(url_for("admin.kb_list"))
+
+
+@bp.post("/kb/<int:kid>/edit")
+@require_role(*SUPER_MD)
+def kb_edit(kid: int):
+    from ..models import KnowledgeArticle
+    a = db.session.get(KnowledgeArticle, kid)
+    if not a or (a.org_id and a.org_id != current_user.org_id and not current_user.is_super):
+        abort(404)
+    f = request.form
+    a.intent = (f.get("intent") or a.intent).strip()
+    a.category = (f.get("category") or a.category).strip()
+    a.keywords = (f.get("keywords") or a.keywords).replace(",", "\n")
+    a.en = (f.get("en") or a.en).strip()
+    a.pidgin = f.get("pidgin") or None
+    a.yo = f.get("yo") or None
+    a.ha = f.get("ha") or None
+    a.ig = f.get("ig") or None
+    a.cta = f.get("cta") or None
+    audit("KB_EDITED", "kb", kid, {"intent": a.intent})
+    db.session.commit()
+    flash("Dialogue updated.", "success")
+    return redirect(url_for("admin.kb_list", scope=request.args.get("scope") or "all"))
+
+
+@bp.post("/kb/<int:kid>/approve")
+@require_role(*SUPER)
+def kb_approve(kid: int):
+    from ..models import KnowledgeArticle
+    a = db.session.get(KnowledgeArticle, kid)
+    if not a:
+        abort(404)
+    a.status = "approved"
+    a.approved_by = current_user.id
+    audit("KB_APPROVED", "kb", kid, {"intent": a.intent})
+    db.session.commit()
+    flash("Dialogue approved and live.", "success")
+    return redirect(url_for("admin.kb_list", scope="pending"))
+
+
+@bp.post("/kb/<int:kid>/promote")
+@require_role(*SUPER)
+def kb_promote(kid: int):
+    """Learning loop: promote a good tenant answer into the global master library."""
+    from ..models import KnowledgeArticle
+    a = db.session.get(KnowledgeArticle, kid)
+    if not a:
+        abort(404)
+    a.org_id = None
+    a.scope = "global"
+    a.status = "approved"
+    a.approved_by = current_user.id
+    audit("KB_PROMOTED_TO_GLOBAL", "kb", kid, {"intent": a.intent})
+    db.session.commit()
+    flash("Promoted to the global master library.", "success")
+    return redirect(url_for("admin.kb_list"))
+
+
+@bp.post("/kb/<int:kid>/delete")
+@require_role(*SUPER_MD)
+def kb_delete(kid: int):
+    from ..models import KnowledgeArticle
+    a = db.session.get(KnowledgeArticle, kid)
+    if not a or (a.org_id and a.org_id != current_user.org_id and not current_user.is_super):
+        abort(404)
+    audit("KB_DELETED", "kb", kid, {"intent": a.intent})
+    db.session.delete(a)
+    db.session.commit()
+    flash("Dialogue deleted.", "success")
+    return redirect(url_for("admin.kb_list"))

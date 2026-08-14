@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e5a8a">
+<title>{{ _('tagline') }} — {{ org.name if org else 'Hospital' }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<style>
+.chat{max-width:640px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 150px)}
+.msgs{flex:1;overflow-y:auto;padding:10px 4px;display:flex;flex-direction:column;gap:10px}
+.bub{max-width:85%;padding:11px 14px;border-radius:16px;font-size:.95rem;line-height:1.45;white-space:pre-wrap}
+.bub.bot{background:#fff;border:1px solid var(--line-soft);border-bottom-left-radius:4px;box-shadow:var(--shadow-1)}
+.bub.user{background:var(--primary);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:6px 0}
+.chip{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:7px 12px;font-size:.8rem;
+  font-weight:650;cursor:pointer;color:var(--ink-2)}
+.chip:hover{border-color:var(--primary);color:var(--primary-700)}
+.fb{display:flex;gap:8px;margin-top:6px}
+.fb button{background:none;border:none;font-size:1rem;cursor:pointer;opacity:.6}
+.fb button:hover{opacity:1}
+.inrow{display:flex;gap:8px;padding-top:8px}
+.inrow input{flex:1}
+.disclosure{font-size:.72rem;color:var(--faint);text-align:center;padding:4px}
+</style>
+</head>
+<body>
+<div class="portal-head">
+  <div style="font-size:2rem">💬</div>
+  <h1>{{ org.name if org else 'Hospital' }}</h1>
+  <div>{{ _('tagline') }}</div>
+  {% include "_langbar.html" %}
+</div>
+<main class="wrap" style="padding-top:6px">
+  <div class="disclosure">You're chatting with a friendly assistant. It can't diagnose or prescribe —
+    a human is always one tap away.</div>
+  <div class="chat">
+    <div class="msgs" id="msgs"></div>
+    <div class="chips" id="chips">
+      <button class="chip" data-q="Book an appointment">📅 Book</button>
+      <button class="chip" data-q="What are your opening hours?">🕐 Hours</button>
+      <button class="chip" data-q="How much is my bill?">🧾 Bills</button>
+      <button class="chip" data-q="I want to make a complaint"> Complaint</button>
+      <button class="chip" data-q="I am pregnant and want to book ANC">🤰 ANC</button>
+      <button class="chip" data-q="Where is the hospital?">🗺 Directions</button>
+      <button class="chip" data-q="Talk to a human">🙋 Human</button>
+    </div>
+    <div class="inrow">
+      <button class="mic-btn" data-lang="{{ speech_lang }}" onclick="hmsVoice.start(this,'chat-in')"
+        style="margin:0">🎤</button>
+      <input id="chat-in" type="text" placeholder="{{ _('fb_improve') }}…" autocomplete="off">
+      <button class="btn small" id="send" style="min-height:46px">Send</button>
+    </div>
+  </div>
+</main>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+var sessionId = null, LANG = "{{ lang }}";
+var msgs = document.getElementById('msgs');
+function add(text, role, msgId){
+  var d = document.createElement('div');
+  d.className = 'bub ' + role;
+  d.textContent = text;
+  msgs.appendChild(d);
+  if (role === 'bot' && msgId){
+    var fb = document.createElement('div');
+    fb.className = 'fb';
+    fb.innerHTML = '<button data-r="up">👍</button><button data-r="down">👎</button>';
+    fb.querySelectorAll('button').forEach(function(b){
+      b.onclick = function(){
+        fetch('/chat/feedback', {method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({msg_id: msgId, rating: b.dataset.r})});
+        fb.remove();
+      };
+    });
+    msgs.appendChild(fb);
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function send(text){
+  if(!text) return;
+  add(text, 'user');
+  fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({text:text, lang:LANG, session:sessionId})})
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    sessionId = d.session;
+    add(d.reply, 'bot', d.msg_id);
+    if (text.toLowerCase().indexOf('human') >= 0){
+      fetch('/chat/handoff', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({session:sessionId})})
+      .then(function(r){return r.json();}).then(function(h){ add(h.message, 'bot'); });
+    }
+  });
+}
+document.getElementById('send').onclick = function(){
+  var i = document.getElementById('chat-in'); send(i.value.trim()); i.value='';
+};
+document.getElementById('chat-in').addEventListener('keydown', function(e){
+  if(e.key==='Enter'){ send(this.value.trim()); this.value=''; }
+});
+document.querySelectorAll('.chip').forEach(function(c){
+  c.onclick = function(){ send(c.dataset.q); };
+});
+add("Hello! I'm your care assistant — ask me about bookings, bills, hours, directions, ANC, " +
+    "or anything about your visit. How can I help?", 'bot');
+</script>
+</body>
+</html>

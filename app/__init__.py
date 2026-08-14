@@ -36,13 +36,14 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.bookings import bp as book_bp
     from .views.queue import bp as queue_bp
     from .views.feedback import bp as fb_bp
+    from .views.chat import bp as chat_bp
     from .views.roster import bp as roster_bp
     from .views.admincp import bp as admin_bp
     from .views.reports import bp as reports_bp
     from .views.api import bp as api_bp
 
     for blueprint in (auth_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
-                      roster_bp, admin_bp, reports_bp, api_bp):
+                      chat_bp, roster_bp, admin_bp, reports_bp, api_bp):
         app.register_blueprint(blueprint)
 
     register_security_hooks(app)
@@ -71,6 +72,10 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
         if os.environ.get("AUTO_SEED") == "1":
             from .seeddata import auto_seed
             auto_seed(app)
+
+        # Load the global master dialogue library for the patient assistant.
+        from .chatbot.seed_kb import seed_global_kb
+        seed_global_kb(app)
 
     @app.context_processor
     def inject_globals():
