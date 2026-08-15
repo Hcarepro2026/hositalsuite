@@ -169,7 +169,20 @@ def migrate_disk_to_db(app) -> int:
     if backend() == "disk":
         return 0
     from .config import Config
+
+    # If the database is unhealthy, ABORT the whole sweep immediately. Retrying
+    # per-file multiplies the connection timeout by the number of files (37
+    # files x 10s = 6 minutes), which outlasts the host's health check and puts
+    # the container in a restart loop that serves nothing at all.
+    try:
+        db.session.execute(db.text("SELECT 1"))
+    except Exception as exc:                             # noqa: BLE001
+        db.session.rollback()
+        app.logger.warning("storage: skipping disk rescue, database not ready (%s)", exc)
+        return 0
+
     moved = 0
+    failures = 0
     for root_dir in (Config.UPLOAD_DIR, Config.REPORT_DIR):
         if not os.path.isdir(root_dir):
             continue
@@ -188,7 +201,13 @@ def migrate_disk_to_db(app) -> int:
                     put_file(local, key)
                     moved += 1
                 except Exception as exc:            # noqa: BLE001 - never block boot
+                    db.session.rollback()
+                    failures += 1
                     app.logger.warning("storage: could not migrate %s: %s", local, exc)
+                    if failures >= 3:
+                        app.logger.warning("storage: aborting disk rescue after %d failures; "
+                                           "will retry on the next start", failures)
+                        return moved
     if moved:
         db.session.commit()
         app.logger.info("storage: rescued %d file(s) from the ephemeral disk", moved)

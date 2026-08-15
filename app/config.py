@@ -24,6 +24,26 @@ def _data_uri(default_rel: str) -> str:
     return url
 
 
+def _connect_args() -> dict:
+    """Driver-level connection timeouts (PostgreSQL only; SQLite has no socket).
+
+    connect_timeout caps the TCP handshake; the keepalive settings make the
+    kernel detect a silently dropped connection in ~30s instead of hanging on
+    a dead socket for many minutes.
+    """
+    url = os.environ.get("DATABASE_URL", "")
+    if not url or url.startswith("sqlite"):
+        return {}
+    return {
+        "connect_timeout": int(os.environ.get("DB_CONNECT_TIMEOUT", "10")),
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+        "application_name": "hospital-suite",
+    }
+
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-key-change-me")
     SQLALCHEMY_DATABASE_URI = _data_uri("app.db")
@@ -35,6 +55,13 @@ class Config:
         "pool_pre_ping": True,
         "pool_recycle": 300,
         "pool_timeout": 30,
+        # Bound every connection attempt. Without connect_timeout a database
+        # that accepts TCP but never answers (Supabase pooler wobble, an IPv6
+        # black-hole, a network partition) blocks the worker for the OS default
+        # of ~130s. At boot that outlasts the host's health check, so the
+        # container is killed and restarted forever and the site serves NOTHING
+        # — not even static files. Fail fast instead and start in degraded mode.
+        "connect_args": _connect_args(),
     }
     TIMEZONE = ZoneInfo(os.environ.get("TIMEZONE", "Africa/Lagos"))
 

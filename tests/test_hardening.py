@@ -395,3 +395,45 @@ def test_audit_chain_still_verifies_after_all_changes(client, seeded):
         "phone": "08012223333"}, follow_redirects=True)
     ok, n = verify_chain(seeded["org"])
     assert ok is True and n > 0
+
+
+# ================================================================ boot resilience
+def test_connect_timeout_is_configured_for_postgres(monkeypatch):
+    """Regression: a database that accepts TCP but never replies hung startup
+    for ~130s (the OS default), outlasting the host health check and putting
+    the container in a permanent restart loop that served NOTHING."""
+    import importlib
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@example.invalid:5432/db")
+    import app.config as cfg
+    importlib.reload(cfg)
+    args = cfg._connect_args()
+    assert args["connect_timeout"] <= 15, "unbounded connect blocks the whole boot"
+    assert args["keepalives"] == 1
+
+    # SQLite has no socket, so it must get no libpq options
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///x.db")
+    importlib.reload(cfg)
+    assert cfg._connect_args() == {}
+    monkeypatch.undo()
+    importlib.reload(cfg)
+
+
+def test_disk_rescue_gives_up_fast_when_database_is_down(app, monkeypatch):
+    """Regression: the rescue retried EVERY file, multiplying the connection
+    timeout by the file count (37 files x 10s = 6 minutes of dead boot)."""
+    from app import storage
+
+    calls = {"n": 0}
+    real_execute = db.session.execute
+
+    def boom(*a, **kw):
+        calls["n"] += 1
+        raise RuntimeError("database is down")
+
+    monkeypatch.setattr(db.session, "execute", boom)
+    moved = storage.migrate_disk_to_db(app)
+    monkeypatch.setattr(db.session, "execute", real_execute)
+
+    assert moved == 0
+    assert calls["n"] == 1, "must probe once and abort, not once per file"

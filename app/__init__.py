@@ -103,27 +103,43 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                 db.session.rollback()
                 app.logger.exception("boot step %r failed — continuing", name)
 
-        _boot_step("create_all", db.create_all)
+        # ONE database readiness probe up front. If the database is not
+        # answering, every subsequent boot step would each burn its own
+        # connect_timeout; serially that outlasts the host's health check and
+        # the container is killed before it ever listens. Better to start in
+        # degraded mode (static pages + an honest 503 on /health) and let the
+        # scheduler heal things once the database returns.
+        db_ready = False
+        try:
+            db.session.execute(db.text("SELECT 1"))
+            db_ready = True
+        except Exception as exc:                         # noqa: BLE001
+            db.session.rollback()
+            app.logger.error("DATABASE NOT REACHABLE AT BOOT (%s) — starting in DEGRADED mode. "
+                             "Pages will serve; /api/v1/health will report status=degraded.", exc)
 
-        # Alembic first (proper versioned migrations), then the legacy
-        # column-adder as a safety net for anything Alembic could not do.
-        from .migrate import ensure_schema, run_alembic_upgrade
-        _boot_step("alembic_upgrade", lambda: run_alembic_upgrade(app))
-        _boot_step("ensure_schema", ensure_schema)
+        if db_ready:
+            _boot_step("create_all", db.create_all)
 
-        # Rescue any files still living on the ephemeral container disk.
-        from .storage import migrate_disk_to_db
-        _boot_step("storage_rescue", lambda: migrate_disk_to_db(app))
+            # Alembic first (proper versioned migrations), then the legacy
+            # column-adder as a safety net for anything Alembic could not do.
+            from .migrate import ensure_schema, run_alembic_upgrade
+            _boot_step("alembic_upgrade", lambda: run_alembic_upgrade(app))
+            _boot_step("ensure_schema", ensure_schema)
 
-        # First-boot bootstrap on free hosts with no shell access (Render free):
-        # AUTO_SEED=1 seeds ONLY an empty database; credentials printed once to logs.
-        if os.environ.get("AUTO_SEED") == "1":
-            from .seeddata import auto_seed
-            _boot_step("auto_seed", lambda: auto_seed(app))
+            # Rescue any files still living on the ephemeral container disk.
+            from .storage import migrate_disk_to_db
+            _boot_step("storage_rescue", lambda: migrate_disk_to_db(app))
 
-        # Load the global master dialogue library for the patient assistant.
-        from .chatbot.seed_kb import seed_global_kb
-        _boot_step("seed_kb", lambda: seed_global_kb(app))
+            # First-boot bootstrap on free hosts with no shell access (Render free):
+            # AUTO_SEED=1 seeds ONLY an empty database; credentials printed once to logs.
+            if os.environ.get("AUTO_SEED") == "1":
+                from .seeddata import auto_seed
+                _boot_step("auto_seed", lambda: auto_seed(app))
+
+            # Load the global master dialogue library for the patient assistant.
+            from .chatbot.seed_kb import seed_global_kb
+            _boot_step("seed_kb", lambda: seed_global_kb(app))
 
     @app.context_processor
     def inject_globals():
