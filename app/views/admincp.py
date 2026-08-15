@@ -4,8 +4,8 @@ from __future__ import annotations
 import os
 import shutil
 
-from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request,
-                   send_file, url_for)
+from flask import (Blueprint, Response, abort, current_app, flash, redirect,
+                   render_template, request, send_file, url_for)
 from flask_login import current_user
 
 from .. import services, whatsapp
@@ -1162,3 +1162,79 @@ def data_request_fulfil(rid: int):
     db.session.commit()
     flash(f"Request {req.ref} marked {req.status.lower()}.", "success")
     return redirect(url_for("admin.data_requests"))
+
+
+# ================================================================ bulk staff upload
+@bp.get("/users/import")
+@require_role(*SUPER)
+def users_import_form():
+    depts = (db.session.query(Department)
+             .filter_by(org_id=current_user.org_id, active=True)
+             .order_by(Department.name).all())
+    return render_template("admin/users_import.html", depts=depts,
+                           role_choices=[(r, role_label(r)) for r in ROLES])
+
+
+@bp.get("/users/import/template")
+@require_role(*SUPER)
+def users_import_template():
+    """Download a starter spreadsheet matching the hospital's own paperwork."""
+    from .. import bulkusers
+    kind = request.args.get("kind", "nominal")
+    csv_text = bulkusers.template_csv(kind)
+    return Response(csv_text, mimetype="text/csv", headers={
+        "Content-Disposition": f"attachment; filename=staff-upload-{kind}.csv"})
+
+
+@bp.post("/users/import")
+@require_role(*SUPER)
+def users_import_preview():
+    from .. import bulkusers
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("Please choose a CSV or Excel (.xlsx) file.", "error")
+        return redirect(url_for("admin.users_import_form"))
+
+    raw, err = bulkusers.parse_file(file)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("admin.users_import_form"))
+    if not raw:
+        flash("No staff rows were found in that file.", "error")
+        return redirect(url_for("admin.users_import_form"))
+
+    default_dept = request.form.get("default_department_id", type=int)
+    rows = bulkusers.build_preview(current_user.org_id, raw,
+                                   default_department_id=default_dept)
+    token = bulkusers.save_preview(current_user.org_id, rows)
+    valid = sum(1 for r in rows if r["ok"])
+    return render_template("admin/users_import_preview.html", rows=rows, token=token,
+                           valid_count=valid, error_count=len(rows) - valid)
+
+
+@bp.post("/users/import/confirm")
+@require_role(*SUPER)
+def users_import_confirm():
+    from .. import bulkusers
+    token = (request.form.get("token") or "").strip()
+    rows = bulkusers.load_preview(current_user.org_id, token)
+    if rows is None:
+        flash("That import preview has expired. Please upload the file again.", "error")
+        return redirect(url_for("admin.users_import_form"))
+    try:
+        result = bulkusers.commit_preview(current_user.org_id, rows,
+                                          created_by_id=current_user.id)
+        audit("USERS_BULK_IMPORTED", "user", None,
+              {"created": result["created_count"], "skipped": result["skipped"]})
+        db.session.commit()
+    except Exception as exc:                             # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("bulk user import failed")
+        flash(f"The import could not be completed: {exc}", "error")
+        return redirect(url_for("admin.users_import_form"))
+
+    bulkusers.discard_preview(current_user.org_id, token)
+    flash(f"{result['created_count']} staff account(s) created. "
+          f"{result['skipped']} row(s) skipped. Each account is awaiting your approval.",
+          "success")
+    return render_template("admin/users_import_done.html", result=result)

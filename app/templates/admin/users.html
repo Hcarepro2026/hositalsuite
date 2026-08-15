@@ -2,6 +2,9 @@
 {% block title %}Users{% endblock %}
 {% block content %}
 <h1>Users &amp; Roles</h1>
+<p class="row" style="gap:8px;flex-wrap:wrap">
+  <a class="btn small secondary" href="/admin/users/import">📋 Bulk upload staff (nominal roll)</a>
+</p>
 
 {% if pending %}
 <div class="notice" style="border-left-color:var(--amber);background:var(--amber-bg)">
