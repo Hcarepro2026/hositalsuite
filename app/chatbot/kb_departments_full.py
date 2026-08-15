@@ -1566,6 +1566,178 @@ _d("Nursing Services", [
 ])
 
 
+# ============================================================ RADIOLOGY / IMAGING
+_d("Radiology / Imaging", [
+    ("what", ["radiology", "imaging department", "scan department", "x ray department"],
+     "Our Imaging unit does X-rays, ultrasound scans and ECG. Your doctor writes the request and "
+     "we do the pictures — then the doctor explains what they show.",
+     "Our Imaging unit dey do X-ray, ultrasound scan and ECG. Your doctor go write the request and "
+     "we go do the picture — then doctor go explain wetin e show.", _CTA_DESK),
+    ("book", ["book a scan", "arrange x ray", "when can i do my scan"],
+     "Bring your request slip to the Imaging desk and they'll tell you the next available time. "
+     "Some scans are done the same day.",
+     "Bring your request slip come Imaging desk and dem go tell you the next time wey dey available. "
+     "Some scan dey done same day.", _CTA_DESK),
+    ("prepare", ["how do i prepare for a scan", "before ultrasound"],
+     "It depends on the scan — some need a full bladder, some need you to fast. Your request slip "
+     "will say, so please read it, and ask at the desk if it isn't clear.",
+     "E depend on the scan — some need full bladder, some need make you fast. Your request slip go talk "
+     "am, abeg read am, and ask for the desk if e no clear.", _CTA_DESK),
+    ("results", ["scan results", "when will my x ray be ready"],
+     "The report goes to your doctor, usually within a day or two for routine scans. Your doctor will "
+     "go through it with you — pictures need explaining, not just reading.",
+     "The report dey go your doctor, usually within one or two days for normal scan. Your doctor go go "
+     "through am with you — picture need explanation, no be just to read am.", _CTA_HELP),
+    ("cost", ["how much is an x ray", "scan price", "ultrasound cost"],
+     "It varies by the type of scan. The billing desk will price your specific request before it's "
+     "done, so you always know first.",
+     "E dey vary by the type of scan. Billing desk go price your own request before dem do am, so you go "
+     "always know first.", _CTA_DESK),
+    ("safe", ["is x ray safe", "radiation", "is scan safe in pregnancy"],
+     "These are good questions and the radiographer will answer them properly for your situation. "
+     "Always tell them if you are or might be pregnant, before the scan — never after.",
+     "Na correct question and the radiographer go answer am well for your own situation. Always tell dem "
+     "if you dey pregnant or you fit dey pregnant, before the scan — no be after.", _CTA_HELP),
+    ("bring", ["what to bring for a scan"],
+     "Bring your request slip, your hospital card, any previous films or reports, and your receipt. "
+     "Old films help the radiologist compare.",
+     "Bring your request slip, hospital card, any old film or report, and your receipt. Old film dey help "
+     "the radiologist compare.", _CTA_HELP),
+    ("wait", ["how long does a scan take"],
+     "Most X-rays take just a few minutes; an ultrasound takes a bit longer. The desk will tell you "
+     "what to expect on the day.",
+     "Most X-ray na few minutes; ultrasound dey take small time pass. The desk go tell you wetin to expect "
+     "for the day.", _CTA_HELP),
+    ("film", ["collect my x ray film", "copy of my scan"],
+     "Ask at the Imaging desk with your ID and receipt. Films are usually released with the report.",
+     "Ask for Imaging desk with your ID and receipt. Dem dey usually release film with the report.", _CTA_DESK),
+    ("hours", ["imaging hours", "when is x ray open"],
+     "Imaging runs through the working day, with emergency cover for urgent cases at any hour.",
+     "Imaging dey run through the work day, and emergency cover dey for urgent case any time.", _CTA_DESK),
+    ("where", ["where is radiology", "find imaging"],
+     "The Imaging unit is signposted inside the hospital — reception will walk you there.",
+     "Imaging unit get sign inside the hospital — reception go waka with you.", _CTA_DESK),
+    ("complaint", ["complain about imaging"],
+     "Please tell us — it reaches management with a reference number so it can be followed up properly.",
+     "Abeg tell us — e dey reach management with reference number make dem fit follow am up well.",
+     "Tap 'Make a Complaint' and I'll take you there."),
+])
+
+# ============================================================ FAMILY MEDICINE / GOPD
+_d("Family Medicine / General Outpatient", [
+    ("what", ["family medicine", "general outpatient", "gopd", "general clinic"],
+     "The General Outpatient Department — GOPD — is where most visits begin. If you're not sure which "
+     "specialist you need, start here and the doctor will treat you or point you the right way.",
+     "General Outpatient Department — GOPD — na where most visit dey start. If you no sure which specialist "
+     "you need, start from here and doctor go treat you or show you the right way.", _CTA_BOOK),
+    ("book", ["book gopd", "see a general doctor"],
+     "I can book you into GOPD. Mornings are calmest. Bring your hospital card and any medicines you "
+     "are taking.",
+     "I fit book you for GOPD. Morning dey calm pass. Bring your hospital card and any medicine wey you dey "
+     "take.", _CTA_BOOK),
+    ("walk_in", ["can i just walk in", "without appointment"],
+     "Yes, you can walk in — though booking or taking a queue number from your phone first means less "
+     "standing around.",
+     "Yes, you fit waka come — but if you book or take queue number from your phone first, you no go stand "
+     "for line.", "Say 'queue' and I'll get you a number."),
+    ("which_clinic", ["which department should i see", "i don't know who to see"],
+     "Then GOPD is exactly the right place — that's what it's for. The doctor will see you and refer you "
+     "on if you need a specialist.",
+     "Then GOPD na exactly the right place — na wetin e dey for. Doctor go see you and refer you go specialist "
+     "if you need am.", _CTA_BOOK),
+    ("bring", ["what to bring to gopd"],
+     "Your hospital card, any medicines you're taking, previous results if you have them, and a short "
+     "note of what's been troubling you.",
+     "Your hospital card, any medicine wey you dey take, old result if you get am, and short note of wetin dey "
+     "worry you.", _CTA_HELP),
+    ("cost", ["gopd consultation fee"],
+     "GOPD consultation is charged at our standard clinic rate; tests and medicines are separate. Billing "
+     "will confirm before anything is done.",
+     "GOPD consultation na our normal clinic rate; test and medicine get dem own charge. Billing go confirm "
+     "before dem do anything.", _CTA_DESK),
+    ("children", ["can my child be seen at gopd"],
+     "Young children are usually best seen by Paediatrics, but come in and we'll direct you to the right "
+     "team quickly.",
+     "Small pikin better make Paediatrics see dem, but come and we go direct you to the right team quick.",
+     _CTA_BOOK),
+    ("referral", ["gopd referral to specialist"],
+     "If you need a specialist, the GOPD doctor writes the referral and we book you in — you won't have to "
+     "start over.",
+     "If you need specialist, GOPD doctor go write the referral and we go book you — you no go start again from "
+     "scratch.", _CTA_BOOK),
+    ("hours", ["gopd hours", "when is general clinic open"],
+     "GOPD runs through the working day on weekdays. Accident & Emergency covers everything outside those "
+     "hours.",
+     "GOPD dey run through the work day for weekdays. Accident & Emergency dey cover everything outside that "
+     "time.", _CTA_BOOK),
+    ("dressing", ["wound dressing at gopd", "treatment room"],
+     "The treatment and dressing rooms are part of GOPD. Come at your appointment time, or sooner if the "
+     "wound looks worse.",
+     "Treatment and dressing room dey inside GOPD. Come for your appointment time, or come quick if the wound "
+     "worse.", _CTA_DESK),
+    ("where", ["where is gopd"],
+     "GOPD is signposted from the main entrance — reception will point you straight there.",
+     "GOPD get sign from the main entrance — reception go show you straight.", _CTA_DESK),
+    ("complaint", ["complain about gopd"],
+     "Please do — it goes to management with a reference number and someone will look into it.",
+     "Abeg do — e dey go management with reference number and person go look into am.",
+     "Tap 'Make a Complaint' and I'll take you there."),
+])
+
+# ============================================================ CATERING SERVICES
+_d("Catering Services", [
+    ("what", ["catering", "hospital kitchen", "patient meals", "food services"],
+     "Our Catering team prepares patient meals, including special diets ordered by the dietitian. Good "
+     "food is part of getting better, not an extra.",
+     "Our Catering team dey prepare patient food, including special diet wey dietitian order. Good food na "
+     "part of recovery, no be extra.", _CTA_DESK),
+    ("meal_times", ["meal times", "when is food served"],
+     "Meals are served at set times through the day. The ward nurse will tell you the exact times on your "
+     "ward.",
+     "Dem dey serve food for set time through the day. Ward nurse go tell you the exact time for your ward.",
+     _CTA_DESK),
+    ("bring_food", ["can i bring food for my patient", "outside food"],
+     "Please check with the nurse first — some patients are on restricted or special diets for medical "
+     "reasons, and the wrong food can genuinely set them back.",
+     "Abeg check with nurse first — some patient dey on restricted or special diet for medical reason, and wrong "
+     "food fit really set dem back.", _CTA_DESK),
+    ("special_diet", ["diabetic meal", "special diet", "no salt diet"],
+     "Special diets are arranged with our Nutrition & Dietetics team. Tell the nurse and they'll set it up.",
+     "Special diet, na our Nutrition & Dietetics team dey arrange am. Tell nurse and dem go set am up.", _CTA_DESK),
+    ("allergy", ["food allergy", "i cannot eat"],
+     "Please tell the nurse straight away so it's recorded on your chart. Never assume the kitchen knows — "
+     "tell them, every admission.",
+     "Abeg tell nurse sharp sharp make dem record am for your chart. No assume say kitchen sabi — tell dem, every "
+     "time you admit.", _CTA_DESK),
+    ("quality", ["the food was cold", "food complaint", "food not good"],
+     "I'm sorry — please tell the ward nurse the same day so it can be put right, and file it formally if "
+     "it keeps happening. Meals matter.",
+     "Sorry — abeg tell ward nurse same day make dem fix am, and file am formally if e dey happen again. Food dey "
+     "important.", "Tap 'Make a Complaint' if it continues."),
+    ("visitors_food", ["is there a canteen", "where can i buy food"],
+     "Ask at reception about the canteen or nearby options for visitors.",
+     "Ask for reception about canteen or place wey dey near for visitor.", _CTA_DESK),
+    ("religious", ["halal food", "religious diet"],
+     "Please tell the nurse your dietary requirements on admission and we'll do our best to accommodate them.",
+     "Abeg tell nurse your food requirement when you admit and we go try our best to arrange am.", _CTA_DESK),
+    ("water", ["drinking water for patients"],
+     "Ask the ward nurse — drinking water is provided on the wards.",
+     "Ask ward nurse — drinking water dey for the ward.", _CTA_DESK),
+    ("hours", ["catering hours"],
+     "The kitchen works around the meal service through the day. The ward nurse knows the times for your ward.",
+     "Kitchen dey work around the meal service through the day. Ward nurse sabi the time for your ward.", _CTA_DESK),
+    ("hygiene", ["is the kitchen clean", "food hygiene"],
+     "Catering and Environmental Health work together on food hygiene, and it's taken seriously. Report any "
+     "concern the same day.",
+     "Catering and Environmental Health dey work together on food hygiene, and dem dey take am serious. Report any "
+     "concern same day.", _CTA_DESK),
+    ("complaint", ["complain about the food"],
+     "Please tell us — food complaints reach management with a reference number.",
+     "Abeg tell us — food complaint dey reach management with reference number.",
+     "Tap 'Make a Complaint' and I'll take you there."),
+])
+
+
 # --------------------------------------------------------------------------
 # Build the KB list the loader expects.
 #
@@ -1595,6 +1767,10 @@ _SHORT = {
     "Public Affairs": ["public affairs", "public relations", "enquiries"],
     "Laundry": ["laundry", "linen"],
     "Nursing Services": ["nursing", "nurse", "matron", "apex nurse"],
+    "Radiology / Imaging": ["radiology", "imaging", "x ray", "xray", "scan", "ultrasound"],
+    "Family Medicine / General Outpatient": ["family medicine", "general outpatient", "gopd",
+                                             "general clinic", "outpatient"],
+    "Catering Services": ["catering", "kitchen", "patient food", "meals"],
 }
 
 
