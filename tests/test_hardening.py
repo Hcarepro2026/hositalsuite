@@ -454,3 +454,25 @@ def test_disk_rescue_gives_up_fast_when_database_is_down(app, monkeypatch):
 
     assert moved == 0
     assert calls["n"] == 1, "must probe once and abort, not once per file"
+
+
+def test_scheduler_self_heals_if_its_thread_dies(app, monkeypatch):
+    """A dead scheduler means duty reminders and SLA escalations silently stop.
+    It must restart itself rather than stay dead until someone redeploys."""
+    import app.scheduler as sched
+
+    class DeadThread:
+        def is_alive(self):
+            return False
+
+    monkeypatch.setenv("DISABLE_SCHEDULER", "0")
+    monkeypatch.setattr(sched, "_thread_ref", DeadThread())
+    monkeypatch.setattr(sched, "_started", True)
+    assert sched.is_alive() is False
+
+    restarted = sched.ensure_running(app)
+    assert restarted is True
+    assert sched.is_alive() is True
+
+    # calling again is a no-op while it is healthy
+    assert sched.ensure_running(app) is False

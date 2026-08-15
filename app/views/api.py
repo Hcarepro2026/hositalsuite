@@ -33,8 +33,13 @@ def health():
 
     scheduler_ok = None
     try:
-        from ..scheduler import is_alive
+        from ..scheduler import ensure_running, is_alive
         scheduler_ok = is_alive()
+        if scheduler_ok is False:
+            # Self-heal: a dead scheduler means SLA escalations and duty
+            # reminders have silently stopped. Restart it on the spot.
+            ensure_running(current_app._get_current_object())
+            scheduler_ok = is_alive()
     except Exception:                                 # noqa: BLE001
         scheduler_ok = None
 

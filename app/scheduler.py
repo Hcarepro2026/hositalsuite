@@ -343,3 +343,28 @@ def is_alive() -> bool | None:
         return None
     thread = _thread_ref
     return bool(thread and thread.is_alive())
+
+
+def ensure_running(app) -> bool:
+    """Restart the scheduler thread if it has died. Self-healing.
+
+    The thread can die during a bad boot — e.g. the database was still waking
+    up on the very first tick. Without this it stays dead until someone
+    redeploys, and duty reminders plus SLA escalation silently never happen.
+    Called from the health endpoint, so any monitoring ping also repairs it.
+    """
+    global _started, _thread_ref
+    import os
+    if os.environ.get("DISABLE_SCHEDULER") == "1":
+        return False
+    with _lock:
+        thread = _thread_ref
+        if thread is not None and thread.is_alive():
+            return False
+        t = threading.Thread(target=_loop, args=(app, 30), daemon=True,
+                             name="hms-scheduler")
+        t.start()
+        _thread_ref = t
+        _started = True
+        app.logger.warning("scheduler was not running — restarted it")
+        return True
