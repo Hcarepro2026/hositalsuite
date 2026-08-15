@@ -364,6 +364,23 @@ def test_scheduler_health_is_reported(app):
     assert is_alive() in (None, True, False)
 
 
+def test_health_returns_200_even_when_degraded(client, seeded, monkeypatch):
+    """Regression (2026-08-15 outage): /api/v1/health is the PLATFORM health
+    check. Returning 503 while the database was down made Render kill a
+    working container, turning a database wobble into a total site outage.
+    Liveness must always be 200; /ready is the strict probe."""
+    def boom(*a, **kw):
+        raise RuntimeError("database down")
+    monkeypatch.setattr(db.session, "execute", boom)
+
+    r = client.get("/api/v1/health")
+    assert r.status_code == 200, "health must stay 200 or the host kills the deploy"
+    assert r.get_json()["status"] == "degraded"
+    assert r.get_json()["database"] is False
+
+    assert client.get("/api/v1/ready").status_code == 503
+
+
 def test_health_endpoint_exposes_operational_state(client, seeded, app):
     from app.backup import create_backup
     create_backup(app, kind="test")

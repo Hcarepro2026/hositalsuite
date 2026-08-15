@@ -56,7 +56,28 @@ def health():
         "storage": current_app.config.get("STORAGE_BACKEND", "db"),
         "whatsapp_mode": whatsapp.mode(),
     }
-    return jsonify(payload), (200 if healthy else 503)
+    # ALWAYS HTTP 200 — this is a LIVENESS probe, and it is the URL the host
+    # uses to decide whether a deploy succeeded. Returning 503 while the
+    # database is down makes the platform kill a perfectly good container,
+    # turning a recoverable database wobble into a total site outage (exactly
+    # what happened on 2026-08-15). Read the "status" field to see health;
+    # use /api/v1/ready when you specifically need a readiness check.
+    return jsonify(payload), 200
+
+
+@bp.get("/ready")
+def ready():
+    """Strict readiness probe: 503 unless the database is actually usable.
+
+    Deliberately NOT the platform health check — use this for monitoring
+    dashboards and alerting, where you want to be paged for a degraded state.
+    """
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        return jsonify(ready=True), 200
+    except Exception:                                 # noqa: BLE001
+        db.session.rollback()
+        return jsonify(ready=False), 503
 
 
 # ================================================================ live alerts (§19/§37)

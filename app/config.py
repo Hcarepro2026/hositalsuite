@@ -35,7 +35,7 @@ def _connect_args() -> dict:
     if not url or url.startswith("sqlite"):
         return {}
     return {
-        "connect_timeout": int(os.environ.get("DB_CONNECT_TIMEOUT", "10")),
+        "connect_timeout": int(os.environ.get("DB_CONNECT_TIMEOUT", "5")),
         "keepalives": 1,
         "keepalives_idle": 30,
         "keepalives_interval": 10,
