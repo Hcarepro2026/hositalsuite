@@ -32,10 +32,18 @@ def chat_page():
 @rate_limit(limit=40, window=60.0)
 def chat_api():
     org = _org()
-    data = request.get_json(silent=True) or {}
-    text = (data.get("text") or "").strip()
-    lang = data.get("lang") or "en"
-    session_id = data.get("session") or None
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    # Coerce defensively: a non-string "text" (a number, a list, null) used to
+    # raise AttributeError and return a 500 to the patient.
+    raw = data.get("text")
+    text = (raw if isinstance(raw, str) else ("" if raw is None else str(raw))).strip()
+    text = text[:2000]                     # bound the work the retrieval engine does
+    lang = data.get("lang")
+    lang = lang if isinstance(lang, str) and lang in ("en", "yo", "ha", "ig", "pcm") else "en"
+    session_id = data.get("session")
+    session_id = session_id if isinstance(session_id, int) else None
     if not text:
         return jsonify(error="empty"), 400
     sess = db.session.get(ChatSession, session_id) if session_id else None

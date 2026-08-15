@@ -127,6 +127,27 @@ def rate_limit(limit: int = 10, window: float = 60.0, key_extra: str = ""):
     return deco
 
 
+# ------------------------------------------------------------------ safe redirects
+def safe_next(target: str | None, fallback: str = "/") -> str:
+    """Return `target` only if it is a path on THIS site, else `fallback`.
+
+    A bare startswith("/") test is NOT enough: "//evil.com" starts with "/" but
+    browsers treat it as a protocol-relative URL and navigate off-site. That is
+    an open redirect — a phishing link that looks like it belongs to the
+    hospital. Also rejects backslash tricks and any absolute URL.
+    """
+    if not target:
+        return fallback
+    t = target.strip()
+    if not t.startswith("/"):
+        return fallback
+    if t.startswith("//") or t.startswith("/" + chr(92)):
+        return fallback
+    if "://" in t:
+        return fallback
+    return t
+
+
 # ------------------------------------------------------------------ phone numbers
 # Nigerian mobile numbers, local (08012345678) or international (+2348012345678).
 PHONE_RE = re.compile(r"^\+?\d{7,15}$")

@@ -81,7 +81,9 @@ dict(cat="bills", intent="bill_estimate", kw=[
  cta="Tell me the service and I'll give you a clear estimate right away."),
 dict(cat="bills", intent="bill_payment", kw=[
     "how to pay","pay bill","payment","pay my bill","payment methods","card payment","transfer",
-    "pos","pay online","how do i settle","settle bill","make payment"],
+    "pos","pay online","how do i settle","settle bill","make payment",
+    "how do i pay","how can i pay","where do i pay","how to make payment","mode of payment",
+    "do you take card","do you accept transfer","can i pay with card"],
  en="Paying is quick and flexible — we accept card, bank transfer, and POS at the billing desk, and you'll always get a proper receipt. If you'd like, I can point you to the desk or help you start online. How would you like to pay?",
  pcm="Payment easy o — we dey accept card, transfer, and POS for billing desk, and go collect proper receipt. If you like, I fit show you the desk or help you start online. How you wan pay?",
  cta="Choose card, transfer, or POS and I'll guide you through it."),
@@ -146,7 +148,9 @@ dict(cat="services", intent="services_overview", kw=[
 # ---------------------------------------------------------------- COMPLAINTS
 dict(cat="complaints", intent="complaint_start", kw=[
     "i want to complain","complaint","make a complaint","i have a complaint","report issue","bad service",
-    "not happy","unhappy","mistreat","rude staff","poor service","something went wrong","i was treated badly"],
+    "not happy","unhappy","mistreat","rude staff","poor service","something went wrong","i was treated badly",
+    "was rude","were rude","rude to me","shouted at me","ignored me","nobody attended to me",
+    "kept me waiting","no one helped me","treated me badly","very rude","so rude"],
  en="I'm truly sorry your experience fell short — that matters to us, and I'm going to make sure the right people hear it and act on it. You can submit it right here in under a minute, and you'll get a reference to track it. Or I can take the details now. How would you prefer?",
  pcm="I dey sorry well well say your experience no good — e matter to us, and go make sure the right people hear am and act. Fit submit am here for under one minute, and go collect number to track am. Or I fit take the details now. Which one you prefer?",
  cta="Tap 'Make a Complaint', or just tell me what happened in your own words."),

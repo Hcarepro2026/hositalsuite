@@ -216,9 +216,8 @@ def set_lang(code: str):
     from flask import session as flask_session
     if code in ("en", "yo", "ha", "ig"):
         flask_session["lang"] = code
-    back = request.args.get("next") or request.referrer or "/complaint"
-    if not back.startswith("/"):
-        back = "/complaint"
+    from ..security import safe_next
+    back = safe_next(request.args.get("next") or request.referrer, "/complaint")
     return redirect(back)
 
 

@@ -12,7 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from ..audit import audit
 from ..models import LoginAttempt, PasswordReset, User, db, now_naive
 from ..security import (client_ip, password_strength_errors, rate_limit,
-                        require_login)
+                        require_login, safe_next)
 
 bp = Blueprint("auth", __name__)
 
@@ -106,8 +106,9 @@ def login_post():
     if user.must_change_password:
         flash("This is a temporary password. Please choose your own password now.", "info")
         return redirect(url_for("auth.change_password"))
-    if nxt and nxt.startswith("/"):
-        return redirect(nxt)
+    target = safe_next(nxt, "")
+    if target:
+        return redirect(target)
     return redirect(url_for("main.dashboard"))
 
 

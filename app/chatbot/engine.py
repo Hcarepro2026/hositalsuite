@@ -47,14 +47,35 @@ def _articles_for(org_id):
     return q.all()
 
 
+def _phrase_hit(kw: str, text: str) -> bool:
+    """True if `kw` appears in `text` as WHOLE WORDS.
+
+    Plain `kw in text` matched across word boundaries, so the trigger
+    "are you" (intent how_are_you) fired inside "what ARE YOUr opening hours"
+    and beat the correct answer on a tie. Patients asking about opening hours
+    were told "I'm doing wonderfully, thank you for asking".
+    """
+    return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", text) is not None
+
+
 def _score(article: KnowledgeArticle, text: str) -> int:
-    hits = 0
+    """Relevance of one article to the patient's message.
+
+    Longer trigger phrases score quadratically so a specific multi-word match
+    ("opening hours") decisively outranks an incidental short one ("are you").
+    """
+    best = 0
+    total = 0
     for kw in (article.keywords or "").splitlines():
         kw = _norm(kw)   # normalize punctuation so "can't" matches "can t"
-        if kw and kw in text:
-            # longer, more specific triggers weigh more
-            hits += max(1, len(kw.split()))
-    return hits
+        if not kw or not _phrase_hit(kw, text):
+            continue
+        words = len(kw.split())
+        weight = words * words          # 1 word -> 1, 2 -> 4, 3 -> 9
+        total += weight
+        best = max(best, weight)
+    # Favour the article with the single most specific match, then breadth.
+    return best * 10 + total
 
 
 def answer(text: str, lang: str = "en", org_id=None):

@@ -29,6 +29,34 @@ STRINGS: dict[str, dict[str, str]] = {
         "ha": "Da fatan kar a saka bayanin lafiya mai mahimmanci — abin da muke bukata don taimaka muku kawai.",
         "ig": "Biko etinyela ozi ahụike nwere mmetụta — naanị ihe anyị chọrọ iji nyere gị aka.",
     },
+    # ---- patient assistant chat ----
+    "chat_greeting": {
+        "en": "Hello! I'm your care assistant. Ask me about booking, opening hours, bills, "
+              "directions, antenatal care — or anything about your visit. How can I help?",
+        "yo": "Pẹ̀lẹ́ o! Èmi ni olùrànlọ́wọ́ ìtọ́jú rẹ. Bi mí nípa ìpàdé, àkókò ìṣí, owó, ọ̀nà, "
+              "ìtọ́jú aboyún — tàbí ohunkóhun nípa ìbẹ̀wò rẹ. Báwo ni mo ṣe lè ràn ọ́ lọ́wọ́?",
+        "ha": "Sannu! Ni ne mataimakin kulawar ku. Ka tambaye ni game da alƙawari, lokutan "
+              "buɗewa, kuɗi, hanya, kulawar masu juna biyu — ko komai game da ziyararka. "
+              "Ta yaya zan taimaka?",
+        "ig": "Ndewo! Abụ m onye enyemaka nlekọta gị. Jụọ m maka ndebe oge, oge emeghe, ụgwọ, "
+              "ụzọ, nlekọta ime — ma ọ bụ ihe ọ bụla gbasara nleta gị. Kedu ka m ga-esi nyere gị aka?",
+    },
+    "chat_placeholder": {
+        "en": "Type your question…", "yo": "Kọ ìbéèrè rẹ…",
+        "ha": "Rubuta tambayarka…", "ig": "Pịnye ajụjụ gị…",
+    },
+    "chat_send": {"en": "Send", "yo": "Firánṣẹ́", "ha": "Aika", "ig": "Zipu"},
+    "chat_disclosure": {
+        "en": "I can help with hospital questions, but I cannot diagnose illness or prescribe "
+              "medicine. A human is always one tap away.",
+        "yo": "Mo lè ràn ọ́ lọ́wọ́ pẹ̀lú ìbéèrè ilé-ìwòsàn, ṣùgbọ́n n kò lè ṣe àyẹ̀wò àìsàn tàbí "
+              "kọ oògùn. Ẹnìyàn wà ní ìfọwọ́kan kan.",
+        "ha": "Zan iya taimaka da tambayoyin asibiti, amma ba zan iya gano cuta ko rubuta "
+              "magani ba. Mutum yana nan kusa koyaushe.",
+        "ig": "Enwere m ike inyere gị aka na ajụjụ ụlọ ọgwụ, mana enweghị m ike ịchọpụta ọrịa "
+              "ma ọ bụ dee ọgwụ. Mmadụ nọ nso mgbe niile.",
+    },
+
     # ---- patient hub (home page tiles) ----
     "hub_welcome": {
         "en": "How can we help you today?",

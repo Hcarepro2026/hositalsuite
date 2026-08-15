@@ -476,3 +476,31 @@ def test_scheduler_self_heals_if_its_thread_dies(app, monkeypatch):
 
     # calling again is a no-op while it is healthy
     assert sched.ensure_running(app) is False
+
+
+# ================================================================ open redirect
+def test_open_redirect_is_blocked(client, seeded):
+    """Regression: '//evil.com' passes a startswith('/') check but browsers
+    treat it as protocol-relative and navigate OFF-SITE — a phishing link that
+    looks like it belongs to the hospital."""
+    from app.security import safe_next
+    assert safe_next("//evil.com", "/") == "/"
+    assert safe_next("/\\evil.com", "/") == "/"
+    assert safe_next("https://evil.com", "/") == "/"
+    assert safe_next("javascript:alert(1)", "/") == "/"
+    assert safe_next("/book?x=1", "/") == "/book?x=1"
+    assert safe_next(None, "/welcome") == "/welcome"
+
+
+def test_language_switch_cannot_redirect_off_site(client, seeded):
+    for hostile in ["//evil.com", "https://evil.com", "/\\evil.com"]:
+        r = client.get(f"/lang/en?next={hostile}", follow_redirects=False)
+        assert "evil" not in r.headers.get("Location", ""), f"open redirect via {hostile}"
+
+
+def test_login_next_cannot_redirect_off_site(client, seeded, app):
+    app.config["RATE_LIMIT_SCALE"] = 10000
+    r = client.post("/login", data={"username": "admin", "password": "Passw0rd!x",
+                                    "_csrf": csrf(client, "/login"), "next": "//evil.com"},
+                    follow_redirects=False)
+    assert "evil" not in r.headers.get("Location", "")
