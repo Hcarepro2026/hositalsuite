@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import (Blueprint, abort, current_app, flash, redirect, render_template,
+                   request, url_for)
 from flask_login import current_user
 
 from .. import scoring, services
@@ -107,6 +108,65 @@ def branding_logo():
 
 
 @bp.get("/")
+def home():
+    """Front door.
+
+    Patients (not signed in) get the service hub. Staff go to their dashboard.
+    Previously "/" simply demanded a login, so a patient scanning a QR code
+    landed on a staff login screen — the wrong first impression entirely.
+    """
+    if current_user.is_authenticated:
+        return dashboard()
+    return patient_hub()
+
+
+@bp.get("/welcome")
+def patient_hub():
+    """Patient & visitor service hub — the six things a patient can do.
+
+    Always reachable at /welcome, even for signed-in staff who want to preview
+    what patients see (or scan their own QR posters).
+    """
+    from .. import referrals as refeng
+    from ..models import QrLocation
+    from ..services import current_org
+
+    org = current_org()
+    if not org:
+        abort(503)
+
+    # Keep the QR-location tag (?loc=) and referral code (?ref=) across the hub
+    # so posters keep attributing correctly when the patient picks a service.
+    keep = {}
+    loc_code = (request.args.get("loc") or "").strip().upper()
+    qr_loc = None
+    if loc_code:
+        qr_loc = db.session.query(QrLocation).filter_by(code=loc_code).first()
+        if qr_loc:
+            keep["loc"] = qr_loc.code
+    ref_code = (request.args.get("ref") or "").strip()
+    if ref_code:
+        keep["ref"] = ref_code
+    q = ("?" + "&".join(f"{k}={v}" for k, v in keep.items())) if keep else ""
+
+    # Hospital-wide share link for the "tell a friend" tile.
+    share_url = wa_url = None
+    try:
+        row = refeng.ensure_hospital_referral(org)
+        db.session.commit()
+        share_url = refeng.share_url(row)
+        wa_url = refeng.whatsapp_share_url(org.name, share_url)
+    except Exception:                                    # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("hub: could not build the share link")
+
+    share_text = (f"I recommend {org.name}. You can book an appointment or join the "
+                  f"queue from your phone here:")
+    return render_template("patient_hub.html", org=org, qr_loc=qr_loc, q=q,
+                           share_url=share_url, wa_url=wa_url, share_text=share_text)
+
+
+@bp.get("/dashboard")
 @require_login
 def dashboard():
     org_id = current_user.org_id

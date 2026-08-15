@@ -49,7 +49,8 @@ def test_temporary_password_blocks_app_until_changed(app, client, seeded):
                                               "new_password": "BrandNew#9x",
                                               "confirm_password": "BrandNew#9x"},
                     follow_redirects=False)
-    assert r.status_code == 302 and r.headers["Location"].endswith("/")
+    # staff land on their dashboard ("/" is now the patient hub)
+    assert r.status_code == 302 and r.headers["Location"].endswith("/dashboard")
     assert client.get("/complaints").status_code == 200
     with app.app_context():
         u = db.session.query(User).filter_by(username="hod1").first()

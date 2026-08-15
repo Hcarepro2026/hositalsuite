@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e5a8a">
+<title>{{ _('tagline') }} — {{ org.name if org else 'Hospital' }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<style>
+  /* Patient hub tiles — big touch targets for low-end phones held one-handed.
+     Deliberately plain CSS (no framework) so it renders on old Android browsers. */
+  .hub-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:6px}
+  @media (min-width:620px){.hub-grid{grid-template-columns:1fr 1fr}}
+
+  .hub-tile{display:flex;align-items:center;gap:14px;text-decoration:none;
+    background:#fff;border:1px solid #dbe4ec;border-left:6px solid var(--accent,#0e5a8a);
+    border-radius:14px;padding:16px 14px;box-shadow:0 2px 10px rgba(16,42,67,.07);
+    transition:transform .12s ease, box-shadow .12s ease;min-height:78px}
+  .hub-tile:active{transform:scale(.985)}
+  .hub-tile:hover{box-shadow:0 6px 18px rgba(16,42,67,.14)}
+  .hub-tile:focus-visible{outline:3px solid #0e5a8a;outline-offset:2px}
+
+  .hub-ico{font-size:2rem;line-height:1;flex-shrink:0;width:52px;height:52px;
+    display:flex;align-items:center;justify-content:center;border-radius:12px;
+    background:#eef4f9}
+  .hub-txt{min-width:0;display:block}
+  .hub-title{display:block;font-weight:800;font-size:1.06rem;color:#0f2f47;line-height:1.25}
+  .hub-desc{display:block;font-size:.85rem;color:#5a6b7b;margin-top:3px;line-height:1.35}
+  .hub-go{margin-left:auto;font-size:1.4rem;color:#9bb0c2;flex-shrink:0}
+
+  /* one accent colour per service so regulars recognise them by colour alone */
+  .t-book   {border-left-color:#0e5a8a} .t-book   .hub-ico{background:#e7f0f8}
+  .t-queue  {border-left-color:#0f8a6a} .t-queue  .hub-ico{background:#e6f6f1}
+  .t-chat   {border-left-color:#6b4fd8} .t-chat   .hub-ico{background:#efeafd}
+  .t-comp   {border-left-color:#c2521c} .t-comp   .hub-ico{background:#fdeee5}
+  .t-fb     {border-left-color:#c9a227} .t-fb     .hub-ico{background:#fdf6e0}
+  .t-refer  {border-left-color:#0d7fa6} .t-refer  .hub-ico{background:#e5f4fa}
+
+  .emerg{display:block;margin:16px 0 4px;padding:13px 14px;border-radius:12px;
+    background:#fdecec;border:1px solid #f3c2c2;border-left:6px solid #c62828;
+    color:#8c1d1d;font-weight:700;font-size:.9rem;text-decoration:none}
+  .hub-foot{text-align:center;margin:18px 0 8px;font-size:.82rem;color:#5a6b7b}
+  .hub-foot a{color:#0e5a8a}
+</style>
+</head>
+<body>
+<div class="portal-head">
+  {% include "_brand_mark.html" %}
+  <div>{{ _('tagline') }}</div>
+  {% include "_langbar.html" %}
+  {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}
+</div>
+
+<main class="wrap" style="max-width:640px">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <h1 style="font-size:1.3rem;margin:8px 0 2px;color:#0f2f47">{{ _('hub_welcome') }}</h1>
+  <p class="muted" style="margin:0 0 4px">{{ _('hub_sub') }}</p>
+
+  <div class="hub-grid">
+    <a class="hub-tile t-book" href="/book{{ q }}">
+      <span class="hub-ico" aria-hidden="true">📅</span>
+      <span class="hub-txt">
+        <span class="hub-title">1 · {{ _('hub_book') }}</span>
+        <span class="hub-desc">{{ _('hub_book_d') }}</span>
+      </span><span class="hub-go" aria-hidden="true">›</span>
+    </a>
+
+    <a class="hub-tile t-queue" href="/queue/join{{ q }}">
+      <span class="hub-ico" aria-hidden="true">🎟️</span>
+      <span class="hub-txt">
+        <span class="hub-title">2 · {{ _('hub_queue') }}</span>
+        <span class="hub-desc">{{ _('hub_queue_d') }}</span>
+      </span><span class="hub-go" aria-hidden="true">›</span>
+    </a>
+
+    <a class="hub-tile t-chat" href="/chat{{ q }}">
+      <span class="hub-ico" aria-hidden="true">💬</span>
+      <span class="hub-txt">
+        <span class="hub-title">3 · {{ _('hub_chat') }}</span>
+        <span class="hub-desc">{{ _('hub_chat_d') }}</span>
+      </span><span class="hub-go" aria-hidden="true">›</span>
+    </a>
+
+    <a class="hub-tile t-comp" href="/complaint{{ q }}">
+      <span class="hub-ico" aria-hidden="true">📣</span>
+      <span class="hub-txt">
+        <span class="hub-title">4 · {{ _('hub_complaint') }}</span>
+        <span class="hub-desc">{{ _('hub_complaint_d') }}</span>
+      </span><span class="hub-go" aria-hidden="true">›</span>
+    </a>
+
+    <a class="hub-tile t-fb" href="/feedback{{ q }}">
+      <span class="hub-ico" aria-hidden="true">⭐</span>
+      <span class="hub-txt">
+        <span class="hub-title">5 · {{ _('hub_feedback') }}</span>
+        <span class="hub-desc">{{ _('hub_feedback_d') }}</span>
+      </span><span class="hub-go" aria-hidden="true">›</span>
+    </a>
+
+    {% if share_url %}
+    <a class="hub-tile t-refer" href="#" id="share-tile">
+      <span class="hub-ico" aria-hidden="true">💌</span>
+      <span class="hub-txt">
+        <span class="hub-title">6 · {{ _('hub_refer') }}</span>
+        <span class="hub-desc">{{ _('hub_refer_d') }}</span>
+      </span><span class="hub-go" aria-hidden="true">›</span>
+    </a>
+    {% endif %}
+  </div>
+
+  {% if share_url %}
+  {# Share sheet: opens the phone's own share menu when available, with a
+     WhatsApp link and copy button as the fallback for older browsers. #}
+  <div class="card pad mt" id="share-box" style="display:none">
+    <b>{{ _('hub_refer') }}</b>
+    <p class="muted" style="margin:6px 0">{{ _('hub_refer_d') }}</p>
+    <div class="grid cols2" style="gap:8px">
+      <a class="btn" id="wa-share" href="{{ wa_url }}" target="_blank" rel="noopener">
+        📲 WhatsApp</a>
+      <button class="btn secondary" type="button" id="copy-link">🔗 Copy link</button>
+    </div>
+    <input type="text" id="share-url" value="{{ share_url }}" readonly
+           style="margin-top:10px;font-size:.82rem;text-align:center"
+           onclick="this.select()">
+    <p class="hint center" id="copy-done" style="display:none;color:#0f8a6a">
+      ✅ Link copied — now paste it to your friend.</p>
+  </div>
+  {% endif %}
+
+  <a class="emerg" href="/chat{{ q }}">🚑 {{ _('hub_emergency') }}</a>
+
+  <div class="hub-foot">
+    {% if hospital and hospital.phone %}
+      📞 <a href="tel:{{ hospital.phone }}">{{ hospital.phone }}</a><br>
+    {% endif %}
+    <a href="/complaint/status">Check a complaint</a> ·
+    <a href="/book/status">Check a booking</a> ·
+    <a href="/privacy">Privacy</a>
+  </div>
+</main>
+
+<script>
+(function () {
+  var tile = document.getElementById('share-tile');
+  var box  = document.getElementById('share-box');
+  if (!tile || !box) return;
+  var url  = document.getElementById('share-url').value;
+  var text = {{ share_text | tojson }};
+
+  tile.addEventListener('click', function (e) {
+    e.preventDefault();
+    // Prefer the phone's native share sheet (WhatsApp, SMS, email in one tap).
+    if (navigator.share) {
+      navigator.share({ title: document.title, text: text, url: url })
+               .catch(function () { box.style.display = 'block'; });
+    } else {
+      box.style.display = 'block';
+      box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  document.getElementById('copy-link').addEventListener('click', function () {
+    var done = document.getElementById('copy-done');
+    var input = document.getElementById('share-url');
+    function ok() { done.style.display = 'block'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(ok, function () { input.select(); });
+    } else {                       // old Android fallback
+      input.select();
+      try { document.execCommand('copy'); ok(); } catch (err) { /* user copies manually */ }
+    }
+  });
+})();
+</script>
+</body>
+</html>
