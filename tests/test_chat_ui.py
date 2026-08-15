@@ -206,7 +206,8 @@ def test_common_patient_questions_route_correctly(client, kb):
         "how do i pay": "bill_payment",
         "where is the hospital": "directions",
         "i want to make a complaint": "complaint_start",
-        "the nurse was rude": "complaint_start",
+        # now routed to the NURSING-specific complaint answer, which is better
+        "the nurse was rude": "nursing_services_complaint",
         "i am pregnant": "anc_book",
         "talk to a human": "human_handoff",
         "how are you": "how_are_you",

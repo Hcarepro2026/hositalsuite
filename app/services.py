@@ -32,6 +32,10 @@ DEFAULT_SETTINGS = {
     "booking_capacity_per_slot": 20,
     "booking_window_days": 30,
     "booking_confirmation_sms": True,
+    # ---- AI fallback (see app/chatbot/ai.py) ----
+    "ai_fallback_enabled": True,      # per-hospital switch
+    "ai_daily_cap": 400,              # protects the free tier
+    "ai_usage_today": "",             # "YYYY-MM-DD|count"
 }
 
 

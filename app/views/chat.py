@@ -1,7 +1,8 @@
 """Public patient-assistant chat (web) + feedback + human handoff."""
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+from flask import (Blueprint, current_app, jsonify, redirect, render_template,
+                   request, url_for)
 from flask_login import current_user
 
 from .. import services
@@ -53,6 +54,30 @@ def chat_api():
         db.session.flush()
 
     res = engine.answer(text, lang=lang, org_id=org.id if org else None)
+
+    # ---- AI fallback: only when the curated library has no confident answer.
+    # The hospital's own words always win; AI fills the long tail.
+    if res is None:
+        from ..chatbot import ai
+        recent = (db.session.query(ChatMessage)
+                  .filter_by(session_id=sess.id)
+                  .order_by(ChatMessage.id.desc()).limit(4).all())
+        history = [{"role": m.role, "text": m.text} for m in reversed(recent)]
+        try:
+            got = ai.answer(text, org=org, lang=lang, history=history)
+        except Exception:                                # noqa: BLE001 - never break chat
+            current_app.logger.exception("AI fallback failed")
+            got = None
+        if got:
+            db.session.add(ChatMessage(session_id=sess.id, role="user", text=text,
+                                       intent="ai_fallback", unanswered=False))
+            db.session.flush()
+            bot = ChatMessage(session_id=sess.id, role="bot", text=got["text"])
+            db.session.add(bot)
+            db.session.commit()
+            return jsonify(session=sess.id, answered=True, reply=got["text"],
+                           msg_id=bot.id, source=got["provider"])
+
     if res is None:
         db.session.add(ChatMessage(session_id=sess.id, role="user", text=text,
                                    unanswered=True))

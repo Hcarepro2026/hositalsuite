@@ -921,6 +921,8 @@ def backup_download(name: str):
 @bp.get("/health")
 @require_role(*SUPER)
 def health():
+    from ..chatbot import ai
+    ai_status = ai.status(current_user.org_id)
     info = {
         "database": "connected" if db.session.execute(db.text("SELECT 1")).scalar() == 1 else "error",
         "whatsapp_mode": whatsapp.mode(),
@@ -932,7 +934,7 @@ def health():
         info["disk"] = f"{usage.free / 1e9:.1f} GB free of {usage.total / 1e9:.1f} GB"
     except OSError:
         pass
-    return render_template("admin/health.html", info=info)
+    return render_template("admin/health.html", info=info, ai=ai_status)
 
 
 # ================================================================ KB / chatbot admin (§SaaS)

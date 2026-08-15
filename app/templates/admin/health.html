@@ -8,6 +8,17 @@
   <p><b>Backups:</b> stored in the database (survive restarts) —
      <a href="/admin">download them here</a></p>
   <p><b>Disk space:</b> {{ info.disk or 'unknown' }}</p>
+  <h2 class="mt">🤖 Patient Assistant AI</h2>
+  <p><b>Status:</b>
+    {% if ai.enabled %}<span class="pill green">on</span>
+    {% else %}<span class="pill">off — knowledge base only</span>{% endif %}</p>
+  <p><b>Providers:</b> {{ ai.providers | join(' → ') }}</p>
+  {% if ai.primary %}<p><b>Model:</b> <code>{{ ai.model }}</code></p>{% endif %}
+  <p><b>Used today:</b> {{ ai.used_today }} of {{ ai.daily_cap }}</p>
+  <p class="hint">The hospital's own 422 curated answers are always used first — the AI only
+    handles questions the library cannot answer, so it costs nothing on the free tier and the
+    assistant keeps working even with no AI configured.</p>
+
   <h2 class="mt">Monitoring checklist</h2>
   <ul class="muted">
     <li>Nightly backups at 02:00 on any database engine — <b>download one monthly and keep it

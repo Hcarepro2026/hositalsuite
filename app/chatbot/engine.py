@@ -101,9 +101,14 @@ def answer(text: str, lang: str = "en", org_id=None):
     best.hit_count = (best.hit_count or 0) + 1
     db.session.commit()
     action = None
-    if best.intent in ("book_appointment", "followup_book", "anc_book"):
+    intent = best.intent or ""
+    # Department intents are named "<dept>_<suffix>" (see kb_departments_full),
+    # so match on the suffix too — otherwise a department-specific complaint
+    # answer would lose its "Make a complaint" shortcut button.
+    if intent in ("book_appointment", "followup_book", "anc_book") or intent.endswith("_book"):
         action = "book"
-    elif best.intent in ("complaint_start", "bill_dispute"):
+    elif (intent in ("complaint_start", "bill_dispute")
+          or intent.endswith("_complaint") or intent.endswith("_report_fraud")):
         action = "complaint"
     elif best.intent in ("emergency_general", "emergency_chest", "anc_danger",
                          "labour_signs", "newborn_jaundice"):
