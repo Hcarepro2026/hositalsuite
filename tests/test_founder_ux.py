@@ -38,7 +38,7 @@ def test_md_sees_admin_manager_history_not_the_form(client, seeded):
 
 def test_patient_gets_inapp_ack_and_sms_whatsapp(client, seeded):
     token = csrf(client, "/complaint")
-    r = client.post("/complaint/submit", data={
+    r = client.post("/complaint/submit", data={"consent": "1", 
         "_csrf": token, "department_id": seeded["dept"], "category": "Long waiting time",
         "description": "We have been waiting for over four hours without any update.",
         "phone": "08012345678", "contact_method": "whatsapp"}, follow_redirects=True)
@@ -60,7 +60,7 @@ def test_patient_gets_inapp_ack_and_sms_whatsapp(client, seeded):
 
 def test_patient_gets_outcome_when_resolved(client, seeded):
     token = csrf(client, "/complaint")
-    client.post("/complaint/submit", data={
+    client.post("/complaint/submit", data={"consent": "1", 
         "_csrf": token, "department_id": seeded["dept"], "category": "Billing / charges",
         "description": "I was charged twice for the same laboratory test yesterday.",
         "phone": "08098765432"}, follow_redirects=True)

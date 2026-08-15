@@ -45,9 +45,10 @@ def test_full_inspection_flow_low_score_requires_explanation_pdf_whatsapp(client
     assert insp.rating == "GOOD"
     assert insp.ref.startswith("TEST-INS-")
 
-    # 4) PDF generated and archived
-    assert insp.pdf_path and os.path.exists(insp.pdf_path)
-    assert os.path.getsize(insp.pdf_path) > 1500
+    # 4) PDF generated and archived in DURABLE storage (survives restarts)
+    from app import storage
+    assert insp.pdf_path and storage.exists(insp.pdf_path)
+    assert len(storage.get(insp.pdf_path)) > 1500
 
     # 5) WhatsApp report queued to MD/CEO and delivered (sandbox)
     wa = db.session.query(WhatsAppMessage).filter_by(kind="report").first()
@@ -126,7 +127,7 @@ def test_complaint_flow_routing_and_escalation(client, seeded, app):
     assert r.status_code == 200 and b"Visitor Portal" in r.data
 
     # 2) validation errors
-    r = client.post("/complaint/submit", data={"_csrf": csrf(client, "/complaint"),
+    r = client.post("/complaint/submit", data={"consent": "1", "_csrf": csrf(client, "/complaint"),
                                                "department_id": "", "category": "",
                                                "description": "short", "phone": "abc"},
                     follow_redirects=True)
@@ -134,7 +135,7 @@ def test_complaint_flow_routing_and_escalation(client, seeded, app):
 
     # 3) valid submission — no account needed
     token = csrf(client, "/complaint")
-    r = client.post("/complaint/submit", data={
+    r = client.post("/complaint/submit", data={"consent": "1", 
         "_csrf": token, "department_id": seeded["dept"], "category": "Long waiting time",
         "description": "We have been waiting for over four hours at triage without any update.",
         "phone": "08012345678", "contact_method": "whatsapp"}, follow_redirects=True)
@@ -192,7 +193,7 @@ def test_complaint_flow_routing_and_escalation(client, seeded, app):
 
 def test_resolved_complaint_never_escalated(client, seeded, app):
     token = csrf(client, "/complaint")
-    client.post("/complaint/submit", data={
+    client.post("/complaint/submit", data={"consent": "1", 
         "_csrf": token, "department_id": seeded["dept"], "category": "Billing / charges",
         "description": "I was charged twice for the same laboratory test yesterday.",
         "phone": "08098765432"}, follow_redirects=True)

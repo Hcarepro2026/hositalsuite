@@ -5,7 +5,7 @@ from conftest import csrf, login
 
 
 def _rate(client, rating, **over):
-    data = {"_csrf": csrf(client, "/feedback"), "rating": str(rating)}
+    data = {"_csrf": csrf(client, "/feedback"), "rating": str(rating), "consent": "1"}
     data.update({k: str(v) for k, v in over.items()})
     return client.post("/feedback/submit", data=data, follow_redirects=True)
 

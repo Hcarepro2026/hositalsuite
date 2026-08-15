@@ -19,8 +19,9 @@ PHONE_RE = re.compile(r"^\+?\d{7,15}$")
 
 
 def _default_org():
-    from ..models import Organization
-    return db.session.query(Organization).order_by(Organization.id).first()
+    """Tenant for this request (see services.current_org)."""
+    from ..services import current_org
+    return current_org()
 
 
 def _dept_letter(dept: Department) -> str:

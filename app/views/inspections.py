@@ -244,11 +244,13 @@ def inspection_submit():
 
     # --- PDF generation (failure must not break submission)
     try:
+        from .. import storage
         scores_by_no = {s.criterion_no: s for s in insp.scores}
-        pdf_name = f"{insp.ref}.pdf"
-        pdf_path = os.path.join(Config.REPORT_DIR, pdf_name)
+        pdf_path = f"reports/{insp.ref}.pdf"
         verify_url = f"{Config.PUBLIC_BASE_URL}/verify/{insp.verify_code}"
-        pdfgen.build_inspection_pdf(org, insp, scores_by_no, pdf_path, verify_url)
+        storage.build_pdf(pdfgen.build_inspection_pdf, pdf_path,
+                          org, insp, scores_by_no, verify_url,
+                          dest_pos=3, org_id=org.id)
         insp.pdf_path = pdf_path
         db.session.add(ReportFile(org_id=org.id, kind="inspection",
                                   title=f"Inspection {insp.ref} — {dept.name}",
@@ -346,13 +348,14 @@ def inspection_pdf(insp_id: int):
     insp = db.session.get(Inspection, insp_id)
     if not insp or insp.org_id != current_user.org_id:
         abort(404)
-    if not insp.pdf_path or not os.path.exists(insp.pdf_path):
+    from .. import storage
+    if not insp.pdf_path or not storage.exists(insp.pdf_path):
         flash("The PDF for this inspection is not available yet.", "error")
         return redirect(url_for("inspections.inspection_detail", insp_id=insp_id))
     audit("PDF_DOWNLOADED", "inspection", insp.id, {"ref": insp.ref})
     db.session.commit()
-    return send_file(insp.pdf_path, as_attachment=True, download_name=f"{insp.ref}.pdf",
-                     mimetype="application/pdf")
+    return storage.send(insp.pdf_path, as_attachment=True,
+                        download_name=f"{insp.ref}.pdf", mimetype="application/pdf")
 
 
 # ------------------------------------------------------------------ amendment

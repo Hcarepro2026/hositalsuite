@@ -13,8 +13,6 @@ restarting the app never double-sends.
 """
 from __future__ import annotations
 
-import os
-import shutil
 import threading
 import time
 from datetime import timedelta
@@ -25,6 +23,7 @@ from .models import (AppNotification, Complaint, CorrectiveAction, DutyRoster,
                      Organization, db, now_naive)
 
 _started = False
+_thread_ref = None          # for health reporting
 _lock = threading.Lock()
 
 
@@ -183,30 +182,89 @@ def job_whatsapp_queue(app):
 
 
 def job_nightly_backup(app):
-    """SQLite file backup (for PostgreSQL use pg_dump in ops). Keeps BACKUP_KEEP copies."""
+    """Engine-independent nightly backup (SQLite AND PostgreSQL).
+
+    The previous implementation silently returned on PostgreSQL, so production
+    had no backups at all despite the UI claiming otherwise. See app/backup.py.
+    """
+    from .backup import create_backup, prune_backups
     from .config import Config
-    uri = app.config["SQLALCHEMY_DATABASE_URI"]
-    if not uri.startswith("sqlite"):
-        return
-    db_path = uri.replace("sqlite:///", "")
-    if not os.path.exists(db_path):
-        return
-    stamp = now_naive().strftime("%Y%m%d-%H%M%S")
-    dest = os.path.join(Config.BACKUP_DIR, f"hospitalsuite-{stamp}.db")
-    if os.path.exists(dest):
-        return
-    shutil.copy2(db_path, dest)
-    backups = sorted(f for f in os.listdir(Config.BACKUP_DIR) if f.endswith(".db"))
-    for old in backups[: max(0, len(backups) - Config.BACKUP_KEEP)]:
+    try:
+        create_backup(app, kind="nightly")
+        prune_backups(keep=Config.BACKUP_KEEP)
+    except Exception as exc:                     # noqa: BLE001
+        app.logger.exception("nightly backup FAILED: %s", exc)
+        db.session.rollback()
+        raise
+
+
+def job_retention_purge(app):
+    """Enforce the configured data-retention period (NDPA 2023).
+
+    The `retention_days` setting existed but nothing ever acted on it, so the
+    hospital promised a retention limit and kept patient data forever.
+
+    We ANONYMISE rather than hard-delete: statistics (scores, SLA performance,
+    satisfaction trends) stay intact for management reporting, while the
+    personal identifiers that make a record sensitive are destroyed. Every pass
+    is audit-logged, and already-anonymised rows are skipped so it is idempotent.
+    """
+    from .models import Appointment, PatientFeedback, QueueTicket
+    now = now_naive()
+    for org in db.session.query(Organization).all():
         try:
-            os.remove(os.path.join(Config.BACKUP_DIR, old))
-        except OSError:
-            pass
+            days = int(services.get_setting(org.id, "retention_days") or 2190)
+        except (TypeError, ValueError):
+            days = 2190
+        days = max(30, days)                      # never purge more aggressively than 30 days
+        cutoff = now - timedelta(days=days)
+        purged = 0
+
+        for c in (db.session.query(Complaint)
+                  .filter(Complaint.org_id == org.id,
+                          Complaint.submitted_at < cutoff,
+                          Complaint.anonymized_at.is_(None)).limit(500).all()):
+            c.phone = "[erased]"
+            c.description = "[erased under data-retention policy]"
+            c.attachment_path = None
+            c.anonymized_at = now
+            purged += 1
+
+        for a in (db.session.query(Appointment)
+                  .filter(Appointment.org_id == org.id,
+                          Appointment.created_at < cutoff,
+                          Appointment.anonymized_at.is_(None)).limit(500).all()):
+            a.patient_name, a.phone = "[erased]", "[erased]"
+            a.anonymized_at = now
+            purged += 1
+
+        for f in (db.session.query(PatientFeedback)
+                  .filter(PatientFeedback.org_id == org.id,
+                          PatientFeedback.created_at < cutoff,
+                          PatientFeedback.anonymized_at.is_(None)).limit(500).all()):
+            f.phone = None
+            if f.comment:
+                f.comment = "[erased under data-retention policy]"
+            f.anonymized_at = now
+            purged += 1
+
+        for t in (db.session.query(QueueTicket)
+                  .filter(QueueTicket.org_id == org.id,
+                          QueueTicket.created_at < cutoff,
+                          QueueTicket.anonymized_at.is_(None)).limit(500).all()):
+            t.patient_name, t.phone = "[erased]", None
+            t.anonymized_at = now
+            purged += 1
+
+        if purged:
+            audit("RETENTION_PURGE", "system", None,
+                  {"records": purged, "retention_days": days}, org_id=org.id)
+            app.logger.info("retention: anonymised %d record(s) for org %s", purged, org.code)
 
 
 # ------------------------------------------------------------------ tick
 JOB_SEQUENCE = (job_duty_reminders, job_overdue_inspection, job_complaint_sla,
-                job_corrective_actions, job_whatsapp_queue)
+                job_corrective_actions, job_whatsapp_queue, job_retention_purge)
 
 
 def tick(app):
@@ -226,8 +284,15 @@ def tick(app):
 
 
 def _loop(app, interval: int):
-    # initial backup check on boot day
+    """Scheduler main loop. Must NEVER exit — it is the hospital's automation.
+
+    A bare `except Exception` cannot catch everything that can end a thread, so
+    the sleep is outside the try and the whole body is defensive. If the process
+    is out of memory or the DB is unreachable we back off and keep trying rather
+    than dying silently and leaving SLAs un-escalated.
+    """
     last_backup_day = None
+    consecutive_failures = 0
     while True:
         try:
             tick(app)
@@ -236,9 +301,20 @@ def _loop(app, interval: int):
                 with app.app_context():
                     job_nightly_backup(app)
                 last_backup_day = today
-        except Exception as exc:  # noqa: BLE001
-            app.logger.exception("scheduler loop error: %s", exc)
-        time.sleep(interval)
+            consecutive_failures = 0
+        except BaseException as exc:                  # noqa: BLE001 - stay alive
+            consecutive_failures += 1
+            try:
+                app.logger.exception("scheduler loop error (%d in a row): %s",
+                                     consecutive_failures, exc)
+            except Exception:                         # noqa: BLE001 - logging must not kill us
+                pass
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+        # Exponential-ish backoff while unhealthy, so a hard-down database does
+        # not spin the CPU, but recovery is still detected within a minute or two.
+        delay = interval if consecutive_failures == 0 else min(interval * consecutive_failures, 300)
+        time.sleep(delay)
 
 
 def start_scheduler(app, interval: int = 30):
@@ -246,6 +322,24 @@ def start_scheduler(app, interval: int = 30):
     with _lock:
         if _started:
             return
+        global _thread_ref
         t = threading.Thread(target=_loop, args=(app, interval), daemon=True, name="hms-scheduler")
         t.start()
+        _thread_ref = t
         _started = True
+
+
+def is_alive() -> bool | None:
+    """True if the scheduler thread is running, False if it died, None if disabled.
+
+    The scheduler drives reminders, SLA escalation and backups. If its thread
+    dies unnoticed, complaints stop escalating and nobody finds out until a
+    patient does — so /api/v1/health surfaces it.
+    """
+    import os
+    if os.environ.get("DISABLE_SCHEDULER") == "1":
+        return None
+    if not _started:
+        return None
+    thread = _thread_ref
+    return bool(thread and thread.is_alive())

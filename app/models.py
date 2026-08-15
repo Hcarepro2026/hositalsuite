@@ -36,10 +36,30 @@ def now_naive() -> datetime:
 
 
 # ---------------------------------------------------------------- tenants
+class StoredFile(db.Model):
+    """Durable binary storage (see app/storage.py).
+
+    Cheap hosts wipe the container disk on every restart, so uploads, generated
+    PDFs and the hospital logo live here instead of on the filesystem.
+    """
+    __tablename__ = "stored_file"
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(300), unique=True, nullable=False, index=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), index=True)
+    folder = db.Column(db.String(40), index=True)
+    filename = db.Column(db.String(200))
+    content_type = db.Column(db.String(80))
+    size = db.Column(db.Integer, default=0)
+    sha256 = db.Column(db.String(64))
+    data = db.Column(db.LargeBinary, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_naive, index=True)
+
+
 class Organization(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(12), unique=True, nullable=False)       # e.g. HOSP
     name = db.Column(db.String(160), nullable=False)
+    slug = db.Column(db.String(40), unique=True, index=True)   # public-portal tenant key
     logo_path = db.Column(db.String(300))
     email = db.Column(db.String(160))
     phone = db.Column(db.String(32))
@@ -205,6 +225,9 @@ class Complaint(db.Model):
     phone = db.Column(db.String(32), nullable=False)
     contact_method = db.Column(db.String(20), default="phone")   # phone | whatsapp | either
     attachment_path = db.Column(db.String(300))
+    is_anonymous = db.Column(db.Boolean, default=False, nullable=False)
+    consent_at = db.Column(db.DateTime)          # NDPA: when the patient agreed
+    anonymized_at = db.Column(db.DateTime)       # retention purge / erasure request
     source = db.Column(db.String(12), default="link")            # qr | link | ussd
     qr_location_id = db.Column(db.Integer, db.ForeignKey("qr_location.id"))
     status = db.Column(db.String(16), default="NEW", nullable=False, index=True)
@@ -285,6 +308,8 @@ class Appointment(db.Model):
     qr_location_id = db.Column(db.Integer, db.ForeignKey("qr_location.id"))
     referral_id = db.Column(db.Integer, index=True)         # inbound: which share-link brought this booking
     is_repeat = db.Column(db.Boolean, default=False, nullable=False)  # same phone booked before
+    consent_at = db.Column(db.DateTime)
+    anonymized_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=now_naive)
     arrived_at = db.Column(db.DateTime)
     cancelled_at = db.Column(db.DateTime)
@@ -304,6 +329,8 @@ class PatientFeedback(db.Model):
     status = db.Column(db.String(12), default="NEW", index=True)   # NEW | ROUTED
     complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"))
     referral_id = db.Column(db.Integer, index=True)         # inbound: arrived via a share-link
+    consent_at = db.Column(db.DateTime)
+    anonymized_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=now_naive)
     department = db.relationship("Department")
     complaint = db.relationship("Complaint")
@@ -325,6 +352,7 @@ class QueueTicket(db.Model):
     status = db.Column(db.String(12), default="WAITING", nullable=False, index=True)
     source = db.Column(db.String(12), default="link")   # qr | link | booking | ussd
     appointment_id = db.Column(db.Integer, db.ForeignKey("appointment.id"))
+    anonymized_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=now_naive)
     called_at = db.Column(db.DateTime)
     served_at = db.Column(db.DateTime)
@@ -559,6 +587,40 @@ class PasswordReset(db.Model):
     attempts = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=now_naive)
     user = db.relationship("User")
+
+
+# ---------------------------------------------------------------- brute-force defence
+class LoginAttempt(db.Model):
+    """Per-username failed-login counter driving temporary account lockout.
+
+    The IP-based rate limiter cannot protect an account when every request
+    arrives from the same proxy IP, and it also cannot stop a slow distributed
+    guess. This adds a second, account-scoped gate.
+    """
+    __tablename__ = "login_attempt"
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    failures = db.Column(db.Integer, default=0, nullable=False)
+    locked_until = db.Column(db.DateTime, index=True)
+    last_failure_at = db.Column(db.DateTime)
+    last_ip = db.Column(db.String(64))
+
+
+# ---------------------------------------------------------------- NDPA data-subject requests
+class DataRequest(db.Model):
+    """Patient request to access or erase their data (NDPA 2023 rights)."""
+    __tablename__ = "data_request"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    ref = db.Column(db.String(40), unique=True, nullable=False)
+    kind = db.Column(db.String(12), nullable=False)          # access | erase
+    phone = db.Column(db.String(32), nullable=False, index=True)
+    note = db.Column(db.Text)
+    status = db.Column(db.String(16), default="NEW", nullable=False, index=True)  # NEW|DONE|REJECTED
+    created_at = db.Column(db.DateTime, default=now_naive, index=True)
+    handled_at = db.Column(db.DateTime)
+    handled_by_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    outcome = db.Column(db.Text)
 
 
 # ---------------------------------------------------------------- user prefs (§19)

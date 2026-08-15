@@ -17,13 +17,46 @@ bp = Blueprint("api", __name__, url_prefix="/api/v1")
 
 @bp.get("/health")
 def health():
+    """Liveness + readiness. Used by Render's health check and by the founder.
+
+    Reports the things that actually break in production: the database, whether
+    the background scheduler is still alive (it runs reminders, SLA escalation
+    and backups — silent death means missed escalations), and when the last
+    backup ran.
+    """
     try:
         db.session.execute(db.text("SELECT 1"))
         db_ok = True
-    except Exception:
+    except Exception:                                 # noqa: BLE001
+        db.session.rollback()
         db_ok = False
-    return jsonify(status="ok" if db_ok else "degraded", database=db_ok,
-                   whatsapp_mode=whatsapp.mode())
+
+    scheduler_ok = None
+    try:
+        from ..scheduler import is_alive
+        scheduler_ok = is_alive()
+    except Exception:                                 # noqa: BLE001
+        scheduler_ok = None
+
+    last_backup = None
+    try:
+        from ..backup import list_backups
+        rows = list_backups(limit=1)
+        if rows:
+            last_backup = rows[0].created_at.isoformat()
+    except Exception:                                 # noqa: BLE001
+        db.session.rollback()
+
+    healthy = db_ok and (scheduler_ok is not False)
+    payload = {
+        "status": "ok" if healthy else "degraded",
+        "database": db_ok,
+        "scheduler": scheduler_ok,
+        "last_backup": last_backup,
+        "storage": current_app.config.get("STORAGE_BACKEND", "db"),
+        "whatsapp_mode": whatsapp.mode(),
+    }
+    return jsonify(payload), (200 if healthy else 503)
 
 
 # ================================================================ live alerts (§19/§37)

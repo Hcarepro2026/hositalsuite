@@ -58,6 +58,14 @@
     <input type="tel" name="phone" required inputmode="tel" placeholder="e.g. 08012345678"
            value="{{ form.get('phone','') if form else '' }}">
 
+    <label class="checkline"
+           style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-weight:400">
+      <input type="checkbox" name="consent" value="1" required style="width:auto;margin-top:3px">
+      <span>I agree that the hospital may store my name and phone number to
+        manage this appointment and send me reminders.
+        See our <a href="/privacy" target="_blank">Privacy Notice</a>.</span>
+    </label>
+
     <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_book') }}</button>
   </form>
 
@@ -72,7 +80,7 @@
        Staff will book your visit for you.</p>
   </div>
 </main>
-<div class="footer">Booking is free · You will receive a reference number · Please arrive 15 minutes early</div>
+<div class="footer">Booking is free · You will receive a reference number · Please arrive 15 minutes early · <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

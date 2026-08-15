@@ -5,14 +5,18 @@
 <div class="card" style="max-width:560px">
   <p><b>Database:</b> <span class="pill {{ 'green' if info.database=='connected' else 'red' }}">{{ info.database }}</span></p>
   <p><b>WhatsApp integration:</b> <span class="pill blue">{{ info.whatsapp_mode }}</span></p>
-  <p><b>Backup directory:</b> <code>{{ info.backup_dir }}</code></p>
+  <p><b>Backups:</b> stored in the database (survive restarts) —
+     <a href="/admin">download them here</a></p>
   <p><b>Disk space:</b> {{ info.disk or 'unknown' }}</p>
   <h2 class="mt">Monitoring checklist</h2>
   <ul class="muted">
-    <li>Nightly database backups at 02:00 ({{ info.backup_dir }}) — verify weekly restores.</li>
+    <li>Nightly backups at 02:00 on any database engine — <b>download one monthly and keep it
+        off this server</b>, and restore one into a test database each quarter.</li>
     <li>WhatsApp failures are flagged in Notifications &amp; retried manually or via queue.</li>
     <li>Application errors return a friendly page; stack traces are never shown to users.</li>
-    <li>For production: enable HTTPS (TLS), PostgreSQL, off-box backups and uptime monitoring.</li>
+    <li>Check <code>/api/v1/health</code> — it reports the database, the background scheduler
+        and the time of the last backup.</li>
+    <li>For production: paid hosting (no cold starts), PostgreSQL, off-box backups, uptime monitoring.</li>
   </ul>
 </div>
 {% endblock %}

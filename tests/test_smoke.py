@@ -16,13 +16,13 @@ def _setup_world(client, app, seeded):
     today = now_naive().date()
     # complaint (public)
     tok = csrf(client, "/complaint")
-    client.post("/complaint/submit", data={
+    client.post("/complaint/submit", data={"consent": "1", 
         "_csrf": tok, "department_id": seeded["dept"], "category": "Long waiting time",
         "description": "Smoke test complaint for crawl coverage purposes.",
         "phone": "08011112222", "idem": "smoke-c1"}, follow_redirects=True)
     # booking (public)
     tok = csrf(client, "/book")
-    client.post("/book/submit", data={
+    client.post("/book/submit", data={"consent": "1", 
         "_csrf": tok, "department_id": seeded["dept"],
         "appointment_date": (today + timedelta(days=1)).isoformat(),
         "appointment_time": "09:00", "patient_name": "Smoke Patient",
@@ -33,10 +33,10 @@ def _setup_world(client, app, seeded):
                                      "patient_name": "Queue Smoke"}, follow_redirects=True)
     # feedback low (routes to recovery) + high
     tok = csrf(client, "/feedback")
-    client.post("/feedback/submit", data={"_csrf": tok, "rating": "1",
+    client.post("/feedback/submit", data={"consent": "1", "_csrf": tok, "rating": "1",
                                           "department_id": seeded["dept"],
                                           "comment": "Smoke low rating"}, follow_redirects=True)
-    client.post("/feedback/submit", data={"_csrf": csrf(client, "/feedback"), "rating": "5",
+    client.post("/feedback/submit", data={"consent": "1", "_csrf": csrf(client, "/feedback"), "rating": "5",
                                           "comment": "Smoke high rating"}, follow_redirects=True)
     # inspection (am1 on duty today)
     login(client, "am1")

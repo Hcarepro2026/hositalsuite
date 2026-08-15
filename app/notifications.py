@@ -182,7 +182,11 @@ def notify_complaint_patient(org, complaint, event: str, extra: str = "") -> str
         template_key=f"patient_{event}", subject=f"Complaint {complaint.ref}",
         body=body, entity_type="complaint", entity_id=complaint.id, status="SENT"))
     phone = (complaint.phone or "").strip()
-    if phone and phone.lower() not in ("not provided", "n/a", "-"):
+    # Anonymous and erased complaints have no reachable contact by design —
+    # never attempt (or log) a delivery to a placeholder value.
+    if getattr(complaint, "is_anonymous", False) or getattr(complaint, "anonymized_at", None):
+        phone = ""
+    if phone and phone.lower() not in ("not provided", "n/a", "-", "anonymous", "[erased]"):
         from . import sms as sms_engine
         from . import whatsapp
         sms_engine.queue_sms(org.id, phone, body, kind="alert",

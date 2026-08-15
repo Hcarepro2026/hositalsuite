@@ -124,7 +124,11 @@ fields over a USSD session and POST JSON to `/api/v1/ussd/complaint` with the sh
 The same routing/SLA/escalation pipeline applies.
 
 ### 4.4 Operations
-- **Backups:** nightly at 02:00 into `data/backups/` (retention `BACKUP_KEEP`, default 14). Manual: `python run.py backup` or Admin → Backups. For PostgreSQL use `pg_dump` in the ops pipeline and verify restores weekly.
+- **Backups:** nightly at 02:00, on **both SQLite and PostgreSQL** (`app/backup.py`). Every table
+  is exported to CSV and zipped with a manifest and restore instructions, then stored durably
+  (retention `BACKUP_KEEP`, default 14). Manual: `python run.py backup` or Admin → Backups → Download.
+  This is a safety net, not a replacement for your database provider's own snapshots — enable
+  those too, and **restore one into a test database each quarter**: an untested backup is not a backup.
 - **Scheduler:** runs in-process (30 s tick). For multi-instance deployments run one worker with the scheduler and set `DISABLE_SCHEDULER=1` on the others.
 - **TLS:** terminate HTTPS at a reverse proxy (nginx/Caddy/ALB); the app sets secure headers and same-site cookies.
 - **Monitoring:** `GET /api/v1/health` returns JSON health for uptime checks.

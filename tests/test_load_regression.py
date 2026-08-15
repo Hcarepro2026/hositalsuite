@@ -22,7 +22,7 @@ def test_reference_collision_retries_to_unique(client, seeded):
     try:
         for i in (1, 2):
             tok = csrf(client, "/complaint")
-            r = client.post("/complaint/submit", data={
+            r = client.post("/complaint/submit", data={"consent": "1", 
                 "_csrf": tok, "department_id": seeded["dept"],
                 "category": "Long waiting time",
                 "description": f"Collision regression complaint number {i}.",

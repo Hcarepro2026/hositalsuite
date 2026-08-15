@@ -53,10 +53,18 @@
     <label>4 · {{ _('f_phone') }}</label>
     <input type="tel" name="phone" inputmode="tel" placeholder="e.g. 08012345678">
 
+    <label class="checkline"
+           style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-weight:400">
+      <input type="checkbox" name="consent" value="1" required style="width:auto;margin-top:3px">
+      <span>I agree that the hospital may store this feedback (and my phone number,
+        if I gave one) to improve its services and follow up if needed.
+        See our <a href="/privacy" target="_blank">Privacy Notice</a>.</span>
+    </label>
+
     <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_feedback') }}</button>
   </form>
 </main>
-<div class="footer">Every rating is read by management · Low ratings trigger immediate follow-up</div>
+<div class="footer">Every rating is read by management · Low ratings trigger immediate follow-up · <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

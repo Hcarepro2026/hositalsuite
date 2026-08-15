@@ -15,7 +15,9 @@ bp = Blueprint("chat", __name__)
 
 
 def _org():
-    return db.session.query(Organization).order_by(Organization.id).first()
+    """Tenant for this request (see services.current_org)."""
+    from ..services import current_org
+    return current_org()
 
 
 @bp.get("/chat")

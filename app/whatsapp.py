@@ -31,18 +31,44 @@ def mode() -> str:
 
 
 # ------------------------------------------------------------------ media
+def _media_available(path: str) -> bool:
+    from . import storage
+    try:
+        if storage.exists(path):
+            return True
+    except Exception:                                # noqa: BLE001
+        pass
+    return bool(path and os.path.isabs(path) and os.path.exists(path))
+
+
 def _upload_media(pdf_path: str) -> Optional[str]:
+    """Upload a PDF to Meta. Reads from durable storage, not the filesystem.
+
+    PDFs now live in app.storage (the container disk is wiped on restart), so
+    this accepts a storage key and falls back to a real path for legacy rows.
+    """
+    import io as _io
+
+    from . import storage
     cfg = current_app.config
     url = f"{GRAPH}/{cfg['WHATSAPP_PHONE_NUMBER_ID']}/media"
-    with open(pdf_path, "rb") as fh:
-        resp = requests.post(
-            url,
-            headers={"Authorization": f"Bearer {cfg['WHATSAPP_ACCESS_TOKEN']}"},
-            data={"messaging_product": "whatsapp", "type": "application/pdf",
-                  "filename": os.path.basename(pdf_path)},
-            files={"file": (os.path.basename(pdf_path), fh, "application/pdf")},
-            timeout=60,
-        )
+
+    data = storage.get(pdf_path)
+    if data is None and os.path.exists(pdf_path):
+        with open(pdf_path, "rb") as fh:
+            data = fh.read()
+    if not data:
+        raise WhatsAppError(f"Report file not found for delivery: {pdf_path}")
+
+    name = os.path.basename(pdf_path)
+    resp = requests.post(
+        url,
+        headers={"Authorization": f"Bearer {cfg['WHATSAPP_ACCESS_TOKEN']}"},
+        data={"messaging_product": "whatsapp", "type": "application/pdf",
+              "filename": name},
+        files={"file": (name, _io.BytesIO(data), "application/pdf")},
+        timeout=60,
+    )
     if resp.status_code not in (200, 201):
         raise WhatsAppError(f"Media upload failed ({resp.status_code}): {resp.text[:200]}")
     return resp.json().get("id")
@@ -109,7 +135,10 @@ def send_message(msg: WhatsAppMessage) -> WhatsAppMessage:
             msg.sent_at = now_naive()
             msg.delivered_at = now_naive()
         else:  # cloud
-            if msg.media_path and os.path.isabs(msg.media_path) and os.path.exists(msg.media_path):
+            # media_path is a durable-storage key (e.g. "reports/REF.pdf"); the
+            # old code required an absolute filesystem path, which silently
+            # downgraded every report to a text-only message after the move.
+            if msg.media_path and _media_available(msg.media_path):
                 media_id = _upload_media(msg.media_path)
                 provider = _send_document(msg.to_number, media_id,
                                           os.path.basename(msg.media_path), msg.body)

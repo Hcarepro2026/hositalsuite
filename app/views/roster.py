@@ -16,6 +16,11 @@ from ..security import require_role
 
 bp = Blueprint("roster", __name__)
 
+
+# Hard cap on imported rows. A 512 MB free instance can be knocked over by a
+# spreadsheet with a million rows; refuse politely instead of dying.
+MAX_IMPORT_ROWS = 2000
+
 DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y")
 
 
@@ -145,6 +150,10 @@ def roster_import_parse():
                 dt = keys.get("date") or keys.get("duty date") or keys.get("duty_date") or ""
                 note = keys.get("note") or keys.get("duty assignment") or ""
                 rows_raw.append(((nm or "").strip(), (dt or "").strip(), (note or "").strip()))
+                if len(rows_raw) > MAX_IMPORT_ROWS:
+                    flash(f"That file has too many rows (limit {MAX_IMPORT_ROWS}). "
+                          "Please split it into smaller files.", "error")
+                    return redirect(url_for("roster.roster_import_form"))
         elif name.endswith(".xlsx"):
             from openpyxl import load_workbook
             wb = load_workbook(file, read_only=True, data_only=True)
@@ -172,6 +181,10 @@ def roster_import_parse():
                     dt = row[i_date].date().isoformat()
                 note = str(row[i_note] or "").strip() if i_note is not None and i_note < len(row) else ""
                 rows_raw.append((nm, dt, note))
+                if len(rows_raw) > MAX_IMPORT_ROWS:
+                    flash(f"That file has too many rows (limit {MAX_IMPORT_ROWS}). "
+                          "Please split it into smaller files.", "error")
+                    return redirect(url_for("roster.roster_import_form"))
         else:
             flash("Unsupported file type. Please upload .xlsx or .csv.", "error")
             return redirect(url_for("roster.roster_import_form"))
@@ -433,6 +446,10 @@ def dept_roster_import():
             for row in _csv.DictReader(_io.StringIO(text)):
                 k = {(x or "").strip().lower(): (v or "").strip() for x, v in row.items()}
                 rows.append((k.get("date", ""), k.get("shift", ""), k.get("staff1", ""), k.get("staff2", "")))
+                if len(rows) > MAX_IMPORT_ROWS:
+                    flash(f"That file has too many rows (limit {MAX_IMPORT_ROWS}). "
+                          "Please split it into smaller files.", "error")
+                    return redirect(url_for("roster.dept_roster", dept=dept.id))
         elif name.endswith(".xlsx"):
             from openpyxl import load_workbook
             wb = load_workbook(file, read_only=True, data_only=True)

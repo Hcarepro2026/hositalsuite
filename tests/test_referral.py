@@ -8,7 +8,7 @@ from conftest import csrf, login
 
 
 def _rate(client, rating, **over):
-    data = {"_csrf": csrf(client, "/feedback"), "rating": str(rating)}
+    data = {"_csrf": csrf(client, "/feedback"), "rating": str(rating), "consent": "1"}
     data.update({k: str(v) for k, v in over.items()})
     return client.post("/feedback/submit", data=data, follow_redirects=True)
 
@@ -16,7 +16,7 @@ def _rate(client, rating, **over):
 def _book(client, seeded, **over):
     token = csrf(client, "/book")
     day = (now_naive().date() + timedelta(days=over.pop("days", 2))).isoformat()
-    data = {"_csrf": token, "department_id": seeded["dept"], "appointment_date": day,
+    data = {"_csrf": token, "consent": "1", "department_id": seeded["dept"], "appointment_date": day,
             "appointment_time": "09:00", "patient_name": over.pop("name", "Chinwe Obi"),
             "phone": over.pop("phone", "08033334444"),
             "idem": over.pop("idem", "ref-idem-1")}

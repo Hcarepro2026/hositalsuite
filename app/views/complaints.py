@@ -21,8 +21,9 @@ PHONE_RE = re.compile(r"^\+?\d{7,15}$")
 
 
 def _default_org() -> Organization | None:
-    """Single-tenant deployments: use the first organization."""
-    return db.session.query(Organization).order_by(Organization.id).first()
+    """Tenant for this request (see services.current_org)."""
+    from ..services import current_org
+    return current_org()
 
 
 # ================================================================ PUBLIC PORTAL
@@ -66,6 +67,10 @@ def portal_submit():
     contact_method = request.form.get("contact_method", "phone")
     if contact_method not in ("phone", "whatsapp", "either"):
         contact_method = "phone"
+    # Anonymous complaints (staff-conduct issues are the highest-value signal and
+    # go unreported when the patient must identify themselves).
+    is_anonymous = request.form.get("anonymous") in ("1", "on", "true", "yes")
+    consented = request.form.get("consent") in ("1", "on", "true", "yes")
 
     dept = db.session.get(Department, dept_id) if dept_id else None
     errors = []
@@ -77,8 +82,14 @@ def portal_submit():
         errors.append("Please describe the complaint (at least 10 characters).")
     if len(description) > 4000:
         errors.append("Description is too long (maximum 4000 characters).")
-    if not PHONE_RE.match(phone):
-        errors.append("Please enter a valid phone number (digits only, e.g. 08012345678).")
+    if is_anonymous:
+        phone = ""                      # never store a number on an anonymous report
+    elif not PHONE_RE.match(phone):
+        errors.append("Please enter a valid phone number (digits only, e.g. 08012345678), "
+                      "or tick 'Submit anonymously'.")
+    if not is_anonymous and not consented:
+        errors.append("Please tick the box to allow the hospital to use your contact "
+                      "details to follow up on this complaint.")
     if errors:
         depts = db.session.query(Department).filter_by(org_id=org.id, active=True).all()
         categories = db.session.query(ComplaintCategory).filter_by(org_id=org.id, active=True).all()
@@ -95,7 +106,7 @@ def portal_submit():
     attachment_path = None
     file = request.files.get("attachment")
     if file and file.filename:
-        path, err = save_upload(file, "complaints")
+        path, err = save_upload(file, "complaints", org_id=org.id)
         if not err:
             attachment_path = path
 
@@ -113,8 +124,10 @@ def portal_submit():
             department_id=dept.id,
             category=category,
             description=description,
-            phone=phone,
+            phone=phone or "anonymous",
             contact_method=contact_method,
+            is_anonymous=is_anonymous,
+            consent_at=None if is_anonymous else now,
             attachment_path=attachment_path,
             source="qr" if qr_loc else "link",
             qr_location_id=qr_loc.id if qr_loc else None,
@@ -369,7 +382,8 @@ def staff_attachment(cid: int):
     c = db.session.get(Complaint, cid)
     if not c or c.org_id != current_user.org_id or not c.attachment_path:
         abort(404)
-    full = resolve_upload_path(c.attachment_path)
-    if not full:
+    from .. import storage
+    try:
+        return storage.send(c.attachment_path)
+    except FileNotFoundError:
         abort(404)
-    return send_file(full)

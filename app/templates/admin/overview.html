@@ -27,6 +27,7 @@
   <a class="card" href="/reports"><h2>📊 Reports &amp; Archive</h2><p class="muted">All exports + digital archive</p></a>
   <a class="card" href="/admin/audit"><h2>🧾 Audit Logs</h2><p class="muted">Tamper-evident, hash-chained
       {% if chain_ok %}<span class="pill green">verified</span>{% else %}<span class="pill red">BROKEN CHAIN</span>{% endif %}</p></a>
+  <a class="card" href="/admin/data-requests"><h2>🔐 Patient Data Requests</h2><p class="muted">NDPA access &amp; erasure requests</p></a>
   <a class="card" href="/admin/health"><h2>💚 System Health &amp; Backups</h2><p class="muted">Database, disk, backups</p></a>
 </div>
 
@@ -34,10 +35,15 @@
   <h2>Backups</h2>
   {% if backups %}
     {% for b in backups %}<div class="row spread">
-      <span><code>{{ b }}</code></span>
-      <a class="btn small ghost" href="/admin/backup/download/{{ b }}">Download</a>
+      <span><code>{{ b.name }}</code> <span class="muted">· {{ b.size_kb }} KB ·
+        {{ b.at.strftime('%d %b %Y %H:%M') if b.at else '' }}</span></span>
+      <a class="btn small ghost" href="/admin/backup/download/{{ b.name }}">Download</a>
     </div>{% endfor %}
   {% else %}<p class="muted">No backups yet — they run nightly at 02:00.</p>{% endif %}
+  <p class="hint mt">Backups cover every table and work on both SQLite and PostgreSQL.
+    Download one at least monthly and keep it somewhere outside this server —
+    and restore one into a test database once a quarter, because an untested
+    backup is not a backup.</p>
   <form method="post" action="/admin/backup" class="mt">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <button class="btn secondary">⬇ Create backup now</button>

@@ -14,7 +14,9 @@ bp = Blueprint("referrals", __name__)
 
 
 def _default_org() -> Organization | None:
-    return db.session.query(Organization).order_by(Organization.id).first()
+    """Tenant for this request (see services.current_org)."""
+    from ..services import current_org
+    return current_org()
 
 
 # ================================================================ PUBLIC

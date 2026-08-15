@@ -11,9 +11,9 @@ from flask_login import current_user
 from .. import services, whatsapp
 from ..audit import audit, verify_chain
 from ..config import Config
-from ..models import (AppNotification, AuditLog, ComplaintCategory, Department,
-                      DutyRoster, Organization, QrLocation, ReportFile, Section,
-                      Unit, User, WhatsAppMessage, db, new_code)
+from ..models import (AppNotification, AuditLog, Complaint, ComplaintCategory,
+                      Department, DutyRoster, Organization, QrLocation, ReportFile,
+                      Section, Unit, User, WhatsAppMessage, db, new_code, now_naive)
 from ..security import password_strength_errors, require_role, save_upload
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -35,9 +35,10 @@ def overview():
         "wa_failed": db.session.query(WhatsAppMessage).filter_by(org_id=org.id, status="FAILED").count(),
         "wa_queue": db.session.query(WhatsAppMessage).filter_by(org_id=org.id, status="QUEUED").count(),
     }
-    backups = []
-    if os.path.isdir(Config.BACKUP_DIR):
-        backups = sorted((f for f in os.listdir(Config.BACKUP_DIR) if f.endswith(".db")), reverse=True)[:10]
+    from ..backup import list_backups
+    backups = [{"name": b.key.split("/")[-1],
+                "size_kb": (b.size or 0) // 1024,
+                "at": b.created_at} for b in list_backups(limit=10)]
     ok, n = verify_chain(org.id)
     return render_template("admin/overview.html", org=org, counts=counts, backups=backups,
                            chain_ok=ok, chain_rows=n)
@@ -67,7 +68,7 @@ def hospital_save():
     org.address = (request.form.get("address") or "").strip() or None
     file = request.files.get("logo")
     if file and file.filename:
-        path, err = save_upload(file, "logos")
+        path, err = save_upload(file, "logos", org_id=org.id)
         if not err:
             org.logo_path = path   # relative path so every page can serve it
     audit("HOSPITAL_UPDATED", "organization", org.id, {"name": org.name, "code": org.code})
@@ -680,16 +681,16 @@ def posters_download():
         else:
             posters.append({"title": svc["title"], "subtitle": svc["subtitle"],
                             "url": f"{base}{svc['path']}", "steps": svc["steps"]})
-    from .. import pdfgen
-    path = os.path.join(Config.REPORT_DIR, f"qr-posters-{new_code(4)}.pdf")
-    pdfgen.build_poster_pdf(org, posters, path)
+    from .. import pdfgen, storage
+    path = f"reports/qr-posters-{new_code(4)}.pdf"
+    storage.build_pdf(pdfgen.build_poster_pdf, path, org, posters, org_id=org.id)
     rf = ReportFile(org_id=org.id, kind="posters", title=f"QR Poster Pack ({len(posters)} posters)",
                     path=path, verify_code=new_code(10), created_by_id=current_user.id)
     db.session.add(rf)
     audit("POSTERS_GENERATED", "report", None, {"count": len(posters), "services": wanted})
     db.session.commit()
-    return send_file(path, as_attachment=True, download_name="QR-Poster-Pack.pdf",
-                     mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, download_name="QR-Poster-Pack.pdf",
+                        mimetype="application/pdf")
 
 
 # ------------------------------------------------------------------ audit log
@@ -710,27 +711,38 @@ def audit_log():
 @bp.post("/backup")
 @require_role(*SUPER)
 def backup_now():
-    uri = db.engine.url
-    if str(uri).startswith("sqlite"):
-        from ..scheduler import job_nightly_backup
-        from flask import current_app
-        job_nightly_backup(current_app)
-        audit("BACKUP_MANUAL", "system", None, {})
+    """Create a real backup on ANY engine (SQLite or PostgreSQL)."""
+    from flask import current_app
+    from ..backup import create_backup, prune_backups
+    try:
+        key, size = create_backup(current_app, kind="manual")
+        prune_backups(keep=Config.BACKUP_KEEP)
+        audit("BACKUP_MANUAL", "system", None, {"key": key, "bytes": size})
         db.session.commit()
-        flash("Database backup created in the backups folder.", "success")
-    else:
-        flash("For PostgreSQL deployments, run pg_dump via your ops pipeline.", "info")
+        flash(f"Backup created ({size // 1024} KB). Download it below and keep a "
+              "copy somewhere outside this server.", "success")
+    except Exception as exc:                      # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("manual backup failed")
+        flash(f"Backup failed: {exc}", "error")
     return redirect(url_for("admin.overview"))
 
 
 @bp.get("/backup/download/<name>")
 @require_role(*SUPER)
 def backup_download(name: str):
+    """Download a backup archive from durable storage."""
+    from .. import storage
     safe = os.path.basename(name)
-    full = os.path.join(Config.BACKUP_DIR, safe)
-    if not safe.endswith(".db") or not os.path.isfile(full):
+    if not (safe.endswith(".zip") or safe.endswith(".db")):
         abort(404)
-    return send_file(full, as_attachment=True)
+    try:
+        resp = storage.send(f"backups/{safe}", as_attachment=True, download_name=safe)
+    except FileNotFoundError:
+        abort(404)
+    audit("BACKUP_DOWNLOADED", "system", None, {"file": safe})
+    db.session.commit()
+    return resp
 
 
 # ------------------------------------------------------------------ system health
@@ -881,3 +893,98 @@ def kb_delete(kid: int):
     db.session.commit()
     flash("Dialogue deleted.", "success")
     return redirect(url_for("admin.kb_list"))
+
+
+# ================================================================ NDPA data-subject requests
+@bp.get("/data-requests")
+@require_role(*SUPER_MD)
+def data_requests():
+    from ..models import DataRequest
+    items = (db.session.query(DataRequest)
+             .filter_by(org_id=current_user.org_id)
+             .order_by(DataRequest.status.desc(), DataRequest.created_at.desc())
+             .limit(200).all())
+    return render_template("admin/data_requests.html", items=items, now=now_naive())
+
+
+def _records_for_phone(org_id: int, phone: str) -> dict:
+    """Every record tied to a phone number, across all patient-facing tables."""
+    from ..models import Appointment, PatientFeedback, QueueTicket
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    tail = digits[-9:] if len(digits) >= 9 else digits
+    like = f"%{tail}%"
+    return {
+        "complaints": db.session.query(Complaint).filter(
+            Complaint.org_id == org_id, Complaint.phone.like(like)).all(),
+        "appointments": db.session.query(Appointment).filter(
+            Appointment.org_id == org_id, Appointment.phone.like(like)).all(),
+        "feedback": db.session.query(PatientFeedback).filter(
+            PatientFeedback.org_id == org_id, PatientFeedback.phone.like(like)).all(),
+        "queue": db.session.query(QueueTicket).filter(
+            QueueTicket.org_id == org_id, QueueTicket.phone.like(like)).all(),
+    }
+
+
+@bp.get("/data-requests/<int:rid>")
+@require_role(*SUPER_MD)
+def data_request_detail(rid: int):
+    from ..models import DataRequest
+    req = db.session.get(DataRequest, rid)
+    if not req or req.org_id != current_user.org_id:
+        abort(404)
+    found = _records_for_phone(req.org_id, req.phone)
+    return render_template("admin/data_request_detail.html", req=req, found=found)
+
+
+@bp.post("/data-requests/<int:rid>/fulfil")
+@require_role(*SUPER_MD)
+def data_request_fulfil(rid: int):
+    """Action an access or erasure request and record exactly what was done."""
+    from ..models import DataRequest
+    req = db.session.get(DataRequest, rid)
+    if not req or req.org_id != current_user.org_id:
+        abort(404)
+    if req.status != "NEW":
+        flash("That request has already been handled.", "info")
+        return redirect(url_for("admin.data_requests"))
+
+    action = request.form.get("action")
+    found = _records_for_phone(req.org_id, req.phone)
+    counts = {k: len(v) for k, v in found.items()}
+
+    if action == "erase":
+        now = now_naive()
+        for c in found["complaints"]:
+            c.phone = "[erased]"
+            c.description = "[erased at the patient's request]"
+            c.attachment_path = None
+            c.anonymized_at = now
+        for a in found["appointments"]:
+            a.patient_name, a.phone, a.anonymized_at = "[erased]", "[erased]", now
+        for f in found["feedback"]:
+            f.phone = None
+            if f.comment:
+                f.comment = "[erased at the patient's request]"
+            f.anonymized_at = now
+        for t in found["queue"]:
+            t.patient_name, t.phone, t.anonymized_at = "[erased]", None, now
+        req.outcome = f"Erased personal identifiers from {sum(counts.values())} record(s): {counts}"
+    elif action == "access":
+        req.outcome = (f"Copy of {sum(counts.values())} record(s) provided to the patient: "
+                       f"{counts}")
+    elif action == "reject":
+        req.status = "REJECTED"
+        req.outcome = (request.form.get("reason") or "Rejected — identity could not be verified.")[:1000]
+    else:
+        flash("Unknown action.", "error")
+        return redirect(url_for("admin.data_request_detail", rid=rid))
+
+    if req.status != "REJECTED":
+        req.status = "DONE"
+    req.handled_at = now_naive()
+    req.handled_by_id = current_user.id
+    audit("DATA_REQUEST_HANDLED", "data_request", req.id,
+          {"ref": req.ref, "action": action, "counts": counts})
+    db.session.commit()
+    flash(f"Request {req.ref} marked {req.status.lower()}.", "success")
+    return redirect(url_for("admin.data_requests"))

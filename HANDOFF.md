@@ -1,7 +1,7 @@
 # HANDOFF — Hospital Admin Manager Suite ("Patient Experience OS")
 
 > **Read this first** if you are a new chat session or a new developer.
-> Everything below is verified fact as of 2026-08-13. The repo is the source of truth:
+> Everything below is verified fact as of **2026-08-15 (v1.2.0, 142 tests green)**. The repo is the source of truth:
 > **https://github.com/Hcarepro2026/hositalsuite** (branch `main`).
 
 ---
@@ -12,9 +12,11 @@
 - Standing instructions: (1) **always end with the pending-features menu** so they can choose;
   (2) **ROUND UP** (stop & summarize cleanly) whenever tokens run low, work slows, or quality risks degrading.
 - They deploy-test via screenshots from **Render** and **Arena** — expect screenshots, diagnose logs patiently.
-- GitHub pushes: repo is theirs. A classic PAT was used historically (`github_pat`/`ghp_` flow); if it fails,
-  guide them to create a fresh 7-day PAT (repo scope) at https://github.com/settings/tokens and push with
-  `git push https://Hcarepro2026:<TOKEN>@github.com/Hcarepro2026/hositalsuite.git main`.
+- GitHub pushes: repo is theirs. Create a **fresh 7-day fine-grained PAT** (contents: read/write) at
+  https://github.com/settings/tokens, push with
+  `git push https://Hcarepro2026:<TOKEN>@github.com/Hcarepro2026/hositalsuite.git main`,
+  then **revoke it**. ⚠️ Never paste a token into a chat window — treat any token that appears in
+  a conversation as compromised and revoke it immediately.
 
 ## 1. Where things live
 
@@ -36,6 +38,31 @@
   Verify DB compatibility with **local** PostgreSQL 17 instead (`sudo service postgresql start`,
   user `hms` / pw `hms_test_pw`, dbs `hms_test`, `hms_load` — recreate if wiped).
 
+## 1b. HARDENING PASS — 2026-08-15 (v1.2.0) — read before changing anything below
+
+An independent audit found four P0 defects. All are fixed; **do not regress them**:
+
+1. **Uploads/PDFs are in the DATABASE, not on disk** (`app/storage.py`, `STORAGE_BACKEND=db`).
+   Render wipes the container disk on every restart — the hospital logo had already been lost
+   (`/branding/logo` was 404ing in production). Never write patient files with `open()`;
+   always go through `storage.put/get/send`.
+2. **Backups actually run on PostgreSQL** (`app/backup.py`). The old job returned immediately
+   unless the DB was SQLite, so production had *no* backups while the UI claimed otherwise.
+   Backups are per-table CSV in a zip with a manifest + RESTORE.txt, kept in durable storage.
+3. **ProxyFix + `security.client_ip()`**. Behind Render/Cloudflare every visitor shared the
+   proxy IP, so per-IP rate limits were effectively global (one abuser locked out the whole
+   hospital) and audit-log IPs were useless. Use `client_ip()`, never `request.remote_addr`.
+4. **Per-username lockout** (`LoginAttempt`): 10 failures ⇒ 15-minute lock. This is the only
+   defence against a *distributed* brute force, which the IP limiter cannot see.
+
+Also added: Alembic migrations (auto-applied at boot, since Render free has no shell),
+NDPA consent + `/privacy` + data-subject requests + retention purge job, anonymous complaints,
+CSP/HSTS/Secure cookies, tenant resolution for public portals, pinned dependencies, GitHub
+Actions CI, and a global exception handler so no traceback ever reaches a patient.
+
+**Tests: 142 passing** (was 116). New suite: `tests/test_hardening.py` — each test names the
+defect it prevents. Run `python -m pytest tests/ -q` before every push.
+
 ## 2. Production-critical knowledge (do not regress)
 
 - **Render free plan has NO Shell and NO One-Off Jobs.** First-run seeding happens via `AUTO_SEED=1`
@@ -48,6 +75,9 @@
   `SSL SYSCALL EOF` after idle). SQLite uses WAL + busy_timeout (set in `create_app`).
 - **Reference-number race is fixed** by `services.insert_with_unique_ref` (collision retry; DB unique
   constraint as arbiter; idem collision returns original record). Do not reintroduce `count+1` inserts.
+- **Migrations**: Alembic (`migrations/`). The baseline is written to be safe on a database
+  that already has tables (it inspects first), and pre-Alembic databases get *stamped*, not
+  replayed. `run_alembic_upgrade()` runs at boot; `ensure_schema()` remains as a fallback.
 - **Load-tested**: 4,000 req/min PASSED (0% failures) on 1 worker, SQLite & PostgreSQL; overload
   ~8,800/min degrades gracefully. See `LOAD_TEST_REPORT.md`; suite in `loadtest/locustfile.py`
   (needs `RATE_LIMIT_SCALE=100000` on BOTH client and server for capacity measurement).

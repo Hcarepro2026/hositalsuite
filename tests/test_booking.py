@@ -10,7 +10,7 @@ from conftest import csrf, login
 def _book(client, seeded, **over):
     token = csrf(client, "/book")
     day = (now_naive().date() + timedelta(days=over.pop("days", 1))).isoformat()
-    data = {"_csrf": token, "department_id": seeded["dept"], "appointment_date": day,
+    data = {"_csrf": token, "consent": "1", "department_id": seeded["dept"], "appointment_date": day,
             "appointment_time": "09:00", "patient_name": "Chinwe Obi",
             "phone": "08033334444", "idem": over.pop("idem", "idem-test-1")}
     data.update(over)
@@ -67,7 +67,8 @@ def test_booking_idempotency_prevents_duplicates(client, seeded):
 
 def test_complaint_idempotency_prevents_duplicates(client, seeded):
     token = csrf(client, "/complaint")
-    data = {"_csrf": token, "department_id": seeded["dept"], "category": "Long waiting time",
+    data = {"_csrf": token, "consent": "1", "department_id": seeded["dept"],
+            "category": "Long waiting time",
             "description": "Waiting too long without any information at all.",
             "phone": "08055556666", "idem": "cmp-idem-1"}
     client.post("/complaint/submit", data=data, follow_redirects=True)

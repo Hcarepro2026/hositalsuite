@@ -26,7 +26,9 @@ LOW_RATING_THRESHOLD = 2
 
 
 def _default_org():
-    return db.session.query(Organization).order_by(Organization.id).first()
+    """Tenant for this request (see services.current_org)."""
+    from ..services import current_org
+    return current_org()
 
 
 # ================================================================ PUBLIC
@@ -62,10 +64,13 @@ def portal_submit():
     if phone and not PHONE_RE.match(phone):
         flash("Please enter a valid phone number or leave it empty.", "error")
         return redirect(url_for("feedback.portal"))
+    if request.form.get("consent") not in ("1", "on", "true", "yes"):
+        flash("Please tick the consent box so we may store your feedback.", "error")
+        return redirect(url_for("feedback.portal"))
 
     fb = PatientFeedback(org_id=org.id, department_id=dept.id if dept else None,
                          rating=rating, comment=comment[:4000] or None,
-                         phone=phone or None, status="NEW",
+                         phone=phone or None, status="NEW", consent_at=now,
                          source="qr" if request.form.get("loc") else "link")
     db.session.add(fb)
     db.session.flush()

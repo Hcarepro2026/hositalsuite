@@ -79,7 +79,24 @@ class Config:
 
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
+    # Secure cookies by default; set COOKIE_SECURE=0 only for plain-HTTP local dev.
+    SESSION_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "1") == "1"
     PERMANENT_SESSION_LIFETIME = 60 * 60 * 10  # 10 hours
+
+    # Durable storage backend: "db" (survives restarts on ephemeral hosts) | "disk"
+    STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "db").lower()
+
+    # Number of trusted reverse proxies in front of the app (Render/Cloudflare = 1).
+    # Drives ProxyFix so rate limiting and audit logs see the real client IP.
+    TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "1") or 1)
+
+    # Brute-force lockout (per username, complements the per-IP rate limiter)
+    LOGIN_MAX_FAILURES = int(os.environ.get("LOGIN_MAX_FAILURES", "10") or 10)
+    LOGIN_LOCKOUT_MINUTES = int(os.environ.get("LOGIN_LOCKOUT_MINUTES", "15") or 15)
+
+    # Hard ceiling on request body size — refuses oversized uploads before they
+    # are buffered into memory (prevents a trivial memory-exhaustion crash).
+    MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", str(8 * 1024 * 1024)))
 
     @classmethod
     def ensure_dirs(cls):

@@ -113,7 +113,7 @@ def test_hod_cannot_amend_inspection(client, seeded):
 # ------------------------------------------------------------------ SLA extension
 def test_sla_extension_is_audit_logged_and_hod_cannot_extend(client, seeded):
     tok = csrf(client, "/complaint")
-    client.post("/complaint/submit", data={
+    client.post("/complaint/submit", data={"consent": "1", 
         "_csrf": tok, "department_id": seeded["dept"], "category": "Billing / charges",
         "description": "Double charged for a laboratory test yesterday.",
         "phone": "08066667777", "idem": "sla-ext-1"}, follow_redirects=True)

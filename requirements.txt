@@ -1,13 +1,25 @@
-Flask>=3.0
-Flask-Login>=0.6
-Flask-SQLAlchemy>=3.1
-SQLAlchemy>=2.0
-reportlab>=4.0
-qrcode>=7.4
-Pillow>=10.0
-requests>=2.31
-openpyxl>=3.1
-pytest>=8.0
-psycopg2-binary>=2.9
-python-dotenv>=1.0
-gunicorn>=21.0
+# Pinned to versions that are TESTED GREEN (116/116) as of 2026-08-15.
+#
+# Why pinned: `Flask>=3.0` style ranges mean a breaking upstream release can
+# fail a deploy at the worst possible moment, with no code change on our side.
+#
+# The form `>=X,<Y` allows patch/bugfix and security releases in, while keeping
+# the next minor version out until someone has run the tests against it.
+# Upgrade deliberately: bump a pin, run `pytest`, then deploy.
+
+Flask>=3.1.3,<3.2
+Flask-Login>=0.6.3,<0.7
+Flask-SQLAlchemy>=3.1.1,<3.2
+SQLAlchemy>=2.0.52,<2.1
+Werkzeug>=3.1.8,<3.2
+Jinja2>=3.1.6,<3.2
+alembic>=1.19.1,<1.20
+reportlab>=5.0.0,<5.1
+qrcode>=8.2,<9
+Pillow>=12.3.0,<13
+requests>=2.33.0,<3
+openpyxl>=3.1.5,<3.2
+psycopg2-binary>=2.9.12,<3
+python-dotenv>=1.2.2,<2
+gunicorn>=26.0.0,<27
+pytest>=9.0.3,<10

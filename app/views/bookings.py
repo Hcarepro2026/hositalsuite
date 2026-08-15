@@ -20,7 +20,9 @@ PHONE_RE = re.compile(r"^\+?\d{7,15}$")
 
 
 def _default_org() -> Organization | None:
-    return db.session.query(Organization).order_by(Organization.id).first()
+    """Tenant for this request (see services.current_org)."""
+    from ..services import current_org
+    return current_org()
 
 
 # ================================================================ PUBLIC
@@ -100,6 +102,9 @@ def portal_submit():
         errors.append("Please enter the patient's full name.")
     if not PHONE_RE.match(phone):
         errors.append("Please enter a valid phone number (e.g. 08012345678).")
+    if request.form.get("consent") not in ("1", "on", "true", "yes"):
+        errors.append("Please tick the box to allow the hospital to store your "
+                      "details for this appointment.")
     if day and dept and slot in slots and services.slot_is_full(org.id, dept.id, day, slot):
         errors.append("That time slot is full — please choose another time.")
 
@@ -131,6 +136,7 @@ def portal_submit():
             appointment_time=slot,
             patient_name=name[:120],
             phone=phone,
+            consent_at=now,
             status="BOOKED",
             source="qr" if qr_loc else "link",
             qr_location_id=qr_loc.id if qr_loc else None,

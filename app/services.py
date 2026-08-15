@@ -35,6 +35,63 @@ DEFAULT_SETTINGS = {
 }
 
 
+# ------------------------------------------------------------------ tenant resolution
+def current_org() -> Optional[Organization]:
+    """Resolve which hospital a request belongs to.
+
+    Public patient portals have no login, so the tenant must come from the
+    request itself. Resolution order (first match wins):
+
+      1. the signed-in user's org
+      2. ?h=<org code or slug> on the query string (used by QR codes and links)
+      3. the <slug>. subdomain, when the deployment is subdomain-per-hospital
+      4. the only organization, if the deployment is single-tenant
+
+    Returning None for an ambiguous multi-tenant request is deliberate: serving
+    hospital #1's departments to hospital #2's patients is a data-integrity bug,
+    so callers show a chooser instead of guessing.
+    """
+    from flask import current_app, has_request_context, request
+
+    try:
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            org = db.session.get(Organization, current_user.org_id)
+            if org is not None:
+                return org
+    except Exception:                                   # noqa: BLE001
+        pass
+
+    if has_request_context():
+        hint = (request.args.get("h") or request.view_args.get("org_slug")
+                if request.view_args else request.args.get("h"))
+        hint = (hint or "").strip()
+        if hint:
+            org = (db.session.query(Organization)
+                   .filter(db.or_(Organization.slug == hint.lower(),
+                                  Organization.code == hint.upper())).first())
+            if org is not None:
+                return org
+        host = (request.host or "").split(":")[0].lower()
+        label = host.split(".")[0] if host.count(".") >= 2 else ""
+        if label and label not in ("www", "localhost", "hospital-suite"):
+            org = db.session.query(Organization).filter_by(slug=label).first()
+            if org is not None:
+                return org
+
+    orgs = db.session.query(Organization).order_by(Organization.id).limit(2).all()
+    if len(orgs) == 1:
+        return orgs[0]
+    if orgs:
+        # Multi-tenant but unidentified: fall back only if explicitly allowed.
+        try:
+            if current_app.config.get("DEFAULT_ORG_FALLBACK", True):
+                return orgs[0]
+        except RuntimeError:
+            return orgs[0]
+    return None
+
+
 def get_setting(org_id: int, key: str, default=None):
     val = Setting.get(org_id, key, None)
     return val if val is not None else DEFAULT_SETTINGS.get(key, default)

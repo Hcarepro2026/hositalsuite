@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from .. import scoring, services
 from ..audit import audit
-from ..models import (AppNotification, Complaint, CorrectiveAction, Department,
-                      DutyRoster, Inspection, db, now_naive)
-from ..security import require_login, save_upload
+from ..models import (AppNotification, Complaint, CorrectiveAction, DataRequest,
+                      Department, DutyRoster, Inspection, db, new_code, now_naive)
+from ..security import rate_limit, require_login, save_upload
 
 bp = Blueprint("main", __name__)
 
@@ -95,26 +95,15 @@ def _kpi(org_id: int) -> dict:
 @bp.get("/branding/logo")
 def branding_logo():
     """Public hospital logo — used on every page, including login and patient portals."""
-    import os
-    from ..config import Config
-    from ..models import Organization
-    org = None
-    try:
-        if current_user.is_authenticated:
-            org = db.session.get(Organization, current_user.org_id)
-    except Exception:
-        org = None
-    if org is None:
-        org = db.session.query(Organization).order_by(Organization.id).first()
+    from .. import storage
+    from ..services import current_org
+    org = current_org()
     if not org or not org.logo_path:
         abort(404)
-    path = org.logo_path
-    candidates = [path, os.path.join(Config.UPLOAD_DIR, path),
-                  os.path.join(Config.UPLOAD_DIR, os.path.basename(path))]
-    full = next((p for p in candidates if p and os.path.isfile(p)), None)
-    if not full:
+    try:
+        return storage.send(org.logo_path, max_age=3600)
+    except FileNotFoundError:
         abort(404)
-    return send_file(full, max_age=3600)
 
 
 @bp.get("/")
@@ -262,7 +251,7 @@ def corrective_action_update(ca_id: int):
         ca.completed_at = now_naive()
         file = request.files.get("evidence")
         if file and file.filename:
-            path, err = save_upload(file, "ca")
+            path, err = save_upload(file, "ca", org_id=ca.org_id)
             if not err:
                 ca.evidence_path = path
     if new_status == "VERIFIED":
@@ -272,3 +261,41 @@ def corrective_action_update(ca_id: int):
     db.session.commit()
     flash(f"Corrective action updated to {new_status}.", "success")
     return redirect(url_for("main.corrective_actions"))
+
+
+# ================================================================ NDPA: privacy & data rights
+@bp.get("/privacy")
+def privacy():
+    """Public privacy notice. Required before a hospital's legal officer will sign."""
+    return render_template("privacy.html", today=now_naive())
+
+
+@bp.get("/privacy/request")
+def privacy_request():
+    return render_template("privacy_request.html")
+
+
+@bp.post("/privacy/request")
+@rate_limit(limit=5, window=600.0, key_extra="dsr")
+def privacy_request_post():
+    """Log a data-subject access/erasure request for staff to action."""
+    from ..services import current_org
+    org = current_org()
+    if not org:
+        abort(503)
+    kind = request.form.get("kind")
+    phone = (request.form.get("phone") or "").strip().replace(" ", "").replace("-", "")
+    note = (request.form.get("note") or "").strip()[:1000]
+    if kind not in ("access", "erase") or len(phone) < 7:
+        flash("Please choose what you need and enter the phone number you used.", "error")
+        return render_template("privacy_request.html"), 422
+
+    req = DataRequest(org_id=org.id, ref=f"DSR-{now_naive():%Y}-{new_code(6)}",
+                      kind=kind, phone=phone, note=note or None)
+    db.session.add(req)
+    audit("DATA_REQUEST_SUBMITTED", "data_request", None,
+          {"kind": kind, "ref": req.ref}, org_id=org.id)
+    db.session.commit()
+    flash(f"Request received. Your reference is {req.ref}. "
+          "We will respond within 30 days.", "success")
+    return redirect(url_for("main.privacy"))

@@ -7,10 +7,10 @@ import os
 from datetime import date, datetime, timedelta
 
 from flask import (Blueprint, Response, abort, render_template,
-                   request, send_file)
+                   request)
 from flask_login import current_user
 
-from .. import pdfgen, scoring, services
+from .. import pdfgen, storage, scoring, services
 from ..audit import audit
 from ..config import Config
 from ..models import (Complaint, CorrectiveAction, Department, DutyRoster,
@@ -90,15 +90,15 @@ def inspection_daily():
         st = services.inspection_state(org.id, day)
         notes.append("No inspection was submitted on this date." if st["state"] != "completed"
                      else "")
-    path = os.path.join(Config.REPORT_DIR, f"daily-{day}-{new_code(4)}.pdf")
+    path = "reports/" + f"daily-{day}-{new_code(4)}.pdf"
     code = new_code(10)
-    pdfgen.build_summary_pdf(org, "Daily Inspection Report", day.strftime("%A, %d %B %Y"),
+    storage.build_summary(org, "Daily Inspection Report", day.strftime("%A, %d %B %Y"),
                              header, rows, path, notes=[n for n in notes if n], verify_code=code)
     _archive_pdf("daily", f"Daily Inspection Report {day}", path, code)
     audit("REPORT_GENERATED", "report", None, {"kind": "daily", "date": str(day)})
     db.session.commit()
-    return send_file(path, as_attachment=True, download_name=f"daily-inspection-{day}.pdf",
-                     mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, download_name=f"daily-inspection-{day}.pdf",
+                        mimetype="application/pdf")
 
 
 # ------------------------------------------------------------------ weekly / monthly summaries
@@ -133,13 +133,13 @@ def weekly():
     org = _org()
     avg = round(sum(r[4] for r in rows) / len(rows), 1) if rows else 0
     notes = [f"Period: {start} to {end}", f"Inspections: {len(rows)}", f"Average score: {avg}/25"]
-    path = os.path.join(Config.REPORT_DIR, f"weekly-{start}-{new_code(4)}.pdf")
+    path = "reports/" + f"weekly-{start}-{new_code(4)}.pdf"
     code = new_code(10)
-    pdfgen.build_summary_pdf(org, "Weekly Inspection Summary", f"{start} — {end}", header, rows,
+    storage.build_summary(org, "Weekly Inspection Summary", f"{start} — {end}", header, rows,
                              path, notes=notes, verify_code=code)
     _archive_pdf("weekly", f"Weekly Summary {start}", path, code)
     db.session.commit()
-    return send_file(path, as_attachment=True, mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, mimetype="application/pdf")
 
 
 @bp.get("/monthly")
@@ -172,13 +172,13 @@ def monthly():
              f"Complaints received: {len(comps)}",
              f"Complaints resolved: {len(resolved)}",
              f"Complaints escalated to MD/CEO: {len(escalated)}"]
-    path = os.path.join(Config.REPORT_DIR, f"monthly-{month}-{new_code(4)}.pdf")
+    path = "reports/" + f"monthly-{month}-{new_code(4)}.pdf"
     code = new_code(10)
-    pdfgen.build_summary_pdf(org, "Monthly Management Report", start.strftime("%B %Y"),
+    storage.build_summary(org, "Monthly Management Report", start.strftime("%B %Y"),
                              header, rows, path, notes=notes, verify_code=code)
     _archive_pdf("monthly", f"Monthly Report {month}", path, code)
     db.session.commit()
-    return send_file(path, as_attachment=True, mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, mimetype="application/pdf")
 
 
 # ------------------------------------------------------------------ department performance
@@ -215,14 +215,14 @@ def department_report(dept_id: int):
         notes = ["Criterion averages: " + ", ".join(
             f"{scoring.CRITERIA[n]['title']}: {criterion_avgs[n]}" for n in range(1, 6)
             if criterion_avgs[n] is not None)] + (["Recurring: " + r for r in recurring] or [])
-        path = os.path.join(Config.REPORT_DIR, f"dept-{dept.id}-{new_code(4)}.pdf")
+        path = "reports/" + f"dept-{dept.id}-{new_code(4)}.pdf"
         code = new_code(10)
-        pdfgen.build_summary_pdf(org, f"Department Performance — {dept.name}",
+        storage.build_summary(org, f"Department Performance — {dept.name}",
                                  f"Last {days} inspections", header, rows, path,
                                  notes=notes, verify_code=code)
         _archive_pdf("dept", f"Dept Report {dept.name}", path, code, "department", dept.id)
         db.session.commit()
-        return send_file(path, as_attachment=True, mimetype="application/pdf")
+        return storage.send(path, as_attachment=True, mimetype="application/pdf")
 
     return render_template("department_report.html", dept=dept, hist=hist,
                            criterion_avgs=criterion_avgs, recurring=recurring,
@@ -249,13 +249,13 @@ def complaints_report():
     esc = len([c for c in items if c.escalated])
     notes = [f"Total complaints: {len(items)}", f"Escalated: {esc}",
              f"Open: {len([c for c in items if c.status in ('NEW','ACKNOWLEDGED','IN_PROGRESS','ESCALATED')])}"]
-    path = os.path.join(Config.REPORT_DIR, f"complaints-{new_code(4)}.pdf")
+    path = "reports/" + f"complaints-{new_code(4)}.pdf"
     code = new_code(10)
-    pdfgen.build_summary_pdf(org, "Complaint Report", now_naive().strftime("%d %B %Y"),
+    storage.build_summary(org, "Complaint Report", now_naive().strftime("%d %B %Y"),
                              header, rows, path, notes=notes, verify_code=code)
     _archive_pdf("complaints", "Complaint Report", path, code)
     db.session.commit()
-    return send_file(path, as_attachment=True, mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, mimetype="application/pdf")
 
 
 @bp.get("/escalations")
@@ -273,13 +273,13 @@ def escalations_report():
     if fmt == "csv":
         return _csv_response(header, rows, "escalation-report.csv")
     org = _org()
-    path = os.path.join(Config.REPORT_DIR, f"escalations-{new_code(4)}.pdf")
+    path = "reports/" + f"escalations-{new_code(4)}.pdf"
     code = new_code(10)
-    pdfgen.build_summary_pdf(org, "Escalation Report", now_naive().strftime("%d %B %Y"),
+    storage.build_summary(org, "Escalation Report", now_naive().strftime("%d %B %Y"),
                              header, rows, path, verify_code=code)
     _archive_pdf("escalation", "Escalation Report", path, code)
     db.session.commit()
-    return send_file(path, as_attachment=True, mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, mimetype="application/pdf")
 
 
 # ------------------------------------------------------------------ corrective actions
@@ -297,13 +297,13 @@ def ca_report():
     if fmt == "csv":
         return _csv_response(header, rows, "corrective-actions.csv")
     org = _org()
-    path = os.path.join(Config.REPORT_DIR, f"ca-{new_code(4)}.pdf")
+    path = "reports/" + f"ca-{new_code(4)}.pdf"
     code = new_code(10)
-    pdfgen.build_summary_pdf(org, "Corrective Action Report", now_naive().strftime("%d %B %Y"),
+    storage.build_summary(org, "Corrective Action Report", now_naive().strftime("%d %B %Y"),
                              header, rows, path, verify_code=code)
     _archive_pdf("ca", "Corrective Action Report", path, code)
     db.session.commit()
-    return send_file(path, as_attachment=True, mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, mimetype="application/pdf")
 
 
 # ------------------------------------------------------------------ compliance
@@ -338,15 +338,15 @@ def compliance_report():
         return _csv_response(header, rows, "am-compliance.csv")
     org = _org()
     rate = round(100 * done / len(roster)) if roster else 0
-    path = os.path.join(Config.REPORT_DIR, f"compliance-{new_code(4)}.pdf")
+    path = "reports/" + f"compliance-{new_code(4)}.pdf"
     code = new_code(10)
-    pdfgen.build_summary_pdf(org, "Admin Manager Compliance Report", f"{start} — {end}",
+    storage.build_summary(org, "Admin Manager Compliance Report", f"{start} — {end}",
                              header, rows, path,
                              notes=[f"Compliance rate: {rate}% ({done}/{len(roster)} duty days)"],
                              verify_code=code)
     _archive_pdf("compliance", "AM Compliance Report", path, code)
     db.session.commit()
-    return send_file(path, as_attachment=True, mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, mimetype="application/pdf")
 
 
 # ------------------------------------------------------------------ referrals (§14)
@@ -378,14 +378,14 @@ def referrals_report():
         f"Repeat visits (same phone booked again): {stats['repeats']}",
         "No prizes or incentives are offered — this is attribution only.",
     ]
-    path = os.path.join(Config.REPORT_DIR, f"referrals-{new_code(4)}.pdf")
+    path = "reports/" + f"referrals-{new_code(4)}.pdf"
     code = new_code(10)
-    pdfgen.build_summary_pdf(org, "Referral & Repeat-Visit Report",
+    storage.build_summary(org, "Referral & Repeat-Visit Report",
                              now_naive().strftime("%d %B %Y"),
                              header, rows, path, notes=notes, verify_code=code)
     _archive_pdf("referrals", "Referral Report", path, code)
     db.session.commit()
-    return send_file(path, as_attachment=True, mimetype="application/pdf")
+    return storage.send(path, as_attachment=True, mimetype="application/pdf")
 
 
 # ------------------------------------------------------------------ archive
@@ -393,8 +393,8 @@ def referrals_report():
 @require_role(*MGR)
 def archive_download(rid: int):
     rf = db.session.get(ReportFile, rid)
-    if not rf or rf.org_id != current_user.org_id or not os.path.exists(rf.path):
+    if not rf or rf.org_id != current_user.org_id or not storage.exists(rf.path):
         abort(404)
     audit("REPORT_DOWNLOADED", "report", rf.id, {"title": rf.title})
     db.session.commit()
-    return send_file(rf.path, as_attachment=True, mimetype="application/pdf")
+    return storage.send(rf.path, as_attachment=True, mimetype="application/pdf")

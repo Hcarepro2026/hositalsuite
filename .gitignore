@@ -8,17 +8,30 @@
 data/
 
 # --- session artifacts from local testing ---
+# These are curl cookie jars containing REAL signed session cookies. Seven of
+# them were committed by accident and have been removed from the repo; this
+# pattern set stops it happening again. Never commit a cookie jar or a token.
 cookies.txt
 pub_cookies.txt
 adm.txt
+adm*.txt
 hod.txt
 md.txt
+md*.txt
+fin.txt
+pub.txt
+lang.txt
+t.txt
+u.txt
 *.cookies
+*cookies*.txt
 
 # --- logs ---
 *.log
 
 # --- Python ---
+.coverage
+htmlcov/
 __pycache__/
 *.py[cod]
 .pytest_cache/

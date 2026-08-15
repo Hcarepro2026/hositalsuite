@@ -58,7 +58,7 @@ def test_category_and_qr_lifecycle(client, seeded):
     client.post(f"/admin/settings/categories/{cat.id}/toggle", data={"_csrf": tok})
     assert db.session.get(ComplaintCategory, cat.id).active is False
     # used categories cannot be deleted
-    client.post("/complaint/submit", data={"_csrf": csrf(client, "/complaint"),
+    client.post("/complaint/submit", data={"consent": "1", "_csrf": csrf(client, "/complaint"),
                                            "department_id": seeded["dept"],
                                            "category": cat.name,
                                            "description": "A test complaint for deletion guard.",

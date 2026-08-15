@@ -95,6 +95,20 @@ class RateLimiter:
 _limiter = RateLimiter()
 
 
+def client_ip() -> str:
+    """Real client IP behind Render/Cloudflare.
+
+    ProxyFix already rewrites remote_addr from X-Forwarded-For, but Cloudflare's
+    CF-Connecting-IP is authoritative when present. Without this every visitor
+    shares the proxy's IP, which makes per-IP rate limits effectively global
+    (one bad actor locks out the whole hospital) and makes audit-log IPs useless.
+    """
+    cf = request.headers.get("CF-Connecting-IP")
+    if cf:
+        return cf.strip()[:64]
+    return (request.remote_addr or "unknown")[:64]
+
+
 def rate_limit(limit: int = 10, window: float = 60.0, key_extra: str = ""):
     def deco(fn):
         @functools.wraps(fn)
@@ -104,7 +118,7 @@ def rate_limit(limit: int = 10, window: float = 60.0, key_extra: str = ""):
             # Default 1 = production limits. NEVER set high in real deployments.
             scale = int(current_app.config.get("RATE_LIMIT_SCALE", 1) or 1)
             effective = limit * scale
-            key = f"{request.endpoint}|{request.remote_addr}|{key_extra}"
+            key = f"{request.endpoint}|{client_ip()}|{key_extra}"
             if not _limiter.allow(key, effective, window):
                 return render_template("error.html", code=429,
                                        message="Too many requests. Please wait a moment and try again."), 429
@@ -159,23 +173,42 @@ def validate_upload(file_storage) -> tuple[str | None, str | None]:
     return safe, None
 
 
-def save_upload(file_storage, subfolder: str) -> tuple[str | None, str | None]:
-    """Validate + persist an upload. Returns (relative_path, error)."""
+def save_upload(file_storage, subfolder: str, *, org_id: int | None = None) -> tuple[str | None, str | None]:
+    """Validate + persist an upload to DURABLE storage. Returns (key, error).
+
+    Writes through app.storage, so uploads survive restarts on hosts with an
+    ephemeral filesystem (Render free) instead of vanishing on the next deploy.
+    """
+    from . import storage
     safe, err = validate_upload(file_storage)
     if err:
         return None, err
-    dest_dir = os.path.join(Config.UPLOAD_DIR, subfolder)
-    os.makedirs(dest_dir, exist_ok=True)
     file_storage.seek(0)
-    file_storage.save(os.path.join(dest_dir, safe))
-    return f"{subfolder}/{safe}", None
+    data = file_storage.read(Config.MAX_UPLOAD_BYTES + 1)
+    if len(data) > Config.MAX_UPLOAD_BYTES:
+        return None, "File is too large (maximum 5 MB)."
+    key = f"{subfolder}/{safe}"
+    try:
+        storage.put(key, data, org_id=org_id, filename=file_storage.filename)
+    except Exception:                                    # noqa: BLE001
+        from flask import current_app
+        current_app.logger.exception("upload failed for key %s", key)
+        return None, "The file could not be saved. Please try again."
+    return key, None
 
 
 def resolve_upload_path(rel_path: str) -> str | None:
+    """Legacy on-disk resolver, kept traversal-proof for pre-storage rows."""
     if not rel_path:
         return None
-    full = os.path.normpath(os.path.join(Config.UPLOAD_DIR, rel_path))
-    if not full.startswith(os.path.normpath(Config.UPLOAD_DIR)):
+    root = os.path.normpath(Config.UPLOAD_DIR)
+    full = os.path.normpath(os.path.join(root, rel_path))
+    # commonpath is the correct containment test; startswith is fooled by
+    # sibling directories that share a prefix (e.g. "/data/uploads-evil").
+    try:
+        if os.path.commonpath([full, root]) != root:
+            return None
+    except ValueError:
         return None
     return full if os.path.isfile(full) else None
 
@@ -193,6 +226,18 @@ def register_security_hooks(app):
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "same-origin")
         resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(self), geolocation=(self)")
+        # HSTS: only meaningful over TLS, and must never be sent on plain-HTTP dev.
+        if request.is_secure:
+            resp.headers.setdefault("Strict-Transport-Security",
+                                    "max-age=31536000; includeSubDomains")
+        # CSP: the app ships inline <style>/<script> blocks and data: QR images,
+        # so 'unsafe-inline' is required until those are extracted. Everything
+        # else is locked to same-origin, and framing is forbidden outright.
+        resp.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' data:; "
+            "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
         if request.path.startswith("/static/"):
             resp.headers.setdefault("Cache-Control", "public, max-age=3600")
         else:

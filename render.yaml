@@ -36,3 +36,18 @@ services:
         value: sandbox           # switch to 'cloud' + credentials when Meta is approved
       - key: SMS_MODE
         value: sandbox           # switch to 'termii' + credentials when ready
+      - key: STORAGE_BACKEND
+        value: db                # uploads/PDFs in the database — Render's disk is
+                                 # WIPED on every deploy/restart. Do not set to
+                                 # 'disk' unless a persistent volume is mounted.
+      - key: COOKIE_SECURE
+        value: "1"               # session cookie only ever sent over HTTPS
+      - key: TRUSTED_PROXY_COUNT
+        value: "1"               # Render/Cloudflare sit in front — needed so rate
+                                 # limits and audit logs see the real client IP
+      - key: LOGIN_MAX_FAILURES
+        value: "10"              # then the account locks for LOGIN_LOCKOUT_MINUTES
+      - key: LOGIN_LOCKOUT_MINUTES
+        value: "15"
+      - key: LOG_LEVEL
+        value: INFO

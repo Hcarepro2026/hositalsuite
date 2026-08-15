@@ -4,13 +4,15 @@ from __future__ import annotations
 import secrets
 from datetime import timedelta
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import (Blueprint, current_app, flash, redirect, render_template,
+                   request, session, url_for)
 from flask_login import current_user, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..audit import audit
-from ..models import PasswordReset, User, db, now_naive
-from ..security import password_strength_errors, rate_limit, require_login
+from ..models import LoginAttempt, PasswordReset, User, db, now_naive
+from ..security import (client_ip, password_strength_errors, rate_limit,
+                        require_login)
 
 bp = Blueprint("auth", __name__)
 
@@ -29,17 +31,62 @@ def login():
     return render_template("login.html", next=request.args.get("next", ""))
 
 
+def _lock_row(username: str) -> LoginAttempt:
+    row = db.session.query(LoginAttempt).filter_by(username=username).first()
+    if row is None:
+        row = LoginAttempt(username=username, failures=0)
+        db.session.add(row)
+        db.session.flush()
+    return row
+
+
+def _lockout_remaining(row: LoginAttempt) -> int:
+    """Minutes left on an active lockout, else 0."""
+    if row.locked_until and row.locked_until > now_naive():
+        return max(1, int((row.locked_until - now_naive()).total_seconds() // 60) + 1)
+    return 0
+
+
 @bp.post("/login")
 @rate_limit(limit=8, window=60.0, key_extra="login")
 def login_post():
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
     nxt = request.form.get("next") or ""
+
+    max_fail = current_app.config.get("LOGIN_MAX_FAILURES", 10)
+    lock_mins = current_app.config.get("LOGIN_LOCKOUT_MINUTES", 15)
+
+    # Account-scoped brute-force gate. The per-IP limiter cannot help when every
+    # request arrives from the same proxy, so failures are also counted per user.
+    lock = _lock_row(username) if username else None
+    if lock is not None:
+        left = _lockout_remaining(lock)
+        if left:
+            audit("LOGIN_LOCKED_OUT", detail={"username": username})
+            db.session.commit()
+            flash(f"Too many failed attempts. Try again in {left} minute(s), "
+                  "or use 'Forgot password'.", "error")
+            return render_template("login.html", next=nxt, username=username), 429
+
     user = db.session.query(User).filter_by(username=username).first()
     if not user or not user.check_password(password):
+        if lock is not None:
+            lock.failures = (lock.failures or 0) + 1
+            lock.last_failure_at = now_naive()
+            lock.last_ip = client_ip()
+            if lock.failures >= max_fail:
+                lock.locked_until = now_naive() + timedelta(minutes=lock_mins)
+                lock.failures = 0
+                audit("ACCOUNT_LOCKED", "user", user.id if user else None,
+                      {"username": username, "minutes": lock_mins})
         audit("LOGIN_FAILED", detail={"username": username})
+        db.session.commit()
         flash("Invalid username or password.", "error")
         return render_template("login.html", next=nxt, username=username), 401
+    if lock is not None:
+        lock.failures = 0
+        lock.locked_until = None
     if not user.active:
         flash("This account is deactivated. Contact your system administrator.", "error")
         return render_template("login.html", next=nxt, username=username), 403
