@@ -302,3 +302,43 @@ def test_department_intents_keep_their_action_buttons(app, kb):
     assert r["action"] == "complaint"
     r = engine.answer("book antenatal", org_id=kb["org"])
     assert r["action"] == "book"
+
+
+def test_kb_sync_refreshes_existing_intents(app, seeded):
+    """Regression: the loader SKIPPED intents that already existed, so improved
+    wording and new triggers never reached a deployed hospital. A fix could be
+    written, tested, deployed — and still not work in production."""
+    from app.chatbot.seed_kb import seed_global_kb
+    from app.models import KnowledgeArticle
+
+    seed_global_kb(app, quiet=True)
+    row = (db.session.query(KnowledgeArticle)
+           .filter_by(org_id=None, intent="hours_clinic").first())
+    assert row is not None
+
+    row.keywords = "stale trigger only"
+    row.en = "Stale answer."
+    db.session.commit()
+
+    seed_global_kb(app, quiet=True)          # must repair it
+    row = (db.session.query(KnowledgeArticle)
+           .filter_by(org_id=None, intent="hours_clinic").first())
+    assert row.en != "Stale answer.", "shipped library did not refresh the row"
+    assert "opening hours" in row.keywords, "triggers were not refreshed"
+
+
+def test_kb_sync_does_not_touch_tenant_authored_rows(app, seeded):
+    """A hospital's own edits must survive a deploy."""
+    from app.chatbot.seed_kb import seed_global_kb
+    from app.models import KnowledgeArticle
+
+    mine = KnowledgeArticle(org_id=seeded["org"], scope="tenant", status="approved",
+                            category="local", intent="hours_clinic",
+                            keywords="our own trigger", en="Our own local answer.")
+    db.session.add(mine)
+    db.session.commit()
+    mid = mine.id
+
+    seed_global_kb(app, quiet=True)
+    still = db.session.get(KnowledgeArticle, mid)
+    assert still.en == "Our own local answer.", "a tenant's own dialogue was overwritten"

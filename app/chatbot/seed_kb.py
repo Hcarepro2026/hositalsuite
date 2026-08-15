@@ -20,25 +20,46 @@ def _all_kb():
 def seed_global_kb(app, quiet: bool = False) -> int:
     from ..models import KnowledgeArticle, db
     with app.app_context():
-        existing = {a.intent for a in db.session.query(KnowledgeArticle)
+        existing = {a.intent: a for a in db.session.query(KnowledgeArticle)
                     .filter_by(org_id=None).all()}
-        added = 0
+        added = updated = 0
         for entry in _all_kb():
-            if entry["intent"] in existing:
+            row = existing.get(entry["intent"])
+            if row is None:
+                db.session.add(KnowledgeArticle(
+                    org_id=None, scope="global", status="approved",
+                    category=entry["cat"], intent=entry["intent"],
+                    keywords="\n".join(entry["kw"]),
+                    en=entry["en"], pidgin=entry.get("pcm"), yo=entry.get("yo"),
+                    ha=entry.get("ha"), ig=entry.get("ig"), cta=entry.get("cta")))
+                added += 1
                 continue
-            db.session.add(KnowledgeArticle(
-                org_id=None, scope="global", status="approved",
-                category=entry["cat"], intent=entry["intent"],
-                keywords="\n".join(entry["kw"]),
-                en=entry["en"], pidgin=entry.get("pcm"), yo=entry.get("yo"),
-                ha=entry.get("ha"), ig=entry.get("ig"), cta=entry.get("cta")))
-            added += 1
-        if added:
+            # REFRESH existing global rows when the shipped library changes.
+            # Previously we skipped them entirely, so improved wording and NEW
+            # TRIGGERS never reached a deployed hospital — a fix could be
+            # written, tested, deployed, and still not work in production.
+            # Tenant-authored rows (org_id set) are never touched.
+            new_kw = "\n".join(entry["kw"])
+            changed = (row.keywords != new_kw or row.en != entry["en"]
+                       or row.cta != entry.get("cta")
+                       or row.pidgin != entry.get("pcm"))
+            if changed:
+                row.keywords = new_kw
+                row.en = entry["en"]
+                row.pidgin = entry.get("pcm")
+                row.yo = entry.get("yo") or row.yo
+                row.ha = entry.get("ha") or row.ha
+                row.ig = entry.get("ig") or row.ig
+                row.cta = entry.get("cta")
+                row.category = entry["cat"]
+                updated += 1
+        if added or updated:
             db.session.commit()
-        if not quiet and added:
+        if not quiet and (added or updated):
             kws = sum(len(e["kw"]) for e in _all_kb())
-            print(f"[KB] synced +{added} global intents (library now {len(_all_kb())} intents / {kws} triggers)")
-        return added
+            print(f"[KB] synced +{added} new / {updated} updated global intents "
+                  f"(library now {len(_all_kb())} intents / {kws} triggers)")
+        return added + updated
 
 
 def library_stats(app) -> dict:
