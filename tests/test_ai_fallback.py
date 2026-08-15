@@ -251,3 +251,54 @@ def test_emergency_answers_send_people_to_ae():
               or "immediately" in (e["en"] + e["cta"]).lower()
               or "now" in e["cta"].lower()]
     assert len(strong) >= len(urgent) // 2, "urgent intents must direct patients to help"
+
+
+# ================================================================ routing quality
+def test_generic_question_shapes_do_not_hijack_answers(app, kb):
+    """Regression: 'what does SURGERY do' matched the trigger 'what does'
+    (generic terminology answer) and beat the Surgery answer on a tie.
+    Question-shape phrases must never outrank subject matter."""
+    from app.chatbot import engine
+    cases = {
+        "what does surgery do": "surgery",
+        "what does internal medicine do": "internal_medicine",
+        "what is the laboratory": "laboratory",
+        "tell me about obstetrics": "obstetrics",
+    }
+    wrong = []
+    for q, expect in cases.items():
+        r = engine.answer(q, org_id=kb["org"])
+        got = r["article"].intent if r and r.get("article") else "NONE"
+        if expect not in got:
+            wrong.append(f"{q!r} -> {got}")
+    assert not wrong, "generic trigger hijacked: " + "; ".join(wrong)
+
+
+def test_real_patient_phrasings_reach_the_right_department(app, kb):
+    from app.chatbot import engine
+    cases = {
+        "the ward is dirty": "environmental_health",
+        "i want to report a bribe": "audit",
+        "how do i pay my bill": "bill",
+        "how much is delivery": "obstetrics",
+        "book antenatal": "anc",
+        "i need my file number": "file_number",   # HIMS slug is truncated in the intent id
+        "my cast is too tight": "orthopaedics",
+        "when is immunisation": "public_health",
+    }
+    wrong = []
+    for q, expect in cases.items():
+        r = engine.answer(q, org_id=kb["org"])
+        got = r["article"].intent if r and r.get("article") else "NONE"
+        if expect not in got:
+            wrong.append(f"{q!r} -> {got}")
+    assert not wrong, "misrouted: " + "; ".join(wrong)
+
+
+def test_department_intents_keep_their_action_buttons(app, kb):
+    """A department complaint answer must still offer 'Make a complaint'."""
+    from app.chatbot import engine
+    r = engine.answer("the nurse was rude", org_id=kb["org"])
+    assert r["action"] == "complaint"
+    r = engine.answer("book antenatal", org_id=kb["org"])
+    assert r["action"] == "book"

@@ -996,7 +996,9 @@ _d("Environmental Health", [
      "management and sanitation. Quietly, it's one of the most important teams for your safety here.",
      "Environmental Health dey keep the hospital clean, safe and hygienic — cleaning service, waste management "
      "and sanitation. Quietly, na one of the most important team for your safety here.", _CTA_DESK),
-    ("dirty", ["the toilet is dirty", "this area is not clean", "report dirty ward"],
+    ("dirty", ["the toilet is dirty", "this area is not clean", "report dirty ward",
+               "the ward is dirty", "ward is dirty", "the place is dirty", "it is dirty here",
+               "room is dirty", "not clean", "dirty", "needs cleaning", "no one has cleaned"],
      "Thank you for telling us — please do, we genuinely want to know. Tell any staff member or reception "
      "and the cleaning team will be sent. You can also file it formally if it keeps happening.",
      "Thank you for telling us — abeg do, we really wan know. Tell any staff or reception and dem go send the "
@@ -1363,7 +1365,9 @@ _d("Internal Audit", [
      "billing desk is usually the right place — but if you suspect something improper, Audit want to know.",
      "Internal Audit dey check say hospital money and process dey handled correctly. For patient, billing desk "
      "na usually the right place — but if you suspect say something no correct, Audit wan know.", _CTA_DESK),
-    ("report_fraud", ["report fraud", "someone asked for a bribe", "extortion"],
+    ("report_fraud", ["report fraud", "someone asked for a bribe", "extortion", "bribe",
+                      "report a bribe", "asked me for money", "demanded money", "corruption",
+                      "staff collected money", "illegal payment"],
      "Thank you for speaking up — that takes courage and it genuinely helps the hospital. Report it through "
      "the complaint form; you can do so ANONYMOUSLY, and it reaches management and Audit directly.",
      "Thank you say you talk — e need courage and e dey really help the hospital. Report am through complaint "

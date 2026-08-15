@@ -58,6 +58,17 @@ def _phrase_hit(kw: str, text: str) -> bool:
     return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", text) is not None
 
 
+# Triggers so generic they describe the SHAPE of a question, not its subject.
+# "what does surgery do" was being won by term_general purely because it
+# contains "what does". These score at minimum weight so a real subject match
+# ("surgery") always wins.
+_GENERIC_TRIGGERS = {
+    "what does", "what is", "what are", "meaning of", "define", "explain",
+    "how do i", "how can i", "can i", "do you", "is there", "tell me about",
+    "i need", "i want", "help", "please", "question",
+}
+
+
 def _score(article: KnowledgeArticle, text: str) -> int:
     """Relevance of one article to the patient's message.
 
@@ -72,6 +83,13 @@ def _score(article: KnowledgeArticle, text: str) -> int:
             continue
         words = len(kw.split())
         weight = words * words          # 1 word -> 1, 2 -> 4, 3 -> 9
+        if kw in _GENERIC_TRIGGERS:
+            # Question-shape ("what does"), not subject matter. Scored BELOW a
+            # single subject word so "what does SURGERY do" reaches Surgery,
+            # not the generic terminology answer.
+            weight = 0
+            total += 1                  # still counts as breadth, just barely
+            continue
         total += weight
         best = max(best, weight)
     # Favour the article with the single most specific match, then breadth.
