@@ -132,10 +132,9 @@
 
   <a class="emerg" href="/chat{{ q }}">🚑 {{ _('hub_emergency') }}</a>
 
+  {% include "_help_desk.html" %}
+
   <div class="hub-foot">
-    {% if hospital and hospital.phone %}
-      📞 <a href="tel:{{ hospital.phone }}">{{ hospital.phone }}</a><br>
-    {% endif %}
     <a href="/complaint/status">Check a complaint</a> ·
     <a href="/book/status">Check a booking</a> ·
     <a href="/privacy">Privacy</a>

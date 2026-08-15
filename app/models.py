@@ -12,7 +12,27 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
-ROLES = ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD")
+# Roles, in seniority order. Labels are what staff actually see in the UI.
+ROLES = ("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR",
+         "ADMIN_MANAGER", "HOD")
+
+ROLE_LABELS = {
+    "SUPER_ADMIN":   "Super Administrator",
+    "MD_CEO":        "MD / CEO",
+    "DMD":           "DMD — Deputy Medical Director",
+    "DCST":          "DCST — Director of Clinical Services & Training",
+    "APEX_NURSE":    "APEX Nurse — Head of Nursing Services",
+    "HEAD_ADMIN_HR": "Head of Admin & HR",
+    "ADMIN_MANAGER": "Admin Manager",
+    "HOD":           "HOD — Head of Department",
+}
+
+# Roles with hospital-wide management sight (dashboards, reports, escalation targets).
+MANAGEMENT_ROLES = ("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR")
+
+
+def role_label(code: str) -> str:
+    return ROLE_LABELS.get(code, code)
 
 INSPECTION_STATUSES = ("DRAFT", "SUBMITTED", "AMENDED", "SUPERSEDED")
 COMPLAINT_STATUSES = ("NEW", "ACKNOWLEDGED", "IN_PROGRESS", "RESOLVED", "CLOSED", "ESCALATED")
@@ -105,6 +125,19 @@ class User(UserMixin, db.Model):
     def is_am(self): return self.role == "ADMIN_MANAGER"
     @property
     def is_hod(self): return self.role == "HOD"
+
+    @property
+    def is_management(self):
+        """Executive sight: MD/CEO, DMD, DCST, APEX Nurse, Head of Admin & HR.
+
+        These roles see the hospital-wide dashboard and are valid escalation
+        targets, without being able to administer the system itself.
+        """
+        return self.role in MANAGEMENT_ROLES
+
+    @property
+    def role_name(self):
+        return role_label(self.role)
 
     def set_password(self, raw: str):
         self.password_hash = generate_password_hash(raw, method="scrypt")

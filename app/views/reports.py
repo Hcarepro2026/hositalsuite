@@ -20,7 +20,9 @@ from ..security import require_role
 
 bp = Blueprint("reports", __name__, url_prefix="/reports")
 
-MGR = ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD")
+# Anyone with management sight, plus the Admin Manager and HODs who file/act on reports.
+MGR = ("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR",
+       "ADMIN_MANAGER", "HOD")
 
 
 def _org() -> Organization:
@@ -117,7 +119,7 @@ def _period_rows(start: date, end: date):
 
 
 @bp.get("/weekly")
-@require_role("SUPER_ADMIN", "MD_CEO")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR")
 def weekly():
     try:
         start = date.fromisoformat(request.args.get("start") or
@@ -143,7 +145,7 @@ def weekly():
 
 
 @bp.get("/monthly")
-@require_role("SUPER_ADMIN", "MD_CEO")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR")
 def monthly():
     month = request.args.get("month") or now_naive().strftime("%Y-%m")
     try:
@@ -231,7 +233,7 @@ def department_report(dept_id: int):
 
 # ------------------------------------------------------------------ complaint reports
 @bp.get("/complaints")
-@require_role("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR", "ADMIN_MANAGER")
 def complaints_report():
     fmt = request.args.get("format", "pdf")
     q = db.session.query(Complaint).filter(Complaint.org_id == current_user.org_id)
@@ -259,7 +261,7 @@ def complaints_report():
 
 
 @bp.get("/escalations")
-@require_role("SUPER_ADMIN", "MD_CEO")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR")
 def escalations_report():
     fmt = request.args.get("format", "csv")
     items = (db.session.query(Complaint)
@@ -308,7 +310,7 @@ def ca_report():
 
 # ------------------------------------------------------------------ compliance
 @bp.get("/compliance")
-@require_role("SUPER_ADMIN", "MD_CEO")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR")
 def compliance_report():
     """Admin Manager inspection compliance: roster days vs submitted inspections."""
     days = min(int(request.args.get("days", type=int) or 30), 365)
@@ -351,7 +353,7 @@ def compliance_report():
 
 # ------------------------------------------------------------------ referrals (§14)
 @bp.get("/referrals")
-@require_role("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR", "ADMIN_MANAGER")
 def referrals_report():
     from .. import referrals as refeng
     fmt = request.args.get("format", "csv")

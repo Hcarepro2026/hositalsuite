@@ -66,28 +66,23 @@ def seed_data(app, demo: bool = False, passwords: dict | None = None,
         hod_pharm = user("hod.pharmacy", "Pharm. Bisi Lawal", "HOD")
         hod_lab = user("hod.lab", "Mrs. Grace Obi", "HOD")
 
-        dept_specs = [
-            ("Internal Medicine", hod_med, [("Outpatient Clinic", ["General OPD", "Specialist Clinic"]),
-                                            ("Wards", ["Ward A", "Ward B"])]),
-            ("Surgery", hod_surg, [("Theatre Complex", ["Theatre 1", "Theatre 2"]),
-                                   ("Surgical Ward", ["Ward C"])]),
-            ("Paediatrics", hod_paeds, [("Paediatric Ward", ["PD Ward 1"]),
-                                        ("Neonatal Unit", ["NICU"])]),
-            ("Emergency", hod_er, [("Accident & Emergency", ["Triage", "Resuscitation Room"])]),
-            ("Pharmacy", hod_pharm, [("Dispensary", ["Main Pharmacy", "Emergency Pharmacy"])]),
-            ("Laboratory", hod_lab, [("Main Lab", ["Haematology", "Chemistry", "Microbiology"])]),
-            ("Records & Billing", None, [("Front Desk", ["Reception", "Billing"])]),
-        ]
-        for dname, dhod, sections in dept_specs:
-            d = Department(org_id=org.id, name=dname, hod_user_id=dhod.id if dhod else None)
-            db.session.add(d)
-            db.session.flush()
-            for sname, units in sections:
-                s = Section(org_id=org.id, department_id=d.id, name=sname)
-                db.session.add(s)
-                db.session.flush()
-                for uname in units:
-                    db.session.add(Unit(org_id=org.id, department_id=d.id, section_id=s.id, name=uname))
+        # Full standard general-hospital structure (see app/standard_departments.py):
+        # clinical services, nursing, diagnostics and the administrative units a
+        # Nigerian general hospital actually runs. Idempotent — safe to re-run.
+        from .standard_departments import install as install_standard
+        install_standard(org.id, only_missing=True)
+
+        # Attach the demo HODs to their clinical departments.
+        for dept_name, hod_user in (
+                ("Internal Medicine", hod_med), ("Surgery", hod_surg),
+                ("Paediatrics", hod_paeds), ("Accident & Emergency", hod_er),
+                ("Pharmacy", hod_pharm), ("Laboratory", hod_lab)):
+            d = db.session.query(Department).filter_by(org_id=org.id, name=dept_name).first()
+            if d is not None and hod_user is not None:
+                d.hod_user_id = hod_user.id
+                d.hod_name = hod_user.name
+                d.hod_phone = hod_user.phone
+        db.session.flush()
 
         for cat in ("Staff attitude / conduct", "Long waiting time", "Billing / charges",
                     "Cleanliness / hygiene", "Equipment / facility issue", "Medication / pharmacy",

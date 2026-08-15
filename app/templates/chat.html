@@ -94,6 +94,10 @@ body{display:flex;flex-direction:column;background:var(--bg,#eef2f6);
     <b>{{ _('hub_chat') }}</b>
     <span>{{ org.name if org else 'Hospital' }}</span>
   </div>
+  {% if hospital and hospital.phone %}
+  <a class="back" style="margin-left:auto" href="tel:{{ hospital.phone | replace(' ', '') }}"
+     title="Call the hospital help desk" aria-label="Call the hospital help desk">📞</a>
+  {% endif %}
 </div>
 
 <div class="disclosure">

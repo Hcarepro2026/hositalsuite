@@ -29,6 +29,33 @@ STRINGS: dict[str, dict[str, str]] = {
         "ha": "Da fatan kar a saka bayanin lafiya mai mahimmanci — abin da muke bukata don taimaka muku kawai.",
         "ig": "Biko etinyela ozi ahụike nwere mmetụta — naanị ihe anyị chọrọ iji nyere gị aka.",
     },
+    # ---- shared patient navigation & help desk ----
+    "back": {"en": "Back", "yo": "Padà", "ha": "Koma", "ig": "Laghachi"},
+    "help_need": {
+        "en": "Need help? Call the hospital help desk",
+        "yo": "Ṣe o nílò ìrànlọ́wọ́? Pe tábìlì ìrànlọ́wọ́ ilé-ìwòsàn",
+        "ha": "Kana buƙatar taimako? Kira teburin taimako na asibiti",
+        "ig": "Ịchọrọ enyemaka? Kpọọ tebụl enyemaka ụlọ ọgwụ",
+    },
+    "help_hours": {
+        "en": "Someone answers during working hours. Emergencies are answered day and night.",
+        "yo": "Ẹnìkan yóò dáhùn ní àkókò iṣẹ́. A ń dáhùn pàjáwìrì ní ọ̀sán àti òru.",
+        "ha": "Wani zai amsa a lokutan aiki. Ana amsa gaggawa dare da rana.",
+        "ig": "Otu onye ga-aza n'oge ọrụ. A na-aza ihe mberede ehihie na abalị.",
+    },
+    "help_ask_reception": {
+        "en": "Please ask at the hospital reception desk for assistance.",
+        "yo": "Jọ̀wọ́ bèèrè ní tábìlì ìtẹ́wọ́gbà ilé-ìwòsàn fún ìrànlọ́wọ́.",
+        "ha": "Da fatan ka tambaya a teburin liyafar asibiti don taimako.",
+        "ig": "Biko jụọ na tebụl nnabata ụlọ ọgwụ maka enyemaka.",
+    },
+    "help_emergency": {
+        "en": "In an emergency go straight to Accident & Emergency — do not wait online.",
+        "yo": "Nínú pàjáwìrì lọ tààrà sí Ẹ̀ka Pàjáwìrì — má dúró lórí ayélujára.",
+        "ha": "A cikin gaggawa je kai tsaye zuwa Sashen Gaggawa — kar ka jira a yanar gizo.",
+        "ig": "N'ihe mberede gaa ozugbo na Ngalaba Mberede — echerela n'ịntanetị.",
+    },
+
     # ---- patient assistant chat ----
     "chat_greeting": {
         "en": "Hello! I'm your care assistant. Ask me about booking, opening hours, bills, "

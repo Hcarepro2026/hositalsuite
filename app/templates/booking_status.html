@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Booking status{% endblock %}
 {% block content %}
+{% with back_to="/welcome" %}{% include "_patient_nav.html" %}{% endwith %}
 <div class="wrap" style="max-width:560px;margin:0 auto;padding:0">
 <h1>{{ _('check_status') }}</h1>
 <form class="card mb" method="get" action="/book/status">
@@ -32,4 +33,5 @@
 </div>
 {% endif %}
 </div>
+{% include "_help_desk.html" %}
 {% endblock %}

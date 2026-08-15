@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Privacy Notice{% endblock %}
 {% block content %}
+{% with back_to="/welcome" %}{% include "_patient_nav.html" %}{% endwith %}
 <div class="card pad-lg" style="max-width:760px;margin:24px auto">
   <h1>Privacy Notice</h1>
   <p class="muted">How {{ hospital.name if hospital else 'this hospital' }} handles your
@@ -73,4 +74,5 @@
   <h2>7. Changes</h2>
   <p>If we change this notice we will update the date at the top of this page.</p>
 </div>
+{% include "_help_desk.html" %}
 {% endblock %}

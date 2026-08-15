@@ -176,6 +176,12 @@ textarea{min-height:96px;resize:vertical}
   font-size:var(--fs-sm);margin-top:8px;transition:all var(--dur)}
 .mic-btn:hover{background:var(--primary-light)}
 .mic-btn.recording{background:var(--red);border-color:var(--red);color:#fff;animation:pulse 1.2s infinite}
+/* dictation feedback: a small inline notice, never a blocking alert() */
+.voice-toast{display:block;margin-top:6px;padding:8px 11px;border-radius:9px;
+  background:#fff7e6;border:1px solid #f0d9a8;color:#7a5b12;font-size:.82rem;line-height:1.35}
+/* chat mic uses the same recording state */
+.composer .mic.recording,.mic.recording{background:#c62828;border-color:#c62828;color:#fff;
+  animation:pulse 1.2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
 
 /* ---------------- tables ---------------- */
@@ -270,3 +276,22 @@ summary{cursor:pointer;font-weight:750;font-size:var(--fs-sm)}
 @media (min-width:760px){
   .btn.big{width:auto}
 }
+
+/* ---------------------------------------------------------------- patient nav + help desk
+   Every patient page gets a way BACK and a way to reach a HUMAN. */
+.patient-back{display:inline-flex;align-items:center;gap:4px;margin:10px 0 2px;
+  padding:9px 15px 9px 11px;border-radius:999px;background:#fff;border:1.5px solid #cfdae4;
+  color:#0e5a8a;font-weight:700;font-size:.9rem;text-decoration:none;min-height:42px}
+.patient-back:hover{border-color:#0e5a8a;background:#f2f8fc}
+.patient-back span{font-size:1.35rem;line-height:1}
+
+.help-desk{margin:18px 0 10px;padding:14px;border-radius:13px;background:#fff;
+  border:1px solid #dbe4ec;border-left:5px solid #0f8a6a;text-align:center}
+.help-desk b{display:block;color:#0f2f47;font-size:.94rem;margin-bottom:8px}
+.help-nums{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.help-call{display:inline-block;padding:11px 18px;border-radius:999px;background:#0f8a6a;
+  color:#fff;font-weight:800;text-decoration:none;font-size:1rem;min-height:44px;
+  line-height:22px}
+.help-call:hover{background:#0c6f55}
+.help-sub{font-size:.79rem;color:#5a6b7b;margin-top:8px;line-height:1.4}
+.help-emerg{color:#8c1d1d;font-weight:650}

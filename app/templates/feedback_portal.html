@@ -22,6 +22,7 @@
   {% include "_langbar.html" %}
 </div>
 <main class="wrap" style="max-width:560px">
+  {% with back_to="/welcome" %}{% include "_patient_nav.html" %}{% endwith %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
@@ -63,6 +64,7 @@
 
     <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_feedback') }}</button>
   </form>
+  {% include "_help_desk.html" %}
 </main>
 <div class="footer">Every rating is read by management · Low ratings trigger immediate follow-up · <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

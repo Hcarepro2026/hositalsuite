@@ -171,7 +171,7 @@ def patient_hub():
 def dashboard():
     org_id = current_user.org_id
     kpi = _kpi(org_id)
-    attention = services.management_attention(org_id) if (current_user.is_md or current_user.is_super) else []
+    attention = services.management_attention(org_id) if current_user.is_management else []
     my_cas = None
     if current_user.is_am or current_user.is_hod:
         my_cas = (db.session.query(CorrectiveAction)

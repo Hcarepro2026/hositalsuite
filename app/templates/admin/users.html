@@ -18,7 +18,8 @@
   {% for u in items %}
   <tr>
     <td>{{ u.name }}</td><td>{{ u.username }}</td>
-    <td><span class="pill {{ 'blue' if u.role=='SUPER_ADMIN' else ('green' if u.role=='MD_CEO' else ('amber' if u.role=='HOD' else 'gray')) }}">{{ u.role }}</span></td>
+    <td><span class="pill {{ 'blue' if u.role=='SUPER_ADMIN' else ('green' if u.is_management else ('amber' if u.role=='HOD' else 'gray')) }}"
+            title="{{ u.role }}">{{ u.role_name }}</span></td>
     <td>{{ u.department.name if u.department else '—' }}</td>
     <td>{{ u.phone or '—' }}</td><td>{{ u.email or '—' }}</td>
     <td>
@@ -38,8 +39,8 @@
           <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
           <input type="text" name="name" value="{{ u.name }}" required>
           <select name="role" class="mt" style="margin-top:6px">
-            {% for r in ('SUPER_ADMIN','MD_CEO','ADMIN_MANAGER','HOD') %}
-            <option {{ 'selected' if u.role==r }}>{{ r }}</option>{% endfor %}
+            {% for code, label in role_choices %}
+            <option value="{{ code }}" {{ 'selected' if u.role==code }}>{{ label }}</option>{% endfor %}
           </select>
           <select name="department_id" class="mt" style="margin-top:6px">
             <option value="">— No department —</option>
@@ -84,10 +85,9 @@
       <div><label>Username <span class="req">*</span></label><input type="text" name="username" required autocapitalize="none"></div>
       <div><label>Role <span class="req">*</span></label>
         <select name="role">
-          <option value="ADMIN_MANAGER">Admin Manager</option>
-          <option value="HOD">HOD</option>
-          <option value="MD_CEO">MD / CEO</option>
-          <option value="SUPER_ADMIN">Super Administrator</option>
+          {% for code, label in role_choices %}
+          <option value="{{ code }}" {{ 'selected' if code == 'ADMIN_MANAGER' }}>{{ label }}</option>
+          {% endfor %}
         </select></div>
       <div><label>Department</label>
         <select name="department_id">

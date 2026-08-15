@@ -16,6 +16,7 @@
   {% if ref_code %}<div class="mt"><span class="pill green">💌 {{ _('refer_welcome') }}</span></div>{% endif %}
 </div>
 <main class="wrap" style="max-width:560px">
+  {% with back_to="/welcome" %}{% include "_patient_nav.html" %}{% endwith %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
@@ -79,6 +80,7 @@
     <p class="muted">Call the hospital directly: <b>{{ org.name }}</b> — or visit the reception desk.
        Staff will book your visit for you.</p>
   </div>
+  {% include "_help_desk.html" %}
 </main>
 <div class="footer">Booking is free · You will receive a reference number · Please arrive 15 minutes early · <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

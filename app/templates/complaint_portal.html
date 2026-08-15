@@ -15,6 +15,7 @@
   {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}
 </div>
 <main class="wrap" style="max-width:560px">
+  {% with back_to="/welcome" %}{% include "_patient_nav.html" %}{% endwith %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
@@ -110,6 +111,7 @@
     <div class="mt"><a href="/complaint/status">{{ _('check_status') }} →</a></div>
     <small class="muted"><a href="/book">{{ _('book_title') }}</a> · <a href="/feedback">{{ _('fb_title') }}</a></small>
   </div>
+  {% include "_help_desk.html" %}
 </main>
 <div class="footer">{{ _('no_account') }} · Hospital Admin Manager Suite · <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

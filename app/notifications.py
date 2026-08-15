@@ -133,7 +133,16 @@ def admin_managers(org_id: int) -> list[User]:
 
 
 def md_ceos(org_id: int) -> list[User]:
-    return db.session.query(User).filter_by(org_id=org_id, role="MD_CEO", active=True).all()
+    """Executive escalation targets.
+
+    Includes the Deputy MD so a breach still reaches a decision-maker when the
+    MD/CEO is away — the whole point of having a deputy. Falls back to the
+    MD/CEO alone if no deputy exists.
+    """
+    return (db.session.query(User)
+            .filter(User.org_id == org_id, User.active.is_(True),
+                    User.role.in_(("MD_CEO", "DMD")))
+            .order_by(User.role.desc()).all())
 
 
 def super_admins(org_id: int) -> list[User]:

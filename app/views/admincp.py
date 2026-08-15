@@ -13,14 +13,16 @@ from ..audit import audit, verify_chain
 from ..config import Config
 from ..models import (AppNotification, AuditLog, Complaint, ComplaintCategory,
                       Department, DutyRoster, Organization, QrLocation, ReportFile,
-                      Section, Unit, User, WhatsAppMessage, db, new_code, now_naive)
+                      ROLES, Section, Unit, User, WhatsAppMessage, db, new_code,
+                      now_naive, role_label)
 from ..security import (PHONE_RE, clean_phone, password_strength_errors,
                         require_role, save_upload)
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 SUPER = ("SUPER_ADMIN",)
-SUPER_MD = ("SUPER_ADMIN", "MD_CEO")
+# Executive view: audit log, data requests, KB approval.
+SUPER_MD = ("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR")
 
 
 # ------------------------------------------------------------------ overview
@@ -107,7 +109,8 @@ def users():
              .filter_by(org_id=current_user.org_id, active=True)
              .order_by(Department.name).all())
     pending = [u for u in items if not u.approved]
-    return render_template("admin/users.html", items=items, depts=depts, pending=pending)
+    return render_template("admin/users.html", items=items, depts=depts, pending=pending,
+                           role_choices=[(r, role_label(r)) for r in ROLES])
 
 
 @bp.post("/users/create")
@@ -129,7 +132,7 @@ def user_create():
         if not d or d.org_id != current_user.org_id:
             flash("Unknown department.", "error")
             return redirect(url_for("admin.users"))
-    if not username or not name or role not in ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD"):
+    if not username or not name or role not in ROLES:
         flash("Username, full name and a valid role are required.", "error")
         return redirect(url_for("admin.users"))
     if db.session.query(User).filter_by(username=username).first():
@@ -165,7 +168,7 @@ def user_edit(uid: int):
     if not name:
         flash("Full name is required.", "error")
         return redirect(url_for("admin.users"))
-    if role not in ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD"):
+    if role not in ROLES:
         flash("Invalid role.", "error")
         return redirect(url_for("admin.users"))
     phone = clean_phone(phone)
@@ -374,6 +377,32 @@ def department_save():
               {"name": name, "roster_mode": roster_mode, "staff_per_shift": per_shift})
     db.session.commit()
     flash("Department saved.", "success")
+    return redirect(url_for("admin.structure"))
+
+
+@bp.post("/structure/install-standard")
+@require_role(*SUPER)
+def install_standard_departments():
+    """Add any missing standard general-hospital departments.
+
+    Existing departments are never touched, so a hospital that has already
+    customised its structure can safely top up what it is missing.
+    """
+    from ..standard_departments import install as install_standard
+    try:
+        made = install_standard(current_user.org_id, only_missing=True)
+        audit("STANDARD_DEPARTMENTS_INSTALLED", "organization", current_user.org_id, made)
+        db.session.commit()
+    except Exception as exc:                          # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("standard department install failed")
+        flash(f"Could not add the standard departments: {exc}", "error")
+        return redirect(url_for("admin.structure"))
+    if made["departments"]:
+        flash(f"Added {made['departments']} department(s), {made['sections']} section(s) "
+              f"and {made['units']} unit(s). Existing ones were left unchanged.", "success")
+    else:
+        flash("You already have all the standard departments — nothing to add.", "info")
     return redirect(url_for("admin.structure"))
 
 

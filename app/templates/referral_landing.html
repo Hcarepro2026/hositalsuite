@@ -14,6 +14,7 @@
   {% include "_langbar.html" %}
 </div>
 <main class="wrap" style="max-width:560px">
+  {% with back_to="/welcome" %}{% include "_patient_nav.html" %}{% endwith %}
   <div class="privacy-note">{{ _('refer_landing_sub') }}</div>
 
   <div class="card pad-lg center">
@@ -30,6 +31,7 @@
     <small class="muted">Need to raise a concern instead?
       <a href="/complaint">{{ _('btn_complaint')|lower }}</a></small>
   </div>
+  {% include "_help_desk.html" %}
 </main>
 <div class="footer">{{ org.name }} · share good care · no login needed</div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

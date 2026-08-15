@@ -32,60 +32,157 @@
   /* ------------------------------------------------ voice-to-text (Web Speech API) */
   window.hmsVoice = {
     supported: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
-    /* Accuracy fix: only read results from e.resultIndex onward, and commit
-       finals once — the old loop re-read ALL results on every event, which is
-       what caused repeated/duplicated words. */
+
+    /* ------------------------------------------------------------------
+       Dictation.
+
+       Problems this rewrite fixes (all reported from real phones):
+
+       1. REPEATED WORDS. Chrome on Android fires the same final result again
+          after a pause, and some builds replay earlier finals. We now key every
+          final on its result index, so a given phrase is committed exactly once
+          no matter how many times the browser re-sends it.
+
+       2. THE MIC STOPPED ON ITS OWN. Android ends recognition after ~5s of
+          silence. The old code treated that as "user finished". Now onend
+          RESTARTS it automatically while the user still wants to dictate, so
+          the mic keeps listening until THEY stop it.
+
+       3. NO AUTO-STOP WHEN FULL. If the target has a maxlength we stop once it
+          is reached, and there is a hard 3-minute safety cap so a forgotten
+          mic cannot record forever or drain the battery.
+
+       4. NO FEEDBACK. The button now shows a live "listening" state and the
+          interim words appear as you speak.
+       ------------------------------------------------------------------ */
+    MAX_MS: 180000,          /* 3-minute hard cap */
+
     start: function (btn, targetId) {
       var target = document.getElementById(targetId);
       if (!target) return;
       if (!this.supported) {
-        alert("Voice-to-text is not supported in this browser. Please type your text instead.");
+        this._toast(btn, "Voice typing is not available in this browser. Please type instead.");
         return;
       }
-      if (btn._rec) { try { btn._rec.stop(); } catch (e) {} return; }
+      /* second tap = the USER stopping it */
+      if (btn._rec) { this.stop(btn); return; }
+
       var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
       var rec = new Rec();
       rec.lang = btn.getAttribute("data-lang") || "en-NG";
       rec.continuous = true;
       rec.interimResults = true;
       rec.maxAlternatives = 1;
-      var base = target.value.replace(/\s+$/, "");
-      var finals = "";
-      btn.classList.add("recording");
-      btn.innerHTML = "⏹ Stop";
+
+      var self = this;
+      var base = (target.value || "").replace(/\s+$/, "");
+      var committed = {};        /* resultIndex -> transcript, so nothing repeats */
+      var wantStop = false;
+      var limit = parseInt(target.getAttribute("maxlength") || "0", 10);
+
       btn._rec = rec;
+      btn._stopFn = function () { wantStop = true; try { rec.stop(); } catch (e) {} };
+      this._setRecording(btn, true);
+
+      function render(interim) {
+        var finals = "";
+        Object.keys(committed).sort(function (a, b) { return a - b; })
+          .forEach(function (k) { finals += committed[k] + " "; });
+        var merged = (base ? base + " " : "") + finals + (interim || "");
+        merged = merged.replace(/[ \t]+/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
+        if (limit > 0 && merged.length >= limit) {
+          merged = merged.slice(0, limit);
+          self._toast(btn, "That is the maximum length — microphone stopped.");
+          btn._stopFn();
+        }
+        target.value = merged;
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+
       rec.onresult = function (e) {
         var interim = "";
-        for (var i = e.resultIndex; i < e.results.length; i++) {   // ← start at resultIndex
+        for (var i = e.resultIndex; i < e.results.length; i++) {
           var r = e.results[i];
-          if (r.isFinal) finals += r[0].transcript.trim() + " ";
-          else interim += r[0].transcript;
+          var txt = (r[0] && r[0].transcript ? r[0].transcript : "").trim();
+          if (!txt) continue;
+          if (r.isFinal) {
+            /* keyed by index: re-sent finals overwrite, never append twice */
+            committed[i] = txt;
+          } else {
+            interim += (interim ? " " : "") + txt;
+          }
         }
-        var merged = (base ? base + " " : "") + finals + interim;
-        target.value = merged.replace(/[ \t]+/g, " ").trim();
-        target.dispatchEvent(new Event("input", { bubbles: true }));
+        render(interim);
       };
+
       rec.onerror = function (e) {
-        if (e.error === "language-not-supported" && rec.lang !== "en-NG") {
-          try { rec.lang = "en-NG"; rec.start(); } catch (err) { hmsVoice._stopBtn(btn); }
+        var err = e && e.error;
+        if (err === "no-speech" || err === "aborted") return;   /* onend will restart */
+        if (err === "language-not-supported" && rec.lang !== "en-NG") {
+          rec.lang = "en-NG";                                   /* fall back and continue */
           return;
         }
-        if (e.error === "language-not-supported") {
-          hmsVoice._stopBtn(btn);
-          alert("Voice input in this language is not supported on this phone — please type instead.");
-          return;
+        wantStop = true;
+        self.stop(btn);
+        if (err === "not-allowed" || err === "service-not-allowed") {
+          self._toast(btn, "Microphone blocked. Allow microphone access in your browser settings, or type instead.");
+        } else if (err === "network") {
+          self._toast(btn, "Voice typing needs internet. Please type instead.");
+        } else if (err === "language-not-supported") {
+          self._toast(btn, "Voice typing is not available in this language on this phone.");
         }
-        hmsVoice._stopBtn(btn);
-        if (e.error === "not-allowed") alert("Microphone permission denied. Please allow microphone access or type instead.");
-        if (e.error === "no-speech") alert("I didn't hear anything. Tap 🎤 and speak clearly close to the phone.");
       };
-      rec.onend = function () { hmsVoice._stopBtn(btn); };   // no auto-restart → no duplication
-      try { rec.start(); } catch (e) { hmsVoice._stopBtn(btn); }
+
+      /* THE KEY FIX: Android ends recognition on silence. Restart unless the
+         USER asked to stop (or the safety cap fired). */
+      rec.onend = function () {
+        if (wantStop) { self._cleanup(btn); return; }
+        try { rec.start(); } catch (e) { self._cleanup(btn); }
+      };
+
+      btn._timer = setTimeout(function () {
+        self._toast(btn, "Microphone stopped after 3 minutes. Tap it again to continue.");
+        btn._stopFn();
+      }, this.MAX_MS);
+
+      try { rec.start(); } catch (e) { this._cleanup(btn); }
     },
-    _stopBtn: function (btn) {
-      btn.classList.remove("recording");
-      btn.innerHTML = "🎤 Speak";
+
+    stop: function (btn) {
+      if (btn && btn._stopFn) btn._stopFn();
+      else this._cleanup(btn);
+    },
+
+    _setRecording: function (btn, on) {
+      btn.classList.toggle("recording", !!on);
+      if (on) {
+        if (!btn._label) btn._label = btn.innerHTML;
+        btn.innerHTML = "⏹ Listening… tap to stop";
+        btn.setAttribute("aria-label", "Stop dictation");
+      } else {
+        btn.innerHTML = btn._label || "🎤 Speak";
+        btn.setAttribute("aria-label", "Start dictation");
+      }
+    },
+
+    _cleanup: function (btn) {
+      if (!btn) return;
+      if (btn._timer) { clearTimeout(btn._timer); btn._timer = null; }
       btn._rec = null;
+      btn._stopFn = null;
+      this._setRecording(btn, false);
+    },
+
+    /* Small inline message — never a blocking alert() mid-dictation. */
+    _toast: function (btn, msg) {
+      try {
+        var host = (btn && btn.parentNode) || document.body;
+        var t = document.createElement("div");
+        t.className = "voice-toast";
+        t.textContent = msg;
+        host.appendChild(t);
+        setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 5000);
+      } catch (e) { /* never block the user */ }
     },
 
     /* Louder, clearer spoken alerts (§19): full volume, best English voice,
