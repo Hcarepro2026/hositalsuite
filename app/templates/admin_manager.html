@@ -87,11 +87,26 @@
         {% endfor %}
       </div>
 
+      {# ---------------- Admin Manager's overall closing comment ---------------- #}
+      <div class="card pad-lg mt">
+        <h2 style="margin-top:0">📝 Your final comment</h2>
+        <p class="muted" style="margin-top:0">Your overall remarks on today's inspection.
+          This appears on the PDF sent to the MD/CEO. Optional, but strongly encouraged —
+          it is where you say what the scores alone cannot.</p>
+        <textarea name="final_comment" id="final_comment" rows="4" maxlength="4000"
+                  placeholder="e.g. The ward was clean and staff attentive, but the second
+                               suction machine has been faulty for three weeks and needs
+                               urgent attention from maintenance."></textarea>
+        <button type="button" class="mic-btn" data-lang="{{ speech_lang }}"
+                onclick="hmsVoice.start(this,'final_comment')">🎤 Speak your comment</button>
+      </div>
+
       <button type="button" class="btn big" id="review-btn">Review &amp; Submit</button>
 
       <div class="card pad-lg mt" id="review" style="display:none">
         <h2>Review before submitting</h2>
         <div id="review-body"></div>
+        <div id="review-comment" class="notice" style="display:none;text-align:left"></div>
         <div class="notice">Once submitted the report is locked, a PDF is generated and it is sent
           to the MD/CEO via WhatsApp. Corrections afterwards go through the formal amendment process.</div>
         <div class="btn-row grid cols2 mt">
@@ -199,6 +214,21 @@ if (form) {
       html += '<div class="notice">GPS location was not captured' +
               (GPS_MODE==='mandatory' ? ' — submission will be blocked.' : '.') + '</div>';
     document.getElementById('review-body').innerHTML = html;
+    // Show the closing comment on the review screen so nothing is submitted unseen.
+    var fc = document.getElementById('final_comment');
+    var fcBox = document.getElementById('review-comment');
+    if (fc && fcBox) {
+      var txt = (fc.value || '').trim();
+      fcBox.textContent = '';
+      if (txt) {
+        var b = document.createElement('b'); b.textContent = 'Your final comment: ';
+        fcBox.appendChild(b);
+        fcBox.appendChild(document.createTextNode(txt));   // textContent = XSS-safe
+      } else {
+        fcBox.textContent = 'No final comment added — you can go back and add one.';
+      }
+      fcBox.style.display = 'block';
+    }
     document.getElementById('review').style.display = 'block';
     document.getElementById('review').scrollIntoView({behavior:'smooth'});
   });
@@ -215,6 +245,8 @@ if (form) {
       data['score_' + n] = parseInt(sel.value, 10);
       data['explanation_' + n] = document.getElementById('explanation_' + n).value.trim();
     });
+    var fcEl = document.getElementById('final_comment');
+    data.final_comment = fcEl ? fcEl.value.trim() : '';
     data.lat = document.getElementById('lat').value || null;
     data.lng = document.getElementById('lng').value || null;
     data.started_ts = document.getElementById('started-ts').value || null;

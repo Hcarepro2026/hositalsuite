@@ -2,16 +2,37 @@
 {% block title %}Users{% endblock %}
 {% block content %}
 <h1>Users &amp; Roles</h1>
+
+{% if pending %}
+<div class="notice" style="border-left-color:var(--amber);background:var(--amber-bg)">
+  <b>⏳ {{ pending|length }} account(s) waiting for your approval.</b>
+  They cannot sign in until you approve them. Look for the amber
+  <span class="pill amber">awaiting approval</span> tag below.
+</div>
+{% endif %}
+
 <div class="table-wrap card mb" style="padding:0">
 <table>
-  <tr><th>Name</th><th>Username</th><th>Role</th><th>Phone (WhatsApp)</th><th>Email</th><th>Status</th><th></th></tr>
+  <tr><th>Name</th><th>Username</th><th>Role</th><th>Department</th>
+      <th>Phone (WhatsApp)</th><th>Email</th><th>Status</th><th></th></tr>
   {% for u in items %}
   <tr>
     <td>{{ u.name }}</td><td>{{ u.username }}</td>
     <td><span class="pill {{ 'blue' if u.role=='SUPER_ADMIN' else ('green' if u.role=='MD_CEO' else ('amber' if u.role=='HOD' else 'gray')) }}">{{ u.role }}</span></td>
+    <td>{{ u.department.name if u.department else '—' }}</td>
     <td>{{ u.phone or '—' }}</td><td>{{ u.email or '—' }}</td>
-    <td>{% if u.active %}<span class="pill green">active</span>{% else %}<span class="pill red">deactivated</span>{% endif %}</td>
+    <td>
+      {% if not u.approved %}<span class="pill amber">awaiting approval</span>
+      {% elif u.active %}<span class="pill green">active</span>
+      {% else %}<span class="pill red">deactivated</span>{% endif %}
+    </td>
     <td class="right">
+      {% if not u.approved %}
+      <form method="post" action="/admin/users/{{ u.id }}/approve" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn small">✅ Approve</button>
+      </form>
+      {% endif %}
       <details style="display:inline-block"><summary class="btn small ghost" style="list-style:none">Edit</summary>
         <form method="post" action="/admin/users/{{ u.id }}/edit" class="card mt" style="min-width:280px">
           <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
@@ -19,6 +40,12 @@
           <select name="role" class="mt" style="margin-top:6px">
             {% for r in ('SUPER_ADMIN','MD_CEO','ADMIN_MANAGER','HOD') %}
             <option {{ 'selected' if u.role==r }}>{{ r }}</option>{% endfor %}
+          </select>
+          <select name="department_id" class="mt" style="margin-top:6px">
+            <option value="">— No department —</option>
+            {% for d in depts %}
+            <option value="{{ d.id }}" {{ 'selected' if u.department_id==d.id }}>{{ d.name }}</option>
+            {% endfor %}
           </select>
           <input type="email" name="email" value="{{ u.email or '' }}" placeholder="email" class="mt" style="margin-top:6px">
           <input type="tel" name="phone" value="{{ u.phone or '' }}" placeholder="phone (WhatsApp)" class="mt" style="margin-top:6px">
@@ -37,6 +64,11 @@
           <button class="btn small mt">Reset</button>
         </form>
       </details>
+      <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline"
+            onsubmit="return confirm('Permanently delete {{ u.name }}? This cannot be undone. If they have signed any inspections or held duty, use Suspend instead.')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn small danger">Delete</button>
+      </form>
     </td>
   </tr>
   {% endfor %}
@@ -45,7 +77,7 @@
 
 <div class="card pad-lg" style="max-width:640px">
   <h2>Create user</h2>
-  <form method="post" action="/users/create">
+  <form method="post" action="/admin/users/create">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <div class="grid cols2">
       <div><label>Full name <span class="req">*</span></label><input type="text" name="name" required></div>
@@ -57,7 +89,12 @@
           <option value="MD_CEO">MD / CEO</option>
           <option value="SUPER_ADMIN">Super Administrator</option>
         </select></div>
-      <div><label>Phone (for WhatsApp)</label><input type="tel" name="phone" placeholder="2348012345678"></div>
+      <div><label>Department</label>
+        <select name="department_id">
+          <option value="">— No department —</option>
+          {% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select></div>
+      <div><label>Phone (for WhatsApp)</label><input type="tel" name="phone" placeholder="08012345678"></div>
       <div><label>Email</label><input type="email" name="email"></div>
       <div><label>Initial password <span class="req">*</span></label><input type="password" name="password" required></div>
     </div>

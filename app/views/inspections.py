@@ -156,6 +156,9 @@ def inspection_submit():
                         f"({scoring.CRITERIA[no]['title']}) because the score is {scores[no]}.")
         explanations[no] = expl
 
+    # --- Admin Manager's overall closing comment (optional, voice-to-text capable)
+    final_comment = (form.get("final_comment") or "").strip()[:4000]
+
     # --- started time: recorded when the inspector opened the form (client-sent,
     # clamped server-side to today and never in the future)
     started_at = now
@@ -221,6 +224,7 @@ def inspection_submit():
             lng=lng,
             gps_captured=(lat is not None and lng is not None),
             device_info=request.headers.get("User-Agent", "")[:280],
+            final_comment=final_comment or None,
         )
         db.session.add(obj)
         db.session.flush()

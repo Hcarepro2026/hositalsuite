@@ -47,6 +47,13 @@
   </div>
 </div>
 
+{% if insp.final_comment %}
+<div class="card mb">
+  <h2>📝 Admin Manager's comment</h2>
+  <p style="white-space:pre-wrap">{{ insp.final_comment }}</p>
+</div>
+{% endif %}
+
 {% if cas %}
 <div class="card mb"><h2>Corrective actions from this inspection</h2>
   {% for ca in cas %}<div class="list-item"><b>{{ ca.finding[:100] }}</b>

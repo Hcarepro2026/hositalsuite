@@ -90,6 +90,14 @@ def login_post():
     if not user.active:
         flash("This account is deactivated. Contact your system administrator.", "error")
         return render_template("login.html", next=nxt, username=username), 403
+    if not getattr(user, "approved", True):
+        # Bulk-uploaded accounts exist but must be approved by an administrator
+        # before they can be used. The password was correct, so say so plainly.
+        audit("LOGIN_UNAPPROVED", "user", user.id, {"username": username})
+        db.session.commit()
+        flash("Your account is waiting for administrator approval. "
+              "Please ask your hospital administrator to approve it.", "error")
+        return render_template("login.html", next=nxt, username=username), 403
     login_user(user, remember=False)
     session.permanent = True
     user.last_login_at = now_naive()

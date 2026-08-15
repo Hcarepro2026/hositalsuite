@@ -127,6 +127,20 @@ def rate_limit(limit: int = 10, window: float = 60.0, key_extra: str = ""):
     return deco
 
 
+# ------------------------------------------------------------------ phone numbers
+# Nigerian mobile numbers, local (08012345678) or international (+2348012345678).
+PHONE_RE = re.compile(r"^\+?\d{7,15}$")
+
+
+def clean_phone(raw: str) -> str:
+    """Normalise a typed phone number: strip spaces, dashes and brackets."""
+    return (raw or "").strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+
+
+def valid_phone(raw: str) -> bool:
+    return bool(PHONE_RE.match(clean_phone(raw)))
+
+
 # ------------------------------------------------------------------ password policy
 PASSWORD_MIN_LEN = 8
 

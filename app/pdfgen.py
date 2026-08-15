@@ -186,6 +186,14 @@ def build_inspection_pdf(org, inspection, scores_by_no: dict, dest_path: str,
             story.append(Paragraph(f"• {ca.action_required} (owner: {ca.owner.name}, "
                                    f"deadline: {ca.deadline.strftime('%d %b %Y')})", st["body"]))
 
+    # ---- Admin Manager's closing comment
+    if getattr(inspection, "final_comment", None):
+        story.append(Paragraph("Admin Manager's Comment", st["h2"]))
+        # escape(): the comment is free text typed by a human and reportlab
+        # renders a mini-HTML dialect, so stray < or & would corrupt the PDF.
+        from xml.sax.saxutils import escape as _esc
+        story.append(Paragraph(_esc(inspection.final_comment), st["body"]))
+
     # ---- verification footer
     story.append(Spacer(1, 14))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#c9d4de")))

@@ -13,6 +13,18 @@ from sqlalchemy import inspect, text
 from .models import db
 
 
+def _bool_true_sql() -> str:
+    """Boolean defaulting to TRUE.
+
+    Used for `user.approved`: every account that already exists was created by
+    an administrator, so back-filling them as approved is correct. Defaulting
+    to FALSE would lock the whole hospital out on the next deploy.
+    """
+    if str(db.engine.url).startswith("postgres"):
+        return "BOOLEAN DEFAULT TRUE"
+    return "INTEGER DEFAULT 1"
+
+
 def _bool_sql() -> str:
     """BOOLEAN on PostgreSQL, INTEGER on SQLite — both accept 0/1 defaults."""
     if str(db.engine.url).startswith("postgres"):
@@ -44,6 +56,12 @@ COLUMNS = [
     ("patient_feedback", "consent_at", "TIMESTAMP"),
     ("patient_feedback", "anonymized_at", "TIMESTAMP"),
     ("queue_ticket", "anonymized_at", "TIMESTAMP"),
+    # --- Day 1 upgrades: HOD contact on the department, staff department + approval
+    ("department", "hod_name", "VARCHAR(120)"),
+    ("department", "hod_phone", "VARCHAR(32)"),
+    ("user", "department_id", "INTEGER"),
+    ("user", "approved", _bool_true_sql),
+    ("inspection", "final_comment", "TEXT"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)
@@ -108,7 +126,10 @@ def ensure_schema() -> None:
         if column not in cols:
             resolved = coltype() if callable(coltype) else coltype
             with db.engine.begin() as conn:
-                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {resolved}'))
+                # Quote the table name: "user" is a RESERVED WORD in
+                # PostgreSQL and an unquoted ALTER TABLE user ... is a syntax
+                # error, which would silently skip the migration.
+                conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN {column} {resolved}'))
     for name, table, cols, where in UNIQUE_INDEXES:
         if table not in existing_tables:
             continue

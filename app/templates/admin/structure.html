@@ -74,9 +74,13 @@ Complaints are routed automatically to the most specific HOD configured.</p>
         <input type="hidden" name="department_id" value="{{ d.id }}">
         <input type="text" name="name" value="{{ d.name }}">
         <select name="hod_user_id" class="mt" style="margin-top:8px">
-          <option value="">— No HOD —</option>
+          <option value="">— No HOD (or not a system user) —</option>
           {% for h in hods %}<option value="{{ h.id }}" {{ 'selected' if d.hod_user_id==h.id }}>{{ h.name }}</option>{% endfor %}
         </select>
+        <input type="text" name="hod_name" class="mt" style="margin-top:8px"
+               value="{{ d.hod_name or '' }}" placeholder="HOD full name">
+        <input type="tel" name="hod_phone" class="mt" style="margin-top:8px" inputmode="tel"
+               value="{{ d.hod_phone or '' }}" placeholder="HOD phone e.g. 08012345678">
         <select name="roster_mode" class="mt" style="margin-top:8px">
           <option value="two_12h" {{ 'selected' if (d.roster_mode or 'two_12h')=='two_12h' }}>Roster: two 12h shifts/day</option>
           <option value="24h" {{ 'selected' if d.roster_mode=='24h' }}>Roster: 24h duty</option>
@@ -117,9 +121,18 @@ Complaints are routed automatically to the most specific HOD configured.</p>
   <form method="post" action="/admin/structure/department">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <label>Name</label><input type="text" name="name" required>
-    <label>HOD (optional)</label>
-    <select name="hod_user_id"><option value="">— None —</option>
+    <label>HOD — pick a staff account (optional)</label>
+    <select name="hod_user_id"><option value="">— None / not a system user —</option>
       {% for h in hods %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}</select>
+
+    <label>HOD full name <span class="req">*</span></label>
+    <input type="text" name="hod_name" required placeholder="e.g. Dr. Amina Bello">
+
+    <label>HOD phone number <span class="req">*</span></label>
+    <input type="tel" name="hod_phone" required inputmode="tel" placeholder="08012345678">
+    <p class="hint">The HOD's name and phone are stored on the department, so you can record a
+      head of department even before they have a login.</p>
+
     <button class="btn mt">Add department</button>
   </form>
 </div>

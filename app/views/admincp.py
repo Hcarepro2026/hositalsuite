@@ -14,7 +14,8 @@ from ..config import Config
 from ..models import (AppNotification, AuditLog, Complaint, ComplaintCategory,
                       Department, DutyRoster, Organization, QrLocation, ReportFile,
                       Section, Unit, User, WhatsAppMessage, db, new_code, now_naive)
-from ..security import password_strength_errors, require_role, save_upload
+from ..security import (PHONE_RE, clean_phone, password_strength_errors,
+                        require_role, save_upload)
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -69,8 +70,27 @@ def hospital_save():
     file = request.files.get("logo")
     if file and file.filename:
         path, err = save_upload(file, "logos", org_id=org.id)
-        if not err:
+        if err:
+            flash(err, "error")
+        else:
             org.logo_path = path   # relative path so every page can serve it
+            # The logo is now displayed much larger, so warn if the uploaded
+            # file is too small to look sharp — a stretched 40px image looks
+            # unprofessional on a hospital's login screen.
+            try:
+                from .. import storage
+                from PIL import Image
+                import io as _io
+                data = storage.get(path)
+                if data:
+                    w, h = Image.open(_io.BytesIO(data)).size
+                    if min(w, h) < 200:
+                        flash(f"Logo uploaded, but it is small ({w}x{h} pixels) and may look "
+                              "blurry. For a sharp result upload a square image of at least "
+                              "400x400 pixels (PNG with a transparent background is best).",
+                              "info")
+            except Exception:                            # noqa: BLE001 - never block the save
+                current_app.logger.exception("logo dimension check failed")
     audit("HOSPITAL_UPDATED", "organization", org.id, {"name": org.name, "code": org.code})
     db.session.commit()
     flash("Hospital profile updated.", "success")
@@ -83,7 +103,11 @@ def hospital_save():
 def users():
     items = (db.session.query(User).filter_by(org_id=current_user.org_id)
              .order_by(User.role, User.name).all())
-    return render_template("admin/users.html", items=items)
+    depts = (db.session.query(Department)
+             .filter_by(org_id=current_user.org_id, active=True)
+             .order_by(Department.name).all())
+    pending = [u for u in items if not u.approved]
+    return render_template("admin/users.html", items=items, depts=depts, pending=pending)
 
 
 @bp.post("/users/create")
@@ -95,6 +119,16 @@ def user_create():
     email = (request.form.get("email") or "").strip()
     phone = (request.form.get("phone") or "").strip()
     password = request.form.get("password") or ""
+    dept_id = request.form.get("department_id", type=int)
+    phone = clean_phone(phone)
+    if phone and not PHONE_RE.match(phone):
+        flash("Enter a valid phone number (digits only, e.g. 08012345678).", "error")
+        return redirect(url_for("admin.users"))
+    if dept_id:
+        d = db.session.get(Department, dept_id)
+        if not d or d.org_id != current_user.org_id:
+            flash("Unknown department.", "error")
+            return redirect(url_for("admin.users"))
     if not username or not name or role not in ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD"):
         flash("Username, full name and a valid role are required.", "error")
         return redirect(url_for("admin.users"))
@@ -107,7 +141,8 @@ def user_create():
             flash(e, "error")
         return redirect(url_for("admin.users"))
     u = User(org_id=current_user.org_id, username=username, name=name, role=role,
-             email=email or None, phone=phone or None, must_change_password=True)
+             email=email or None, phone=phone or None, department_id=dept_id or None,
+             approved=True, must_change_password=True)
     u.set_password(password)
     db.session.add(u)
     db.session.flush()
@@ -133,13 +168,37 @@ def user_edit(uid: int):
     if role not in ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD"):
         flash("Invalid role.", "error")
         return redirect(url_for("admin.users"))
-    old = {"name": u.name, "role": u.role, "email": u.email, "phone": u.phone}
+    phone = clean_phone(phone)
+    if phone and not PHONE_RE.match(phone):
+        flash("Enter a valid phone number (digits only, e.g. 08012345678).", "error")
+        return redirect(url_for("admin.users"))
+    dept_id = request.form.get("department_id", type=int)
+    if dept_id:
+        d = db.session.get(Department, dept_id)
+        if not d or d.org_id != current_user.org_id:
+            flash("Unknown department.", "error")
+            return redirect(url_for("admin.users"))
+    # Never let an admin strip the last SUPER_ADMIN of its role — that would
+    # lock every administrator out of the system with no way back in.
+    if u.role == "SUPER_ADMIN" and role != "SUPER_ADMIN":
+        remaining = (db.session.query(User)
+                     .filter(User.org_id == current_user.org_id,
+                             User.role == "SUPER_ADMIN", User.active.is_(True),
+                             User.id != u.id).count())
+        if remaining == 0:
+            flash("This is the last Super Admin — change someone else to Super Admin first.",
+                  "error")
+            return redirect(url_for("admin.users"))
+    old = {"name": u.name, "role": u.role, "email": u.email, "phone": u.phone,
+           "department_id": u.department_id}
     u.name = name
     u.role = role
     u.email = email or None
     u.phone = phone or None
+    u.department_id = dept_id or None
     audit("USER_EDITED", "user", u.id, {"old": old, "new": {"name": name, "role": role,
-                                        "email": email, "phone": phone}})
+                                        "email": email, "phone": phone,
+                                        "department_id": dept_id}})
     db.session.commit()
     flash(f"User {name} updated.", "success")
     return redirect(url_for("admin.users"))
@@ -158,6 +217,69 @@ def user_toggle(uid: int):
     audit("USER_TOGGLED", "user", u.id, {"active": u.active})
     db.session.commit()
     flash(f"User {'activated' if u.active else 'deactivated'}.", "success")
+    return redirect(url_for("admin.users"))
+
+
+@bp.post("/users/<int:uid>/approve")
+@require_role(*SUPER)
+def user_approve(uid: int):
+    """Approve a pending account so its owner can sign in."""
+    u = db.session.get(User, uid)
+    if not u or u.org_id != current_user.org_id:
+        abort(404)
+    u.approved = True
+    audit("USER_APPROVED", "user", u.id, {"username": u.username})
+    db.session.commit()
+    flash(f"{u.name} approved — they can now sign in.", "success")
+    return redirect(url_for("admin.users"))
+
+
+def _user_has_history(u) -> str | None:
+    """Reason this user cannot be hard-deleted (their records must keep an author)."""
+    from ..models import CorrectiveAction, DutyRoster, Inspection
+    checks = [(Inspection.inspector_id, "inspections"),
+              (DutyRoster.user_id, "duty roster entries"),
+              (CorrectiveAction.owner_id, "corrective actions")]
+    for col, label in checks:
+        if db.session.query(col).filter(col == u.id).first() is not None:
+            return label
+    if db.session.query(Department).filter(Department.hod_user_id == u.id).first():
+        return "departments (they are the HOD)"
+    return None
+
+
+@bp.post("/users/<int:uid>/delete")
+@require_role(*SUPER)
+def user_delete(uid: int):
+    """Permanently delete a user — only when they have no history.
+
+    Staff who have signed inspections or held duty CANNOT be deleted: their
+    records must keep a real author for the audit trail to mean anything.
+    Deactivate those accounts instead (the button says so).
+    """
+    u = db.session.get(User, uid)
+    if not u or u.org_id != current_user.org_id:
+        abort(404)
+    if u.id == current_user.id:
+        flash("You cannot delete your own account.", "error")
+        return redirect(url_for("admin.users"))
+    if u.role == "SUPER_ADMIN":
+        remaining = (db.session.query(User)
+                     .filter(User.org_id == current_user.org_id, User.role == "SUPER_ADMIN",
+                             User.id != u.id).count())
+        if remaining == 0:
+            flash("You cannot delete the last Super Admin.", "error")
+            return redirect(url_for("admin.users"))
+    blocked = _user_has_history(u)
+    if blocked:
+        flash(f"{u.name} cannot be deleted because they have {blocked}. "
+              "Deactivate the account instead — this keeps the records honest.", "error")
+        return redirect(url_for("admin.users"))
+    label = f"{u.name} ({u.username})"
+    audit("USER_DELETED", "user", u.id, {"username": u.username, "role": u.role})
+    db.session.delete(u)
+    db.session.commit()
+    flash(f"User {label} permanently deleted.", "success")
     return redirect(url_for("admin.users"))
 
 
@@ -198,8 +320,26 @@ def department_save():
     name = (request.form.get("name") or "").strip()
     hod_id = request.form.get("hod_user_id", type=int)
     dept_id = request.form.get("department_id", type=int)
+    hod_name = (request.form.get("hod_name") or "").strip()
+    hod_phone = (request.form.get("hod_phone") or "").strip().replace(" ", "").replace("-", "")
     if not name:
         flash("Department name is required.", "error")
+        return redirect(url_for("admin.structure"))
+    # A new department must name a head and give a reachable number: complaint
+    # routing and SLA escalation depend on being able to contact the HOD.
+    # If an HOD staff account was picked, fall back to that account's details.
+    if hod_id:
+        picked = db.session.get(User, hod_id)
+        if picked and picked.org_id == current_user.org_id:
+            hod_name = hod_name or picked.name
+            hod_phone = hod_phone or clean_phone(picked.phone or "")
+    # A new department must name a head and give a reachable number: complaint
+    # routing and SLA escalation depend on being able to contact the HOD.
+    if not dept_id and (not hod_name or not hod_phone):
+        flash("HOD name and HOD phone number are required for a new department.", "error")
+        return redirect(url_for("admin.structure"))
+    if hod_phone and not PHONE_RE.match(hod_phone):
+        flash("Enter a valid HOD phone number (digits only, e.g. 08012345678).", "error")
         return redirect(url_for("admin.structure"))
     roster_mode = request.form.get("roster_mode")
     if roster_mode not in ("two_12h", "24h"):
@@ -214,6 +354,8 @@ def department_save():
             abort(404)
         dept.name = name
         dept.hod_user_id = hod_id or None
+        dept.hod_name = hod_name or None
+        dept.hod_phone = hod_phone or None
         dept.roster_mode = roster_mode
         dept.roster_staff_per_shift = per_shift
         audit("DEPARTMENT_UPDATED", "department", dept.id,
@@ -224,6 +366,7 @@ def department_save():
             flash("A department with that name already exists.", "error")
             return redirect(url_for("admin.structure"))
         dept = Department(org_id=current_user.org_id, name=name, hod_user_id=hod_id or None,
+                          hod_name=hod_name or None, hod_phone=hod_phone or None,
                           roster_mode=roster_mode, roster_staff_per_shift=per_shift)
         db.session.add(dept)
         db.session.flush()

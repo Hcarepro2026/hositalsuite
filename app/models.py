@@ -80,10 +80,22 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     active = db.Column(db.Boolean, default=True, nullable=False)
     must_change_password = db.Column(db.Boolean, default=False)
+    # Which department this member of staff belongs to (bulk uploads, rosters,
+    # and "who works where" reporting all need this).
+    # use_alter: user->department and department->user reference each other, so
+    # the FK is added after both tables exist rather than creating a cycle.
+    department_id = db.Column(
+        db.Integer,
+        db.ForeignKey("department.id", use_alter=True, name="fk_user_department"),
+        index=True)
+    # Account approval: bulk-uploaded/self-registered accounts start unapproved
+    # and cannot sign in until an administrator approves them.
+    approved = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=now_naive)
     last_login_at = db.Column(db.DateTime)
 
     org = db.relationship("Organization", backref="users")
+    department = db.relationship("Department", foreign_keys=[department_id])
 
     @property
     def is_super(self): return self.role == "SUPER_ADMIN"
@@ -110,6 +122,11 @@ class Department(db.Model):
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
     name = db.Column(db.String(120), nullable=False)
     hod_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    # HOD contact recorded ON the department, so a department can have a named
+    # head who is not (yet) a system user — and so the phone survives even if
+    # the linked staff account is changed or deactivated.
+    hod_name = db.Column(db.String(120))
+    hod_phone = db.Column(db.String(32))
     active = db.Column(db.Boolean, default=True, nullable=False)
     # roster design for this department: two 12h shifts/day, or one 24h shift/day
     roster_mode = db.Column(db.String(10), default="two_12h")      # two_12h | 24h
@@ -179,6 +196,9 @@ class Inspection(db.Model):
     lng = db.Column(db.Float)
     gps_captured = db.Column(db.Boolean, default=False)
     device_info = db.Column(db.String(300))
+    # Admin Manager's overall closing remark for the whole inspection (distinct
+    # from the per-criterion explanations). Appears on the PDF sent to MD/CEO.
+    final_comment = db.Column(db.Text)
     amendment_of_id = db.Column(db.Integer, db.ForeignKey("inspection.id"))
     pdf_path = db.Column(db.String(300))
     scores = db.relationship("InspectionScore", backref="inspection", cascade="all, delete-orphan",

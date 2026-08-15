@@ -44,7 +44,10 @@ def test_department_delete_guarded(client, app, seeded):
     assert b"sections/units first" in r.data
     assert db.session.get(Department, seeded["dept"]) is not None
     # a department with children is blocked too
-    r = client.post("/admin/structure/department", data={"_csrf": tok, "name": "Empty Dept"})
+    # NOTE: HOD name + phone are now mandatory when creating a department.
+    r = client.post("/admin/structure/department",
+                    data={"_csrf": tok, "name": "Empty Dept",
+                          "hod_name": "Dr. Empty", "hod_phone": "08010001000"})
     new_id = db.session.query(Department).filter_by(name="Empty Dept").first().id
     client.post(f"/admin/structure/department/{new_id}/delete", data={"_csrf": tok},
                 follow_redirects=True)
