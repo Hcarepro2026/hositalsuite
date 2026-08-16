@@ -79,10 +79,37 @@ def ready():
     """
     try:
         db.session.execute(db.text("SELECT 1"))
-        return jsonify(ready=True), 200
     except Exception:                                 # noqa: BLE001
         db.session.rollback()
-        return jsonify(ready=False), 503
+        return jsonify(ready=False, reason="database unreachable"), 503
+
+    # SCHEMA DRIFT CHECK.
+    # A reachable database is not the same as a USABLE one. /hims/ once
+    # returned 500 for every visitor because a migration had been edited after
+    # it was applied, so the live table was missing a column the app read.
+    # Connectivity looked perfect throughout. This compares what the app
+    # expects against what the database actually has, so the next drift is
+    # visible from outside instead of being discovered by a patient.
+    try:
+        from sqlalchemy import inspect as _inspect
+        insp = _inspect(db.engine)
+        present = set(insp.get_table_names())
+        missing = []
+        for tname, table in db.metadata.tables.items():
+            if tname not in present:
+                missing.append(tname)
+                continue
+            cols = {c["name"] for c in insp.get_columns(tname)}
+            missing.extend(f"{tname}.{c.name}" for c in table.columns
+                           if c.name not in cols)
+        if missing:
+            return jsonify(ready=False, reason="schema drift",
+                           missing=sorted(missing)[:20]), 503
+    except Exception as exc:                          # noqa: BLE001
+        db.session.rollback()
+        return jsonify(ready=False, reason=f"schema check failed: {exc}"[:200]), 503
+
+    return jsonify(ready=True), 200
 
 
 # ================================================================ live alerts (§19/§37)
