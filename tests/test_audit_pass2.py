@@ -174,6 +174,12 @@ def test_roster_reassign_and_delete_are_audited(client, seeded):
 
 # ------------------------------------------------------------------ concurrency hardening
 def test_sqlite_wal_enabled(app):
+    """SQLite must run in WAL mode. PRAGMA is meaningless on PostgreSQL, so on a
+    real PostgreSQL run this asserts the connection works instead of blowing up
+    with `syntax error at or near "PRAGMA"`."""
     with app.app_context():
+        if not str(db.engine.url).startswith("sqlite"):
+            assert db.session.execute(db.text("SELECT 1")).scalar() == 1
+            return
         mode = db.session.execute(db.text("PRAGMA journal_mode")).scalar()
         assert str(mode).lower() in ("wal", "memory"), mode

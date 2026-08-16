@@ -320,11 +320,58 @@ class ComplaintStatusHistory(db.Model):
 DEPT_SHIFTS = {
     "two_12h": [("DAY", "07:00–19:00"), ("NIGHT", "19:00–07:00")],
     "24h": [("24H", "07:00–07:00 (+1)")],
+    # Administrative departments (procurement, audit, finance & accounts, ICT,
+    # admin/HR ...) do not run shifts — they work office hours, Monday to Friday.
+    "office": [("OFFICE", "08:00–16:00, Mon–Fri")],
+    # Three 8-hour tours: the other pattern Nigerian nursing divisions use.
+    "three_8h": [("MORNING", "07:00–14:00"), ("AFTERNOON", "14:00–21:00"),
+                 ("NIGHT", "21:00–07:00")],
 }
+
+ROSTER_MODE_LABELS = {
+    "two_12h": "Two 12-hour shifts per day (day / night)",
+    "24h": "One 24-hour duty per day",
+    "office": "Office hours, Monday to Friday (no shifts)",
+    "three_8h": "Three 8-hour shifts per day (morning / afternoon / night)",
+}
+
+# Every shift code the system understands, in one flat set — used for validation
+# of uploaded files before we know which department a row belongs to.
+ALL_SHIFT_CODES = tuple(sorted({s[0] for shifts in DEPT_SHIFTS.values() for s in shifts}))
+
+# Leave is part of the roster, not a separate register: if a nurse is on annual
+# leave on Tuesday, the Tuesday roster must SAY so, otherwise someone rosters her.
+LEAVE_TYPES = (
+    ("ANNUAL", "Annual leave"),
+    ("CASUAL", "Casual leave"),
+    ("SICK", "Sick leave"),
+    ("STUDY", "Study leave"),
+    ("MATERNITY", "Maternity leave"),
+    ("COMPASSIONATE", "Compassionate leave"),
+    ("EXAM", "Examination leave"),
+    ("OFF", "Off duty"),
+)
+LEAVE_CODES = tuple(c for c, _ in LEAVE_TYPES)
+LEAVE_LABELS = dict(LEAVE_TYPES)
+
+# Who owns a roster line. ORG = the hospital-wide Admin Manager duty roster.
+ROSTER_SCOPES = ("ORG", "DEPARTMENT", "SECTION", "UNIT")
+SCOPE_LABELS = {"ORG": "Admin Manager (hospital-wide)", "DEPARTMENT": "Department",
+                "SECTION": "Section", "UNIT": "Unit"}
+
+# Placeholder shift code stored on leave rows so the uniqueness constraint works
+# on both SQLite and PostgreSQL (NULLs never collide in a UNIQUE index).
+LEAVE_SHIFT = "LEAVE"
 
 
 class DeptRosterEntry(db.Model):
-    """Department-level duty roster: 12h two-shift days or 24h duty, 1–2 staff."""
+    """LEGACY department roster (two staff columns, department only).
+
+    Superseded by :class:`RosterEntry`, which holds one row per person and can
+    also carry sections, units and leave. Kept so that no historical data is
+    lost; migrated into RosterEntry once at boot by
+    ``app.rosterdata.migrate_legacy_entries``.
+    """
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
     department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=False, index=True)
@@ -340,6 +387,90 @@ class DeptRosterEntry(db.Model):
     staff2 = db.relationship("User", foreign_keys=[staff2_user_id])
     __table_args__ = (db.UniqueConstraint("department_id", "duty_date", "shift",
                                           name="uq_dept_roster_day_shift"),)
+
+
+class RosterEntry(db.Model):
+    """ONE unified roster line: one person, one day, one shift — or one leave day.
+
+    WHY ONE TABLE
+    -------------
+    The suite used to have two rosters that could not see each other: the
+    hospital-wide Admin Manager duty roster (`duty_roster`) and a department
+    roster (`dept_roster_entry`) with two fixed staff columns. That design made
+    three ordinary things impossible:
+
+      * rostering a SECTION or a UNIT, not just a whole department;
+      * putting more than two people on a shift;
+      * recording that somebody is on leave, so the roster itself warns you
+        before you place them on duty.
+
+    One row per person fixes all three. A ward with nine nurses on nights is
+    nine rows, not "staff1 and staff2 and nowhere to put the rest".
+
+    LEAVE
+    -----
+    A leave row has ``kind='LEAVE'``, a ``leave_type`` and ``shift='LEAVE'``.
+    Leave can span days, so a single upload row may expand into one entry per
+    calendar day; that keeps every "who is on duty on 14 September" query a
+    plain date lookup with no range arithmetic.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    duty_date = db.Column(db.Date, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+
+    # DUTY (on the roster, working) or LEAVE (on the roster, NOT working)
+    kind = db.Column(db.String(8), nullable=False, default="DUTY", index=True)
+    shift = db.Column(db.String(12), nullable=False, default="DAY")
+    leave_type = db.Column(db.String(16))                       # ANNUAL | SICK | ...
+
+    # Ownership: ORG for the hospital-wide Admin Manager roster, otherwise the
+    # department (and optionally the section / unit inside it).
+    scope = db.Column(db.String(12), nullable=False, default="DEPARTMENT", index=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), index=True)
+    section_id = db.Column(db.Integer, db.ForeignKey("section.id"), index=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey("unit.id"), index=True)
+
+    note = db.Column(db.String(200))
+    source = db.Column(db.String(16), default="manual")         # manual | import | legacy
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime, default=now_naive)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    department = db.relationship("Department")
+    section = db.relationship("Section")
+    unit = db.relationship("Unit")
+
+    # The same person cannot be placed twice on the same day+shift in the same
+    # place. Enforced in the database, not only in Python, so a double-submitted
+    # form or two admins uploading the same file cannot create a duplicate.
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "duty_date", "user_id", "shift", "scope",
+                            "department_id", "section_id", "unit_id",
+                            name="uq_roster_entry_slot"),
+        db.Index("ix_roster_entry_org_date", "org_id", "duty_date"),
+    )
+
+    @property
+    def place_label(self) -> str:
+        if self.scope == "ORG":
+            return "Hospital-wide (Admin Manager)"
+        bits = [self.department.name if self.department else "—"]
+        if self.section:
+            bits.append(self.section.name)
+        if self.unit:
+            bits.append(self.unit.name)
+        return " › ".join(bits)
+
+    @property
+    def is_leave(self) -> bool:
+        return self.kind == "LEAVE"
+
+    @property
+    def display_shift(self) -> str:
+        if self.is_leave:
+            return LEAVE_LABELS.get(self.leave_type or "", "Leave")
+        return self.shift
 
 
 # ---------------------------------------------------------------- bookings

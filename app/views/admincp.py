@@ -239,9 +239,10 @@ def user_approve(uid: int):
 
 def _user_has_history(u) -> str | None:
     """Reason this user cannot be hard-deleted (their records must keep an author)."""
-    from ..models import CorrectiveAction, DutyRoster, Inspection
+    from ..models import CorrectiveAction, DutyRoster, Inspection, RosterEntry
     checks = [(Inspection.inspector_id, "inspections"),
               (DutyRoster.user_id, "duty roster entries"),
+              (RosterEntry.user_id, "roster entries"),
               (CorrectiveAction.owner_id, "corrective actions")]
     for col, label in checks:
         if db.session.query(col).filter(col == u.id).first() is not None:
@@ -314,7 +315,9 @@ def structure():
              .order_by(Department.name).all())
     hods = db.session.query(User).filter_by(org_id=current_user.org_id, active=True)\
         .filter(User.role.in_(("HOD", "MD_CEO", "SUPER_ADMIN"))).order_by(User.name).all()
-    return render_template("admin/structure.html", depts=depts, hods=hods)
+    from ..models import ROSTER_MODE_LABELS
+    return render_template("admin/structure.html", depts=depts, hods=hods,
+                           roster_modes=ROSTER_MODE_LABELS)
 
 
 @bp.post("/structure/department")
@@ -344,11 +347,12 @@ def department_save():
     if hod_phone and not PHONE_RE.match(hod_phone):
         flash("Enter a valid HOD phone number (digits only, e.g. 08012345678).", "error")
         return redirect(url_for("admin.structure"))
+    from ..models import DEPT_SHIFTS
     roster_mode = request.form.get("roster_mode")
-    if roster_mode not in ("two_12h", "24h"):
+    if roster_mode not in DEPT_SHIFTS:
         roster_mode = "two_12h"
     try:
-        per_shift = max(1, min(2, int(request.form.get("roster_staff_per_shift") or 1)))
+        per_shift = max(1, min(20, int(request.form.get("roster_staff_per_shift") or 1)))
     except ValueError:
         per_shift = 1
     if dept_id:
@@ -409,11 +413,12 @@ def install_standard_departments():
 def _dept_referenced(d) -> str | None:
     """Return a reason if the department has live data (block hard delete)."""
     from ..models import (Appointment, Complaint, DeptRosterEntry, Inspection,
-                          PatientFeedback, QueueTicket, Referral)
+                          PatientFeedback, QueueTicket, Referral, RosterEntry)
     checks = [
         (Inspection.department_id, "inspections"), (Complaint.department_id, "complaints"),
         (Appointment.department_id, "bookings"), (QueueTicket.department_id, "queue tickets"),
         (PatientFeedback.department_id, "feedback"), (DeptRosterEntry.department_id, "roster entries"),
+        (RosterEntry.department_id, "roster entries"),
         (Referral.department_id, "referral links"),
     ]
     for col, label in checks:

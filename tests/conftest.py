@@ -1,7 +1,18 @@
 import os
 import tempfile
 
-os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.gettempdir(), "hms_test.db")
+# The suite must pass on BOTH engines: SQLite (developer laptop) and PostgreSQL
+# (what production actually runs on Supabase). Set TEST_DATABASE_URL to run the
+# whole suite against a real PostgreSQL server, e.g.
+#   TEST_DATABASE_URL=postgresql://hms:pw@127.0.0.1:5432/hms_test pytest -q
+# Without it we fall back to a temporary SQLite file.
+#
+# This used to be hard-coded to SQLite, which meant a "PostgreSQL run" silently
+# tested SQLite again and proved nothing.
+os.environ["DATABASE_URL"] = (
+    os.environ.get("TEST_DATABASE_URL")
+    or "sqlite:///" + os.path.join(tempfile.gettempdir(), "hms_test.db")
+)
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["DISABLE_SCHEDULER"] = "1"
 os.environ["WHATSAPP_MODE"] = "sandbox"

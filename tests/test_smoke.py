@@ -72,7 +72,7 @@ def test_admin_crawl(client, app, seeded):
     paths = [
         "/", "/inspections", "/inspections/new", f"/inspections/{insp.id}",
         "/complaints", "/complaints?status=OPEN&escalated=1", f"/complaints/{comp.id}",
-        "/corrective-actions", "/corrective-actions?mine=1", "/roster", "/roster/import",
+        "/corrective-actions", "/corrective-actions?mine=1", "/roster", "/roster/export",
         "/reports", "/bookings", "/queue", "/queue/screen", "/feedbacks",
         "/referrals",
         "/notifications", "/alert-settings",
@@ -130,7 +130,7 @@ def test_md_crawl(client, app, seeded):
               "/notifications", "/alert-settings"]:
         _assert_ok(client.get(p), p)
     # MD must NOT reach super-admin pages
-    for p in ["/admin", "/admin/users", "/roster/import"]:
+    for p in ["/admin", "/admin/users"]:
         assert client.get(p).status_code == 403, f"MD reached {p}"
 
 

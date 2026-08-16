@@ -131,6 +131,11 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
             from .storage import migrate_disk_to_db
             _boot_step("storage_rescue", lambda: migrate_disk_to_db(app))
 
+            # Fold the old two-column department roster into the unified roster.
+            # Idempotent; the original rows are copied, never deleted.
+            from .rosterdata import migrate_legacy_entries
+            _boot_step("roster_merge", lambda: migrate_legacy_entries(app))
+
             # First-boot bootstrap on free hosts with no shell access (Render free):
             # AUTO_SEED=1 seeds ONLY an empty database; credentials printed once to logs.
             if os.environ.get("AUTO_SEED") == "1":

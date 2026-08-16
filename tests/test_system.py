@@ -214,31 +214,32 @@ def test_resolved_complaint_never_escalated(client, seeded, app):
 
 
 # ================================================================ ROSTER & REMINDERS
-def test_roster_import_validation_preview_and_confirm(client, seeded):
+def test_roster_upload_validation_preview_and_confirm(client, seeded):
+    """Upload to the hospital-wide Admin Manager roster: preview, then commit."""
     login(client, "admin")
     today = now_naive().date()
     csv_content = (
         "Name,Date\n"
         f"Alice Manager,{today + timedelta(days=5)}\n"      # valid
-        f"Bob Manager,{today + timedelta(days=5)}\n"        # duplicate date in file
         f"Nobody Here,{today + timedelta(days=6)}\n"        # unknown user
         f"Alice Manager,{today}\n"                          # already rostered
         f"Bob Manager,not-a-date\n"                          # invalid date
         f",{today + timedelta(days=7)}\n"                   # missing name
     )
-    r = client.post("/roster/import",
-                    data={"_csrf": csrf(client, "/roster/import"),
+    r = client.post("/roster/upload",
+                    data={"_csrf": csrf(client, "/roster"), "scope": "ORG",
                           "file": (io.BytesIO(csv_content.encode()), "roster.csv")},
                     content_type="multipart/form-data", follow_redirects=True)
-    assert b"1 valid rows" in r.data
-    assert b"Unknown Admin Manager" in r.data
-    assert b"Duplicate date" in r.data
-    assert b"Invalid date" in r.data
-    assert b"already rostered" in r.data
-    assert b"Missing Admin Manager name" in r.data
+    body = r.data.decode()
+    assert "No active staff account matches" in body
+    assert "already has an Admin Manager on duty" in body
+    assert "Cannot read the date" in body
+    assert "No staff name on this line" in body
+    token = body.split('name="token" value="')[1].split('"')[0]
 
     before = db.session.query(DutyRoster).count()
-    client.post("/roster/import/confirm", data={"_csrf": csrf(client, "/roster")},
+    client.post("/roster/upload/confirm",
+                data={"_csrf": csrf(client, "/roster"), "token": token},
                 follow_redirects=True)
     assert db.session.query(DutyRoster).count() == before + 1  # only the valid row
 
