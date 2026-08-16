@@ -1,0 +1,268 @@
+"""HIMS Register desk — Stage A of the patient flow.
+
+Two jobs, exactly as the founder described them:
+
+  i.  open a folder for a new / first-visit patient
+  ii. search for the folder of a returning patient
+
+Everything is at ``/hims``. The desk clerk lands on a search box, because
+searching first is what stops duplicate folders being created.
+"""
+from __future__ import annotations
+
+from flask import (Blueprint, Response, abort, flash, redirect, render_template,
+                   request, url_for)
+from flask_login import current_user
+
+from .. import hims
+from ..audit import audit
+from ..models import (BLOOD_GROUPS, CATEGORY_LABELS, GENOTYPES, MARITAL_STATUSES,
+                      PATIENT_CATEGORIES, PAYER_LABELS, PAYER_TYPES, SEXES,
+                      VISIT_TYPES, Department, Patient, PatientVisit, db,
+                      now_naive)
+from ..security import require_role
+
+bp = Blueprint("hims", __name__, url_prefix="/hims")
+
+# The HIMS desk itself, plus management sight. HIMS clerks are HODs of the
+# HIMS department in this hospital's structure, so HOD is included.
+DESK = ("SUPER_ADMIN", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD")
+VIEWERS = DESK + ("MD_CEO", "DMD", "DCST", "APEX_NURSE")
+
+
+def _org():
+    from ..services import current_org
+    return current_org()
+
+
+def _form_context(**extra):
+    ctx = dict(sexes=SEXES, payers=PAYER_TYPES, categories=PATIENT_CATEGORIES,
+               blood_groups=BLOOD_GROUPS, genotypes=GENOTYPES,
+               marital_statuses=MARITAL_STATUSES, visit_types=VISIT_TYPES,
+               depts=db.session.query(Department)
+               .filter_by(org_id=current_user.org_id, active=True)
+               .order_by(Department.name).all())
+    ctx.update(extra)
+    return ctx
+
+
+# ================================================================ desk / search
+@bp.get("/")
+@require_role(*VIEWERS)
+def desk():
+    """The HIMS desk: search first, register second."""
+    term = (request.args.get("q") or "").strip()
+    results = hims.search(current_user.org_id, term) if term else []
+    return render_template(
+        "hims/desk.html", term=term, results=results,
+        searched=bool(term), stats=hims.stats(current_user.org_id),
+        visits=hims.today_visits(current_user.org_id)[:15],
+        payer_labels=PAYER_LABELS, category_labels=CATEGORY_LABELS)
+
+
+# ================================================================ open a folder
+@bp.get("/register")
+@require_role(*DESK)
+def register_form():
+    """Blank folder form. Any search term already typed is carried across."""
+    prefill = {}
+    term = (request.args.get("q") or "").strip()
+    if term:
+        # If they searched a phone number, put it in the phone box; if they
+        # searched a name, split it into surname + first name.
+        if hims._digits(term) and len(hims._digits(term)) >= 7:
+            prefill["phone"] = hims._digits(term)
+        else:
+            parts = term.split()
+            prefill["surname"] = parts[0] if parts else ""
+            prefill["first_name"] = " ".join(parts[1:]) if len(parts) > 1 else ""
+    org = _org()
+    return render_template("hims/register.html", **_form_context(
+        form=prefill, errors=[], duplicates=[],
+        next_number=hims.next_hospital_number(org) if org else "—"))
+
+
+@bp.post("/register")
+@require_role(*DESK)
+def register_save():
+    """Create the folder — after checking for an existing one."""
+    org = _org()
+    if not org:
+        abort(503)
+    form = request.form.to_dict()
+    values, errors = hims.validate(form, org_id=current_user.org_id)
+
+    # SEARCH BEFORE CREATE. Show likely duplicates and make the clerk confirm.
+    dupes = []
+    if not errors and form.get("confirm_new") != "1":
+        dupes = hims.possible_duplicates(current_user.org_id, values["surname"],
+                                         values["first_name"], values["phone"])
+    if errors or dupes:
+        return render_template("hims/register.html", **_form_context(
+            form=form, errors=errors, duplicates=dupes,
+            next_number=hims.next_hospital_number(org))), (400 if errors else 200)
+
+    patient = Patient(org_id=current_user.org_id,
+                      hospital_number=hims.next_hospital_number(org),
+                      created_by=current_user.id, consent_at=now_naive(), **values)
+    db.session.add(patient)
+    try:
+        db.session.flush()
+    except Exception:                                              # noqa: BLE001
+        # Two clerks registered in the same instant: take the next free number.
+        db.session.rollback()
+        patient = Patient(org_id=current_user.org_id,
+                          hospital_number=hims.next_hospital_number(org),
+                          created_by=current_user.id, consent_at=now_naive(), **values)
+        db.session.add(patient)
+        db.session.flush()
+
+    visit = None
+    if form.get("start_visit") == "1":
+        visit = hims.open_visit(patient, user_id=current_user.id,
+                                reason=form.get("reason", ""), visit_type="NEW",
+                                department_id=request.form.get("department_id", type=int))
+    audit("PATIENT_FOLDER_OPENED", "patient", patient.id,
+          {"number": patient.hospital_number, "name": patient.full_name})
+    db.session.commit()
+
+    flash(f"Folder opened for {patient.full_name} — hospital number "
+          f"{patient.hospital_number}." + (" Visit started." if visit else ""), "success")
+    return redirect(url_for("hims.folder", pid=patient.id))
+
+
+# ================================================================ view a folder
+@bp.get("/folder/<int:pid>")
+@require_role(*VIEWERS)
+def folder(pid: int):
+    p = db.session.get(Patient, pid)
+    if not p or p.org_id != current_user.org_id:
+        abort(404)
+    return render_template("hims/folder.html", p=p, visits=p.visits[:25],
+                           payer_labels=PAYER_LABELS, category_labels=CATEGORY_LABELS,
+                           depts=db.session.query(Department)
+                           .filter_by(org_id=current_user.org_id, active=True)
+                           .order_by(Department.name).all(),
+                           visit_types=VISIT_TYPES,
+                           can_edit=current_user.role in DESK)
+
+
+@bp.get("/folder/<int:pid>/edit")
+@require_role(*DESK)
+def edit_form(pid: int):
+    p = db.session.get(Patient, pid)
+    if not p or p.org_id != current_user.org_id:
+        abort(404)
+    form = {c.name: getattr(p, c.name) for c in Patient.__table__.columns}
+    form["date_of_birth"] = p.date_of_birth.isoformat() if p.date_of_birth else ""
+    return render_template("hims/register.html", **_form_context(
+        form=form, errors=[], duplicates=[], patient=p,
+        next_number=p.hospital_number))
+
+
+@bp.post("/folder/<int:pid>/edit")
+@require_role(*DESK)
+def edit_save(pid: int):
+    p = db.session.get(Patient, pid)
+    if not p or p.org_id != current_user.org_id:
+        abort(404)
+    form = request.form.to_dict()
+    values, errors = hims.validate(form, org_id=current_user.org_id, patient_id=p.id)
+    if errors:
+        return render_template("hims/register.html", **_form_context(
+            form=form, errors=errors, duplicates=[], patient=p,
+            next_number=p.hospital_number)), 400
+    before = {"name": p.full_name, "phone": p.phone, "payer": p.payer_type}
+    for k, val in values.items():
+        setattr(p, k, val)
+    audit("PATIENT_FOLDER_UPDATED", "patient", p.id,
+          {"number": p.hospital_number, "before": before,
+           "after": {"name": p.full_name, "phone": p.phone, "payer": p.payer_type}})
+    db.session.commit()
+    flash("Folder updated.", "success")
+    return redirect(url_for("hims.folder", pid=p.id))
+
+
+# ================================================================ visits
+@bp.post("/folder/<int:pid>/visit")
+@require_role(*DESK)
+def start_visit(pid: int):
+    """Returning patient found — start today's attendance."""
+    p = db.session.get(Patient, pid)
+    if not p or p.org_id != current_user.org_id:
+        abort(404)
+    open_already = [v for v in p.visits
+                    if v.status not in ("CLOSED", "CANCELLED")
+                    and v.started_at.date() == now_naive().date()]
+    if open_already:
+        flash(f"{p.full_name} already has an open visit today "
+              f"({open_already[0].visit_no}). Close it before starting another.", "error")
+        return redirect(url_for("hims.folder", pid=p.id))
+    visit = hims.open_visit(p, user_id=current_user.id,
+                            reason=request.form.get("reason", ""),
+                            visit_type=request.form.get("visit_type") or None,
+                            department_id=request.form.get("department_id", type=int))
+    audit("PATIENT_VISIT_STARTED", "visit", None,
+          {"patient": p.hospital_number, "visit": visit.visit_no})
+    db.session.commit()
+    flash(f"Visit {visit.visit_no} started for {p.full_name}. "
+          "They are now waiting for Triage.", "success")
+    return redirect(url_for("hims.folder", pid=p.id))
+
+
+@bp.post("/visit/<int:vid>/close")
+@require_role(*DESK)
+def close_visit(vid: int):
+    v = db.session.get(PatientVisit, vid)
+    if not v or v.org_id != current_user.org_id:
+        abort(404)
+    v.status = "CLOSED"
+    v.closed_at = now_naive()
+    audit("PATIENT_VISIT_CLOSED", "visit", v.id, {"visit": v.visit_no})
+    db.session.commit()
+    flash(f"Visit {v.visit_no} closed.", "success")
+    return redirect(url_for("hims.folder", pid=v.patient_id))
+
+
+@bp.post("/folder/<int:pid>/retire")
+@require_role("SUPER_ADMIN", "HEAD_ADMIN_HR")
+def retire_folder(pid: int):
+    """Hide a folder (duplicate, or opened in error). Never deletes history."""
+    p = db.session.get(Patient, pid)
+    if not p or p.org_id != current_user.org_id:
+        abort(404)
+    p.active = False
+    audit("PATIENT_FOLDER_RETIRED", "patient", p.id,
+          {"number": p.hospital_number, "reason": request.form.get("reason", "")[:200]})
+    db.session.commit()
+    flash(f"Folder {p.hospital_number} retired. It no longer appears in searches, "
+          "but its history is kept.", "success")
+    return redirect(url_for("hims.desk"))
+
+
+# ================================================================ export
+@bp.get("/export")
+@require_role("SUPER_ADMIN", "HEAD_ADMIN_HR", "MD_CEO")
+def export():
+    import csv
+    import io
+    rows = (db.session.query(Patient)
+            .filter_by(org_id=current_user.org_id, active=True)
+            .order_by(Patient.hospital_number).all())
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Hospital Number", "Surname", "First Name", "Other Names", "Sex",
+                "Age", "Phone", "Address", "LGA", "Next of Kin", "NOK Phone",
+                "Payment", "Scheme Number", "Category", "Blood Group", "Genotype",
+                "Allergies", "Opened", "Last Visit"])
+    for p in rows:
+        w.writerow([p.hospital_number, p.surname, p.first_name, p.other_names or "",
+                    p.sex, p.age if p.age is not None else "", p.phone or "",
+                    p.address or "", p.lga or "", p.nok_name or "", p.nok_phone or "",
+                    p.payer_label, p.payer_number or "", p.category_label,
+                    p.blood_group or "", p.genotype or "", p.allergies or "",
+                    p.created_at.date() if p.created_at else "",
+                    p.last_visit_at.date() if p.last_visit_at else "never"])
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition":
+                             f"attachment; filename=patient-register-{now_naive().date()}.csv"})

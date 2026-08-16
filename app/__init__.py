@@ -69,12 +69,13 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.chat import bp as chat_bp
     from .views.referrals import bp as ref_bp
     from .views.roster import bp as roster_bp
+    from .views.hims import bp as hims_bp
     from .views.admincp import bp as admin_bp
     from .views.reports import bp as reports_bp
     from .views.api import bp as api_bp
 
     for blueprint in (auth_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
-                      chat_bp, ref_bp, roster_bp, admin_bp, reports_bp, api_bp):
+                      chat_bp, ref_bp, roster_bp, hims_bp, admin_bp, reports_bp, api_bp):
         app.register_blueprint(blueprint)
 
     register_security_hooks(app)

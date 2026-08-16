@@ -856,6 +856,219 @@ class UserPref(db.Model):
         return out
 
 
+# ---------------------------------------------------------------- HIMS: patient folders
+# How the patient pays. LAHSMA is the Lagos State health insurance scheme;
+# Megalex is the private payment system Lagos State hospitals use to collect
+# revenue. Both are recorded on the folder so Billing and the doctor know the
+# route before the patient reaches them.
+PAYER_TYPES = (
+    ("SELF", "Self-paying (cash / transfer)"),
+    ("LAHSMA", "LAHSMA — Lagos State health insurance"),
+    ("MEGALEX", "Megalex — Lagos State revenue system"),
+    ("NHIS", "NHIS — National Health Insurance"),
+    ("HMO", "Private HMO / company retainer"),
+    ("EXEMPT", "Exempt / waiver approved"),
+)
+PAYER_LABELS = dict(PAYER_TYPES)
+PAYER_CODES = tuple(c for c, _ in PAYER_TYPES)
+
+SEXES = (("F", "Female"), ("M", "Male"))
+SEX_LABELS = dict(SEXES)
+
+MARITAL_STATUSES = ("Single", "Married", "Widowed", "Divorced", "Separated")
+
+# Patient categories drive Triage in Stage B: a child does not go to the same
+# clinic as an antenatal mother, and an elderly patient may be seen sooner.
+PATIENT_CATEGORIES = (
+    ("GENERAL", "General adult"),
+    ("CHILD", "Child (under 12)"),
+    ("ANTENATAL", "Antenatal / maternity"),
+    ("ELDERLY", "Elderly (65+)"),
+    ("CHRONIC", "Chronic condition (follow-up)"),
+    ("EMERGENCY", "Emergency"),
+)
+CATEGORY_LABELS = dict(PATIENT_CATEGORIES)
+CATEGORY_CODES = tuple(c for c, _ in PATIENT_CATEGORIES)
+
+BLOOD_GROUPS = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
+GENOTYPES = ("AA", "AS", "AC", "SS", "SC", "CC")
+
+
+class Patient(db.Model):
+    """A patient folder — the hospital record that everything else hangs on.
+
+    WHY THIS EXISTS
+    ---------------
+    Until now the suite stored a loose ``patient_name`` and ``phone`` on each
+    booking and each queue ticket. Two visits by the same woman were two
+    unrelated strings. Nothing could answer "has this patient been here
+    before?", nothing could carry her payment route to Billing, and the doctor
+    had no record to open.
+
+    A folder is opened ONCE, on a first visit, and found again on every return
+    visit — which is exactly what the founder described:
+
+        "HIMS Register: i. open folder for new/first visit patient,
+         ii. Search for the folder of returning patient"
+
+    IDENTIFIERS
+    -----------
+    ``hospital_number`` is the number written on the paper folder and called
+    out at the desk. It is generated per hospital as ``IJD/2026/00001`` and is
+    unique within the tenant, never across tenants.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    hospital_number = db.Column(db.String(32), nullable=False, index=True)
+
+    # --- identity
+    surname = db.Column(db.String(80), nullable=False)
+    first_name = db.Column(db.String(80), nullable=False)
+    other_names = db.Column(db.String(80))
+    sex = db.Column(db.String(1), nullable=False)                 # F | M
+    date_of_birth = db.Column(db.Date)
+    # Many patients genuinely do not know their date of birth. Recording a
+    # stated age is honest; inventing a birthday is not.
+    age_years = db.Column(db.Integer)
+    marital_status = db.Column(db.String(16))
+    occupation = db.Column(db.String(80))
+    religion = db.Column(db.String(40))
+
+    # --- contact
+    phone = db.Column(db.String(32), index=True)
+    phone_alt = db.Column(db.String(32))
+    address = db.Column(db.String(300))
+    lga = db.Column(db.String(80))                                # local government area
+    state = db.Column(db.String(80))
+
+    # --- next of kin (required: somebody must be reachable in an emergency)
+    nok_name = db.Column(db.String(120))
+    nok_relationship = db.Column(db.String(40))
+    nok_phone = db.Column(db.String(32))
+    nok_address = db.Column(db.String(300))
+
+    # --- how they pay
+    payer_type = db.Column(db.String(16), default="SELF", nullable=False, index=True)
+    payer_number = db.Column(db.String(60))                       # LAHSMA/NHIS/HMO number
+    payer_name = db.Column(db.String(120))                        # HMO or employer
+
+    # --- clinical basics the doctor wants at a glance
+    category = db.Column(db.String(16), default="GENERAL", nullable=False, index=True)
+    blood_group = db.Column(db.String(4))
+    genotype = db.Column(db.String(4))
+    allergies = db.Column(db.String(300))
+    chronic_conditions = db.Column(db.String(300))
+
+    # --- housekeeping
+    notes = db.Column(db.Text)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    # NDPA: the patient consented to the hospital holding these details.
+    consent_at = db.Column(db.DateTime)
+    anonymized_at = db.Column(db.DateTime)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime, default=now_naive, index=True)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+    last_visit_at = db.Column(db.DateTime, index=True)
+
+    creator = db.relationship("User", foreign_keys=[created_by])
+    visits = db.relationship("PatientVisit", backref="patient", lazy="select",
+                             order_by="PatientVisit.started_at.desc()")
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "hospital_number", name="uq_patient_org_number"),
+        db.Index("ix_patient_org_surname", "org_id", "surname"),
+    )
+
+    @property
+    def full_name(self) -> str:
+        bits = [(self.surname or "").upper(), self.first_name]
+        if self.other_names:
+            bits.append(self.other_names)
+        return " ".join(b for b in bits if b)
+
+    @property
+    def age(self) -> int | None:
+        """Age today, computed from the birthday when we have one."""
+        if self.date_of_birth:
+            t = now_naive().date()
+            return (t.year - self.date_of_birth.year
+                    - ((t.month, t.day) < (self.date_of_birth.month, self.date_of_birth.day)))
+        return self.age_years
+
+    @property
+    def age_display(self) -> str:
+        a = self.age
+        return f"{a} yrs" if a is not None else "age not known"
+
+    @property
+    def payer_label(self) -> str:
+        return PAYER_LABELS.get(self.payer_type, self.payer_type)
+
+    @property
+    def category_label(self) -> str:
+        return CATEGORY_LABELS.get(self.category, self.category)
+
+    @property
+    def is_returning(self) -> bool:
+        return bool(self.last_visit_at)
+
+    @property
+    def alerts(self) -> list[str]:
+        """Things a doctor must not miss, shown in red on the folder."""
+        out = []
+        if self.allergies:
+            out.append(f"Allergic to: {self.allergies}")
+        if self.genotype in ("SS", "SC"):
+            out.append(f"Genotype {self.genotype} — sickle cell")
+        if self.chronic_conditions:
+            out.append(self.chronic_conditions)
+        return out
+
+
+VISIT_STATUSES = ("REGISTERED", "TRIAGED", "IN_CONSULTATION", "ONWARD", "CLOSED", "CANCELLED")
+VISIT_TYPES = (("NEW", "First visit"), ("FOLLOW_UP", "Follow-up"),
+               ("EMERGENCY", "Emergency"), ("ANTENATAL", "Antenatal"))
+
+
+class PatientVisit(db.Model):
+    """One attendance. Opened at the HIMS desk, then carried through the flow.
+
+    Stage A only creates it and marks it REGISTERED. Triage (Stage B), the
+    consulting room (Stage C) and onward routing (Stage D) each move it along,
+    which is why the clinic/room/destination columns already exist but are left
+    empty for now — so those stages add behaviour, not another migration.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False, index=True)
+    visit_no = db.Column(db.String(40), nullable=False, index=True)
+    visit_type = db.Column(db.String(16), default="FOLLOW_UP", nullable=False)
+    status = db.Column(db.String(16), default="REGISTERED", nullable=False, index=True)
+
+    reason = db.Column(db.String(300))            # what the patient says is wrong
+    payer_type = db.Column(db.String(16))         # how THIS visit is being paid for
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), index=True)
+    appointment_id = db.Column(db.Integer, db.ForeignKey("appointment.id"))
+    queue_ticket_id = db.Column(db.Integer, db.ForeignKey("queue_ticket.id"))
+
+    # filled in by later stages — deliberately created now, used later
+    clinic = db.Column(db.String(20))             # OPD | SOPD | MOPD | EMERGENCY
+    consulting_room = db.Column(db.String(20))
+    doctor_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+
+    started_at = db.Column(db.DateTime, default=now_naive, nullable=False, index=True)
+    triaged_at = db.Column(db.DateTime)
+    seen_at = db.Column(db.DateTime)
+    closed_at = db.Column(db.DateTime)
+    registered_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+
+    department = db.relationship("Department")
+    doctor = db.relationship("User", foreign_keys=[doctor_id])
+    registrar = db.relationship("User", foreign_keys=[registered_by])
+
+    __table_args__ = (db.UniqueConstraint("org_id", "visit_no", name="uq_visit_org_no"),)
+
+
 # ---------------------------------------------------------------- settings
 class Setting(db.Model):
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), primary_key=True)

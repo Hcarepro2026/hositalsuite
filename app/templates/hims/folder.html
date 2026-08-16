@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}{{ p.full_name }}{% endblock %}
+{% block content %}
+
+<p><a class="patient-back" href="/hims/">← Back to HIMS Register</a></p>
+
+<div class="spread mb">
+  <div>
+    <h1 style="margin:0">{{ p.full_name }}</h1>
+    <p class="muted" style="margin:4px 0 0">
+      <b>{{ p.hospital_number }}</b> · {{ p.age_display }} ·
+      {{ 'Female' if p.sex == 'F' else 'Male' }} ·
+      {{ category_labels.get(p.category, p.category) }}
+      {% if p.is_returning %}<span class="pill blue">Returning patient</span>
+      {% else %}<span class="pill amber">First visit — no attendance yet</span>{% endif %}
+      {% if not p.active %}<span class="pill red">RETIRED FOLDER</span>{% endif %}
+    </p>
+  </div>
+  {% if can_edit %}<a class="btn small ghost" href="/hims/folder/{{ p.id }}/edit">✎ Edit folder</a>{% endif %}
+</div>
+
+{% if p.alerts %}
+<div class="flash error"><b>⚠ Important — do not miss:</b>
+  <ul style="margin:6px 0 0 18px">{% for a in p.alerts %}<li>{{ a }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="grid cols2 mb">
+  <div class="card">
+    <h2>Contact</h2>
+    <table>
+      <tr><th>Phone</th><td>{{ p.phone or '—' }}</td></tr>
+      {% if p.phone_alt %}<tr><th>Second phone</th><td>{{ p.phone_alt }}</td></tr>{% endif %}
+      <tr><th>Address</th><td>{{ p.address or '—' }}</td></tr>
+      <tr><th>LGA / State</th><td>{{ p.lga or '—' }}{% if p.state %}, {{ p.state }}{% endif %}</td></tr>
+      {% if p.occupation %}<tr><th>Occupation</th><td>{{ p.occupation }}</td></tr>{% endif %}
+      {% if p.marital_status %}<tr><th>Marital status</th><td>{{ p.marital_status }}</td></tr>{% endif %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Next of kin</h2>
+    <table>
+      <tr><th>Name</th><td>{{ p.nok_name or '—' }}</td></tr>
+      <tr><th>Relationship</th><td>{{ p.nok_relationship or '—' }}</td></tr>
+      <tr><th>Phone</th><td><b>{{ p.nok_phone or '—' }}</b></td></tr>
+      {% if p.nok_address %}<tr><th>Address</th><td>{{ p.nok_address }}</td></tr>{% endif %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Payment</h2>
+    <table>
+      <tr><th>Route</th><td><b>{{ payer_labels.get(p.payer_type, p.payer_type) }}</b></td></tr>
+      {% if p.payer_number %}<tr><th>Scheme number</th><td>{{ p.payer_number }}</td></tr>{% endif %}
+      {% if p.payer_name %}<tr><th>Scheme / employer</th><td>{{ p.payer_name }}</td></tr>{% endif %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Clinical</h2>
+    <table>
+      <tr><th>Blood group</th><td>{{ p.blood_group or '—' }}</td></tr>
+      <tr><th>Genotype</th><td>{{ p.genotype or '—' }}</td></tr>
+      <tr><th>Allergies</th><td>{{ p.allergies or 'none recorded' }}</td></tr>
+      <tr><th>Chronic conditions</th><td>{{ p.chronic_conditions or 'none recorded' }}</td></tr>
+    </table>
+  </div>
+</div>
+
+{% if p.notes %}
+<div class="card mb"><h2>Notes</h2><p>{{ p.notes }}</p></div>
+{% endif %}
+
+<!-- ---------------------------------------------- visits -->
+<div class="card mb">
+  <h2>Attendance history</h2>
+  {% if visits %}
+  <div class="table-wrap" style="padding:0">
+  <table>
+    <tr><th>Date</th><th>Visit</th><th>Type</th><th>Reason</th><th>Status</th>
+        {% if can_edit %}<th></th>{% endif %}</tr>
+    {% for v in visits %}
+    <tr>
+      <td>{{ v.started_at.strftime('%d %b %Y, %H:%M') }}</td>
+      <td>{{ v.visit_no }}</td>
+      <td>{{ v.visit_type.replace('_',' ')|title }}</td>
+      <td>{{ v.reason or '—' }}</td>
+      <td><span class="pill {{ 'amber' if v.status == 'REGISTERED' else ('gray' if v.status in ('CLOSED','CANCELLED') else 'blue') }}">{{ v.status.replace('_',' ') }}</span></td>
+      {% if can_edit %}
+      <td class="right">
+        {% if v.status not in ('CLOSED','CANCELLED') %}
+        <form method="post" action="/hims/visit/{{ v.id }}/close" style="display:inline"
+              onsubmit="return confirm('Close visit {{ v.visit_no }}?')">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small ghost">Close visit</button>
+        </form>
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% else %}
+  <p class="muted">This patient has not attended yet.</p>
+  {% endif %}
+</div>
+
+{% if can_edit and p.active %}
+<div class="card mb">
+  <h2>➕ Start a visit</h2>
+  <p class="hint">The patient is here today. Starting a visit puts them in the queue for
+    Triage.</p>
+  <form method="post" action="/hims/folder/{{ p.id }}/visit">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>What is the problem? (in the patient's own words)</label>
+    <input type="text" name="reason" maxlength="300" placeholder="e.g. fever and headache for 3 days">
+    <div class="grid cols2">
+      <div><label>Visit type</label>
+        <select name="visit_type">
+          {% for code, label in visit_types %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+        </select></div>
+      <div><label>Department (if already known)</label>
+        <select name="department_id"><option value="">— Triage will decide —</option>
+          {% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select></div>
+    </div>
+    <button class="btn mt">Start visit</button>
+  </form>
+</div>
+{% endif %}
+
+{% if current_user.role in ('SUPER_ADMIN','HEAD_ADMIN_HR') and p.active %}
+<details class="card">
+  <summary>Retire this folder</summary>
+  <p class="hint">Use only for a duplicate or a folder opened in error. The folder stops
+    appearing in searches, but nothing is deleted — its history is kept.</p>
+  <form method="post" action="/hims/folder/{{ p.id }}/retire"
+        onsubmit="return confirm('Retire folder {{ p.hospital_number }}?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="text" name="reason" maxlength="200" placeholder="Why? e.g. duplicate of IJD/2026/00019">
+    <button class="btn danger mt">Retire folder</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}
