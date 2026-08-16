@@ -114,8 +114,9 @@ def main():
         fill(pg, "nok_phone", "08033901140")
         pg.select_option('[name="payer_type"]', "LAHSMA")
         fill(pg, "payer_number", "LAH/2026/99881")
-        fill(pg, "allergies", "penicillin")
-        pg.select_option('[name="genotype"]', "SS")
+        pg.select_option('[name="preferred_lang"]', "yo")
+        pg.check('input[name="assistance"][value="WHEELCHAIR"]')
+        fill(pg, "care_note", "travels from Ikorodu")
         fill(pg, "reason", "fever and headache for 3 days")
         pg.click('button:has-text("Open the folder")')
         pg.wait_for_load_state("networkidle")
@@ -123,12 +124,21 @@ def main():
         check("the folder is created and given a hospital number",
               "IJE/" in body and "Folder opened" in body,
               [l for l in body.splitlines() if "IJE/" in l][:1])
-        check("clinical warnings are shown in red on the folder",
-              "do not miss" in body and "penicillin" in body and "sickle cell" in body)
+        check("the folder says how to look after the person, not their diagnosis",
+              "Looking after" in body and "wheelchair" in body.lower()
+              and "travels from Ikorodu" in body)
         check("the visit was started and is waiting for Triage",
               "REGISTERED" in body.upper())
 
         with app.app_context():
+            from app.models import AppNotification
+            spoken = [r.body for r in db.session.query(AppNotification)
+                      .filter_by(channel="station").all()]
+            check("arrival is ANNOUNCED OUT LOUD to the desk",
+                  any("registered" in x.lower() for x in spoken), str(spoken[:1]))
+            check("the wheelchair request is announced as its own urgent call",
+                  any("needs help" in x and "wheelchair" in x.lower() for x in spoken),
+                  str([x for x in spoken if "needs help" in x][:1]))
             pt = db.session.query(Patient).first()
             check("payment route was saved for Billing",
                   pt.payer_type == "LAHSMA" and pt.payer_number == "LAH/2026/99881")
@@ -181,6 +191,9 @@ def main():
         check("the register downloads as a CSV with the real folder in it",
               "Hospital Number,Surname" in text and "ABATAN" in text
               and "LAH/2026/99881" in text)
+        check("the downloaded register carries no medical data",
+              "Genotype" not in text and "Blood Group" not in text
+              and "Allergies" not in text)
 
         # ---- 9. usable on a phone
         pg.goto(f"{BASE}/hims/register")

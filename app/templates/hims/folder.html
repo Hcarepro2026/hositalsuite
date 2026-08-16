@@ -19,9 +19,9 @@
   {% if can_edit %}<a class="btn small ghost" href="/hims/folder/{{ p.id }}/edit">✎ Edit folder</a>{% endif %}
 </div>
 
-{% if p.alerts %}
-<div class="flash error"><b>⚠ Important — do not miss:</b>
-  <ul style="margin:6px 0 0 18px">{% for a in p.alerts %}<li>{{ a }}</li>{% endfor %}</ul>
+{% if p.care_flags %}
+<div class="flash info"><b>💛 Looking after {{ p.first_name }}:</b>
+  <ul style="margin:6px 0 0 18px">{% for a in p.care_flags %}<li>{{ a }}</li>{% endfor %}</ul>
 </div>
 {% endif %}
 
@@ -34,7 +34,7 @@
       <tr><th>Address</th><td>{{ p.address or '—' }}</td></tr>
       <tr><th>LGA / State</th><td>{{ p.lga or '—' }}{% if p.state %}, {{ p.state }}{% endif %}</td></tr>
       {% if p.occupation %}<tr><th>Occupation</th><td>{{ p.occupation }}</td></tr>{% endif %}
-      {% if p.marital_status %}<tr><th>Marital status</th><td>{{ p.marital_status }}</td></tr>{% endif %}
+      <tr><th>Speaks</th><td>{{ p.lang_label }}</td></tr>
     </table>
   </div>
 
@@ -58,13 +58,13 @@
   </div>
 
   <div class="card">
-    <h2>Clinical</h2>
-    <table>
-      <tr><th>Blood group</th><td>{{ p.blood_group or '—' }}</td></tr>
-      <tr><th>Genotype</th><td>{{ p.genotype or '—' }}</td></tr>
-      <tr><th>Allergies</th><td>{{ p.allergies or 'none recorded' }}</td></tr>
-      <tr><th>Chronic conditions</th><td>{{ p.chronic_conditions or 'none recorded' }}</td></tr>
-    </table>
+    <h2>Help they need</h2>
+    {% if p.assistance_list %}
+    <ul style="margin:0 0 0 18px">
+      {% for a in p.assistance_list %}<li>{{ assistance_labels.get(a, a) }}</li>{% endfor %}
+    </ul>
+    {% else %}<p class="muted">No special assistance recorded.</p>{% endif %}
+    {% if p.care_note %}<p class="mt"><b>Note:</b> {{ p.care_note }}</p>{% endif %}
   </div>
 </div>
 

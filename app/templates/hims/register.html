@@ -61,12 +61,6 @@
       <div><label>…or age in years</label>
         <input type="number" name="age_years" min="0" max="130" value="{{ form.age_years or '' }}"
                placeholder="if the birthday is not known"></div>
-      <div><label>Marital status</label>
-        <select name="marital_status">
-          <option value="">—</option>
-          {% for m in marital_statuses %}
-          <option value="{{ m }}" {{ 'selected' if form.marital_status == m }}>{{ m }}</option>{% endfor %}
-        </select></div>
       <div><label>Occupation</label>
         <input type="text" name="occupation" maxlength="80" value="{{ form.occupation or '' }}"></div>
     </div>
@@ -130,36 +124,41 @@
     </div>
   </div>
 
-  <!-- ---------------------------------------------- clinical -->
+  <!-- ---------------------------------------------- looking after them -->
   <div class="card mb">
-    <h2>Clinical basics</h2>
-    <p class="hint">Anything entered here is shown in red at the top of the folder, so the
-      doctor cannot miss it.</p>
+    <h2>Looking after them well</h2>
+    <p class="hint">This is not a medical record — it is how we treat the person at the
+      door. Anything ticked here is read out loud to the desk when they arrive, and shown
+      at the top of their folder.</p>
+
     <div class="grid cols2">
       <div><label>Patient category</label>
         <select name="category">
           {% for code, label in categories %}
           <option value="{{ code }}" {{ 'selected' if (form.category or 'GENERAL') == code }}>{{ label }}</option>{% endfor %}
         </select></div>
-      <div><label>Blood group</label>
-        <select name="blood_group"><option value="">—</option>
-          {% for g in blood_groups %}
-          <option value="{{ g }}" {{ 'selected' if form.blood_group == g }}>{{ g }}</option>{% endfor %}
+      <div><label>Language they are most comfortable in</label>
+        <select name="preferred_lang">
+          {% for code, label in langs %}
+          <option value="{{ code }}" {{ 'selected' if (form.preferred_lang or 'en') == code }}>{{ label }}</option>{% endfor %}
         </select></div>
-      <div><label>Genotype</label>
-        <select name="genotype"><option value="">—</option>
-          {% for g in genotypes %}
-          <option value="{{ g }}" {{ 'selected' if form.genotype == g }}>{{ g }}</option>{% endfor %}
-        </select></div>
-      <div><label>Known allergies</label>
-        <input type="text" name="allergies" maxlength="300" value="{{ form.allergies or '' }}"
-               placeholder="e.g. penicillin"></div>
     </div>
-    <label>Chronic conditions</label>
-    <input type="text" name="chronic_conditions" maxlength="300"
-           value="{{ form.chronic_conditions or '' }}" placeholder="e.g. hypertension, diabetes">
-    <label>Other notes</label>
-    <textarea name="notes" rows="2" maxlength="2000">{{ form.notes or '' }}</textarea>
+
+    <label class="mt">Do they need any help getting through the visit?</label>
+    {% set picked = (form.assistance or '').split(',') %}
+    <div class="grid cols2">
+      {% for code, label in assistance_needs %}
+      <label class="row" style="align-items:center;gap:8px;margin:2px 0">
+        <input type="checkbox" name="assistance" value="{{ code }}" style="width:auto"
+               {{ 'checked' if code in picked }}>
+        <span>{{ label }}</span>
+      </label>
+      {% endfor %}
+    </div>
+
+    <label class="mt">Anything else the desk should know?</label>
+    <input type="text" name="care_note" maxlength="200" value="{{ form.care_note or '' }}"
+           placeholder="e.g. travels a long way — try not to keep them waiting">
   </div>
 
   {% if not editing %}

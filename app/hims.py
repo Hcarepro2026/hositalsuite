@@ -36,8 +36,8 @@ from datetime import date, datetime
 
 from sqlalchemy import func, or_
 
-from .models import (CATEGORY_CODES, GENOTYPES, PAYER_CODES, Patient,
-                     PatientVisit, db, new_code, now_naive)
+from .models import (ASSISTANCE_CODES, CATEGORY_CODES, PATIENT_LANG_LABELS,
+                     PAYER_CODES, Patient, PatientVisit, db, new_code, now_naive)
 from .security import clean_phone, valid_phone
 
 MAX_SEARCH_RESULTS = 50
@@ -182,7 +182,7 @@ def validate(form: dict, *, org_id: int, patient_id: int | None = None) -> tuple
     Deliberately strict about the four things that make a folder useful — who
     they are, their sex, how old they are, and somebody reachable in an
     emergency — and relaxed about everything else, because a busy desk should
-    not be blocked by an unknown religion.
+    not be blocked by an unknown occupation.
     """
     errors: list[str] = []
     v: dict = {}
@@ -223,9 +223,7 @@ def validate(form: dict, *, org_id: int, patient_id: int | None = None) -> tuple
         errors.append("Enter either a date of birth or the patient's age. "
                       "If the patient does not know their birthday, just enter the age.")
 
-    v["marital_status"] = (form.get("marital_status") or "").strip()[:16]
     v["occupation"] = (form.get("occupation") or "").strip()[:80]
-    v["religion"] = (form.get("religion") or "").strip()[:40]
 
     # Contact
     v["phone"] = clean_phone(form.get("phone", ""))
@@ -267,13 +265,14 @@ def validate(form: dict, *, org_id: int, patient_id: int | None = None) -> tuple
     v["category"] = (form.get("category") or "GENERAL").strip().upper()
     if v["category"] not in CATEGORY_CODES:
         v["category"] = "GENERAL"
-    v["blood_group"] = (form.get("blood_group") or "").strip().upper()[:4]
-    v["genotype"] = (form.get("genotype") or "").strip().upper()[:4]
-    if v["genotype"] and v["genotype"] not in GENOTYPES:
-        errors.append(f"Genotype must be one of {', '.join(GENOTYPES)}.")
-        v["genotype"] = ""
-    v["allergies"] = (form.get("allergies") or "").strip()[:300]
-    v["chronic_conditions"] = (form.get("chronic_conditions") or "").strip()[:300]
+    # Language and assistance — how to look after them, not what is wrong with
+    # them. This app is not a medical record.
+    lang = (form.get("preferred_lang") or "en").strip().lower()[:4]
+    v["preferred_lang"] = lang if lang in PATIENT_LANG_LABELS else "en"
+    picked = form.getlist("assistance") if hasattr(form, "getlist") else \
+        [a for a in (form.get("assistance") or "").split(",") if a]
+    v["assistance"] = ",".join(a for a in picked if a in ASSISTANCE_CODES)[:200]
+    v["care_note"] = (form.get("care_note") or "").strip()[:200]
     v["notes"] = (form.get("notes") or "").strip()[:2000]
 
     # An under-12 is a child and an over-65 elderly, whatever the clerk picked —

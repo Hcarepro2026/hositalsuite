@@ -46,6 +46,13 @@ PATIENT_ALERTS: dict[str, tuple[str, str]] = {
     "lab_waiting":         (STANDARD, "Patients waiting at the laboratory"),
     "emergency_arrival":   (EMERGENCY, "Emergency arrival"),
     "patient_waiting_long": (URGENT, "Patient waiting too long"),
+    # --- HIMS reception desk (Stage A). The point of this app is that a visit
+    # FEELS good, so the desk is told out loud when somebody is waiting, when a
+    # patient needs help getting through the door, and when a regular returns.
+    "reception_waiting":   (STANDARD, "Patients waiting at reception"),
+    "patient_registered":  (STANDARD, "Patient registered"),
+    "assistance_needed":   (URGENT, "Patient needs assistance"),
+    "returning_patient":   (STANDARD, "Returning patient"),
 }
 
 _TITLES = ("dr", "mr", "mrs", "miss", "ms", "prof", "pharm", "engr", "cno",
@@ -129,6 +136,21 @@ def phrase(kind: str, *, name: str = "", count: int = 0, place: str = "",
                 + f". {detail}" if detail else
                 f"Attention. Emergency arrival{' at ' + place if place else ''}. "
                 f"Immediate attention required.")
+    if kind == "reception_waiting":
+        return (f"{who}, {plural(count, 'patient')} "
+                f"{'is' if count == 1 else 'are'} waiting at "
+                f"{place or 'the reception desk'}. Please attend to them.")
+    if kind == "patient_registered":
+        return (f"{who}, {patient or 'a patient'} has been registered"
+                + (f" and is waiting for {place}" if place else "") + ".")
+    if kind == "assistance_needed":
+        # The whole reason this app exists: somebody at the door needs a hand.
+        return (f"{who}, {patient or 'a patient'} at "
+                f"{place or 'reception'} needs help. {detail or 'Please assist them.'}")
+    if kind == "returning_patient":
+        return (f"{who}, {patient or 'a patient'} is back with us"
+                + (f" at {place}" if place else "")
+                + ". Please welcome them.")
     if kind == "patient_waiting_long":
         return (f"{who}, {patient or 'a patient'} has been waiting "
                 f"{detail or 'a long time'}"

@@ -14,12 +14,12 @@ from flask import (Blueprint, Response, abort, flash, redirect, render_template,
                    request, url_for)
 from flask_login import current_user
 
-from .. import hims
+from .. import announce, hims
 from ..audit import audit
-from ..models import (BLOOD_GROUPS, CATEGORY_LABELS, GENOTYPES, MARITAL_STATUSES,
-                      PATIENT_CATEGORIES, PAYER_LABELS, PAYER_TYPES, SEXES,
-                      VISIT_TYPES, Department, Patient, PatientVisit, db,
-                      now_naive)
+from ..models import (ASSISTANCE_LABELS, ASSISTANCE_NEEDS, CATEGORY_LABELS,
+                      PATIENT_CATEGORIES, PATIENT_LANGS, PAYER_LABELS,
+                      PAYER_TYPES, SEXES, VISIT_TYPES, Department, Patient,
+                      PatientVisit, db, now_naive)
 from ..security import require_role
 
 bp = Blueprint("hims", __name__, url_prefix="/hims")
@@ -37,13 +37,51 @@ def _org():
 
 def _form_context(**extra):
     ctx = dict(sexes=SEXES, payers=PAYER_TYPES, categories=PATIENT_CATEGORIES,
-               blood_groups=BLOOD_GROUPS, genotypes=GENOTYPES,
-               marital_statuses=MARITAL_STATUSES, visit_types=VISIT_TYPES,
+               assistance_needs=ASSISTANCE_NEEDS, langs=PATIENT_LANGS,
+               visit_types=VISIT_TYPES,
                depts=db.session.query(Department)
                .filter_by(org_id=current_user.org_id, active=True)
                .order_by(Department.name).all())
     ctx.update(extra)
     return ctx
+
+
+def _announce_arrival(patient, visit) -> None:
+    """Say it out loud. This is the whole point of the app.
+
+    Three separate announcements, because they need different people to act:
+      * the patient is registered and waiting  -> the station screen
+      * they need a wheelchair / a seat / help -> URGENT, so somebody goes now
+      * they are a returning patient           -> greet them by name
+    """
+    org_id = patient.org_id
+    dept = visit.department.name if visit and visit.department else "Triage"
+
+    announce.to_station(org_id, "patient_registered",
+                        patient=announce.speech_name(patient.full_name),
+                        place=dept, department_id=visit.department_id if visit else None)
+
+    if patient.care_flags:
+        # Somebody who cannot stand should not be left standing.
+        announce.to_station(org_id, "assistance_needed",
+                            patient=announce.speech_name(patient.full_name),
+                            place="the reception desk",
+                            detail="; ".join(patient.care_flags),
+                            department_id=visit.department_id if visit else None)
+
+    if patient.is_returning and visit and visit.visit_type != "NEW":
+        announce.to_station(org_id, "returning_patient",
+                            patient=announce.speech_name(patient.full_name),
+                            place="reception",
+                            department_id=visit.department_id if visit else None)
+
+
+def _announce_reception_depth(org_id: int) -> None:
+    """Tell the desk how many people are now waiting to be seen."""
+    waiting = len([v for v in hims.today_visits(org_id, status="REGISTERED")])
+    if waiting >= 1:
+        announce.to_station(org_id, "reception_waiting", count=waiting,
+                            place="the reception desk")
 
 
 # ================================================================ desk / search
@@ -122,6 +160,9 @@ def register_save():
         visit = hims.open_visit(patient, user_id=current_user.id,
                                 reason=form.get("reason", ""), visit_type="NEW",
                                 department_id=request.form.get("department_id", type=int))
+    if visit:
+        _announce_arrival(patient, visit)
+        _announce_reception_depth(current_user.org_id)
     audit("PATIENT_FOLDER_OPENED", "patient", patient.id,
           {"number": patient.hospital_number, "name": patient.full_name})
     db.session.commit()
@@ -140,6 +181,7 @@ def folder(pid: int):
         abort(404)
     return render_template("hims/folder.html", p=p, visits=p.visits[:25],
                            payer_labels=PAYER_LABELS, category_labels=CATEGORY_LABELS,
+                           assistance_labels=ASSISTANCE_LABELS,
                            depts=db.session.query(Department)
                            .filter_by(org_id=current_user.org_id, active=True)
                            .order_by(Department.name).all(),
@@ -202,6 +244,9 @@ def start_visit(pid: int):
                             reason=request.form.get("reason", ""),
                             visit_type=request.form.get("visit_type") or None,
                             department_id=request.form.get("department_id", type=int))
+    db.session.flush()
+    _announce_arrival(p, visit)
+    _announce_reception_depth(current_user.org_id)
     audit("PATIENT_VISIT_STARTED", "visit", None,
           {"patient": p.hospital_number, "visit": visit.visit_no})
     db.session.commit()
@@ -253,14 +298,15 @@ def export():
     w = csv.writer(buf)
     w.writerow(["Hospital Number", "Surname", "First Name", "Other Names", "Sex",
                 "Age", "Phone", "Address", "LGA", "Next of Kin", "NOK Phone",
-                "Payment", "Scheme Number", "Category", "Blood Group", "Genotype",
-                "Allergies", "Opened", "Last Visit"])
+                "Payment", "Scheme Number", "Category", "Language",
+                "Assistance needed", "Opened", "Last Visit"])
     for p in rows:
         w.writerow([p.hospital_number, p.surname, p.first_name, p.other_names or "",
                     p.sex, p.age if p.age is not None else "", p.phone or "",
                     p.address or "", p.lga or "", p.nok_name or "", p.nok_phone or "",
                     p.payer_label, p.payer_number or "", p.category_label,
-                    p.blood_group or "", p.genotype or "", p.allergies or "",
+                    p.lang_label,
+                    "; ".join(ASSISTANCE_LABELS.get(a, a) for a in p.assistance_list),
                     p.created_at.date() if p.created_at else "",
                     p.last_visit_at.date() if p.last_visit_at else "never"])
     return Response(buf.getvalue(), mimetype="text/csv",

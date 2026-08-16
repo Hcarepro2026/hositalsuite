@@ -890,8 +890,30 @@ PATIENT_CATEGORIES = (
 CATEGORY_LABELS = dict(PATIENT_CATEGORIES)
 CATEGORY_CODES = tuple(c for c, _ in PATIENT_CATEGORIES)
 
-BLOOD_GROUPS = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
-GENOTYPES = ("AA", "AS", "AC", "SS", "SC", "CC")
+# THIS APP IS NOT AN EMR. It exists to make a visit feel calm, quick and
+# respectful — so the folder holds only what the FRONT DESK needs to look after
+# somebody well. Blood group, genotype, allergies and diagnoses belong in the
+# hospital's clinical record, not here.
+#
+# What we DO keep is what changes how a patient is treated at the door: the
+# language they are comfortable in, and any help they need to get through the
+# visit without struggling.
+ASSISTANCE_NEEDS = (
+    ("WHEELCHAIR",  "Needs a wheelchair"),
+    ("ELDERLY",     "Elderly — offer a seat"),
+    ("PREGNANT",    "Pregnant — offer a seat"),
+    ("HEARING",     "Hard of hearing — speak up, face them"),
+    ("SIGHT",       "Poor sight — guide them"),
+    ("MOBILITY",    "Walks with difficulty"),
+    ("CARER",       "Comes with a carer"),
+    ("INTERPRETER", "Needs an interpreter"),
+)
+ASSISTANCE_LABELS = dict(ASSISTANCE_NEEDS)
+ASSISTANCE_CODES = tuple(c for c, _ in ASSISTANCE_NEEDS)
+
+# The four languages the rest of the app already speaks.
+PATIENT_LANGS = (("en", "English"), ("yo", "Yorùbá"), ("ha", "Hausa"), ("ig", "Igbo"))
+PATIENT_LANG_LABELS = dict(PATIENT_LANGS)
 
 
 class Patient(db.Model):
@@ -930,9 +952,7 @@ class Patient(db.Model):
     # Many patients genuinely do not know their date of birth. Recording a
     # stated age is honest; inventing a birthday is not.
     age_years = db.Column(db.Integer)
-    marital_status = db.Column(db.String(16))
     occupation = db.Column(db.String(80))
-    religion = db.Column(db.String(40))
 
     # --- contact
     phone = db.Column(db.String(32), index=True)
@@ -952,12 +972,11 @@ class Patient(db.Model):
     payer_number = db.Column(db.String(60))                       # LAHSMA/NHIS/HMO number
     payer_name = db.Column(db.String(120))                        # HMO or employer
 
-    # --- clinical basics the doctor wants at a glance
+    # --- looking after them well (NOT a clinical record)
     category = db.Column(db.String(16), default="GENERAL", nullable=False, index=True)
-    blood_group = db.Column(db.String(4))
-    genotype = db.Column(db.String(4))
-    allergies = db.Column(db.String(300))
-    chronic_conditions = db.Column(db.String(300))
+    preferred_lang = db.Column(db.String(4), default="en")
+    assistance = db.Column(db.String(200))        # comma-separated ASSISTANCE_CODES
+    care_note = db.Column(db.String(200))         # anything else the desk should know
 
     # --- housekeeping
     notes = db.Column(db.Text)
@@ -1013,16 +1032,28 @@ class Patient(db.Model):
         return bool(self.last_visit_at)
 
     @property
-    def alerts(self) -> list[str]:
-        """Things a doctor must not miss, shown in red on the folder."""
-        out = []
-        if self.allergies:
-            out.append(f"Allergic to: {self.allergies}")
-        if self.genotype in ("SS", "SC"):
-            out.append(f"Genotype {self.genotype} — sickle cell")
-        if self.chronic_conditions:
-            out.append(self.chronic_conditions)
+    def assistance_list(self) -> list[str]:
+        return [a for a in (self.assistance or "").split(",") if a]
+
+    @property
+    def care_flags(self) -> list[str]:
+        """How to look after this person well — shown at the top of the folder.
+
+        Courtesy, not medicine: offer a seat, fetch a wheelchair, speak up,
+        greet them in their own language.
+        """
+        out = [ASSISTANCE_LABELS[a] for a in self.assistance_list
+               if a in ASSISTANCE_LABELS]
+        if self.preferred_lang and self.preferred_lang != "en":
+            out.append(f"Prefers {PATIENT_LANG_LABELS.get(self.preferred_lang, self.preferred_lang)}"
+                       " — greet them in it")
+        if self.care_note:
+            out.append(self.care_note)
         return out
+
+    @property
+    def lang_label(self) -> str:
+        return PATIENT_LANG_LABELS.get(self.preferred_lang or "en", "English")
 
 
 VISIT_STATUSES = ("REGISTERED", "TRIAGED", "IN_CONSULTATION", "ONWARD", "CLOSED", "CANCELLED")

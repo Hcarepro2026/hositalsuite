@@ -7,8 +7,10 @@ register at the same moment. Each of those has a test here.
 """
 from datetime import date, timedelta
 
+from app.announce import phrase
 from app.hims import (next_hospital_number, possible_duplicates, search,
                       validate)
+from app.models import AppNotification
 from app.models import Organization, Patient, PatientVisit, db, now_naive
 
 from conftest import csrf, login
@@ -136,10 +138,24 @@ def test_bad_phone_numbers_are_rejected_not_silently_dropped(client, seeded):
     assert b"next of kin phone number is not valid" in r.data
 
 
-def test_genotype_must_be_real(client, seeded):
+def test_language_and_assistance_are_recorded(client, seeded):
     login(client, "admin")
-    r = _folder(client, genotype="ZZ")
-    assert b"Genotype must be one of" in r.data
+    _folder(client, preferred_lang="ha", assistance="ELDERLY")
+    p = db.session.query(Patient).first()
+    assert p.preferred_lang == "ha" and p.lang_label == "Hausa"
+    assert "ELDERLY" in p.assistance_list
+    assert any("seat" in f for f in p.care_flags)
+    # a made-up language or need is ignored, never stored
+    _folder(client, surname="TWO", phone="08065226200",
+            preferred_lang="klingon", assistance="TELEPORT")
+    p2 = db.session.query(Patient).filter_by(surname="TWO").first()
+    assert p2.preferred_lang == "en" and p2.assistance_list == []
+
+
+def test_english_speaker_gets_no_language_flag(client, seeded):
+    login(client, "admin")
+    _folder(client, preferred_lang="en")
+    assert db.session.query(Patient).first().care_flags == []
 
 
 def test_category_follows_the_age(client, seeded):
@@ -315,17 +331,31 @@ def test_closing_a_visit_works(client, seeded):
 
 
 # ------------------------------------------------------------------ folder page
-def test_folder_page_shows_the_clinical_warnings_in_red(client, seeded):
+def test_folder_page_shows_how_to_look_after_the_person(client, seeded):
+    """NOT a medical record — courtesy. Offer a seat, fetch a wheelchair."""
     login(client, "admin")
-    _folder(client, allergies="penicillin", genotype="SS",
-            chronic_conditions="hypertension")
+    _folder(client, assistance="WHEELCHAIR", preferred_lang="yo",
+            care_note="travels from Ikorodu")
     p = db.session.query(Patient).first()
-    r = client.get(f"/hims/folder/{p.id}")
-    body = r.data.decode()
-    assert "do not miss" in body
-    assert "Allergic to: penicillin" in body
-    assert "sickle cell" in body
-    assert "hypertension" in body
+    body = client.get(f"/hims/folder/{p.id}").data.decode()
+    assert "Looking after" in body
+    assert "Needs a wheelchair" in body
+    assert "Yor" in body                      # greet them in Yoruba
+    assert "travels from Ikorodu" in body
+
+
+def test_the_folder_holds_no_medical_record(app, seeded):
+    """This app is about the EXPERIENCE of a visit, not diagnoses.
+
+    Guards against drifting back into EMR territory: no blood group, genotype,
+    allergy or diagnosis column may exist on a patient folder.
+    """
+    with app.app_context():
+        cols = {c.name for c in Patient.__table__.columns}
+        forbidden = {"blood_group", "genotype", "allergies", "chronic_conditions",
+                     "diagnosis", "treatment", "prescription", "test_result",
+                     "vital_signs", "temperature", "blood_pressure"}
+        assert cols & forbidden == set(), f"EMR fields crept back in: {cols & forbidden}"
 
 
 def test_folder_can_be_edited(client, seeded):
@@ -429,3 +459,84 @@ def test_validate_trims_and_caps_long_input(app, seeded):
                               "nok_phone": "08033901140"}, org_id=seeded["org"])
         assert errors == []
         assert len(v["surname"]) == 80
+
+
+# ------------------------------------------------------------------ VOICE
+def _spoken(kind=None):
+    q = db.session.query(AppNotification).filter_by(channel="station")
+    if kind:
+        q = q.filter_by(template_key=kind)
+    return [r.body for r in q.all()]
+
+
+def test_registering_a_patient_is_announced_out_loud(client, seeded):
+    """The desk should HEAR that somebody is waiting, not have to notice."""
+    login(client, "admin")
+    _folder(client, surname="ABATAN", first_name="Lekan", start_visit="1")
+    said = _spoken("patient_registered")
+    assert said, "nothing was announced when a patient was registered"
+    assert "Abatan" in said[0] or "Lekan" in said[0]
+    assert "registered" in said[0].lower()
+
+
+def test_reception_backlog_is_announced_with_a_count(client, seeded):
+    login(client, "admin")
+    _folder(client, surname="ONE", start_visit="1")
+    _folder(client, surname="TWO", phone="08065226200", start_visit="1")
+    said = _spoken("reception_waiting")
+    assert said
+    assert "2 patients are waiting" in said[-1]
+    assert "reception" in said[-1]
+
+
+def test_a_patient_needing_help_raises_an_urgent_announcement(client, seeded):
+    """Somebody who cannot stand must not be left standing."""
+    login(client, "admin")
+    _folder(client, surname="OGUNLEYE", first_name="Bisi",
+            assistance="WHEELCHAIR", start_visit="1")
+    said = _spoken("assistance_needed")
+    assert said, "a patient needing a wheelchair was announced to nobody"
+    assert "needs help" in said[0]
+    assert "wheelchair" in said[0].lower()
+    from app.announce import urgency_of
+    assert urgency_of("assistance_needed") == "urgent"
+
+
+def test_no_assistance_means_no_extra_shouting(client, seeded):
+    login(client, "admin")
+    _folder(client, start_visit="1")
+    assert _spoken("assistance_needed") == []
+
+
+def test_a_returning_patient_is_welcomed_by_name(client, seeded):
+    login(client, "admin")
+    _folder(client, surname="KAREEM", first_name="Sikiru", start_visit="1")
+    p = db.session.query(Patient).first()
+    v = db.session.query(PatientVisit).first()
+    v.status, v.started_at = "CLOSED", now_naive() - timedelta(days=20)
+    db.session.commit()
+    client.post(f"/hims/folder/{p.id}/visit",
+                data={"_csrf": csrf(client, f"/hims/folder/{p.id}")},
+                follow_redirects=True)
+    said = _spoken("returning_patient")
+    assert said and "back with us" in said[0]
+    assert "Welcome" in said[0] or "welcome" in said[0]
+
+
+def test_registering_without_a_visit_announces_nothing(client, seeded):
+    """Registering ahead of time must not shout that somebody is at the door."""
+    login(client, "admin")
+    _folder(client)                                   # no start_visit
+    assert _spoken() == []
+
+
+def test_spoken_sentences_are_written_to_be_heard(app, seeded):
+    """Plain sentences a person can act on — the founder's own examples."""
+    with app.app_context():
+        assert phrase("reception_waiting", name="MRS TAYO ADEYEMI", count=1) == \
+            "Mrs Tayo, 1 patient is waiting at the reception desk. Please attend to them."
+        assert phrase("reception_waiting", name="MR TUNDE", count=3,
+                      place="the drug dispensary") == \
+            "Mr Tunde, 3 patients are waiting at the drug dispensary. Please attend to them."
+        # no name -> addressed to the room, never to "None"
+        assert phrase("patient_registered", patient="Mr Sikiru").startswith("Team,")

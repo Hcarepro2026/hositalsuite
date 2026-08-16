@@ -42,7 +42,7 @@
     <tr>
       <td><b>{{ p.hospital_number }}</b></td>
       <td>{{ p.full_name }}
-        {% if p.alerts %}<br>{% for a in p.alerts %}<span class="pill red">{{ a }}</span> {% endfor %}{% endif %}
+        {% if p.care_flags %}<br>{% for a in p.care_flags %}<span class="pill amber">{{ a }}</span> {% endfor %}{% endif %}
       </td>
       <td>{{ p.age_display }} · {{ 'Female' if p.sex == 'F' else 'Male' }}</td>
       <td>{{ p.phone or '—' }}</td>
