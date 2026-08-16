@@ -1,0 +1,174 @@
+"""Guards against the migration mistake that took /hims/ down in production.
+
+WHAT HAPPENED
+-------------
+Stage A shipped, creating `patient` with clinical columns. The founder pointed
+out the app is not an EMR, so those columns were removed from the model — by
+EDITING the migration that had already run in production.
+
+Alembic had already recorded that revision as applied, so it never ran again.
+The live database kept the old columns and never gained the new ones, and every
+visit to /hims/ died with:
+
+    (psycopg2.errors.UndefinedColumn) column patient.preferred_lang does not exist
+
+An applied migration is immutable history. Fixes go in a NEW migration.
+
+These tests check the two things that would have caught it:
+  1. every column the app reads actually exists after migrations run
+  2. the migration chain is linear and each revision is only defined once
+"""
+import os
+import re
+
+import pytest
+from sqlalchemy import inspect
+
+from app.models import db
+
+MIGRATIONS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "migrations", "versions")
+
+
+def _revisions():
+    """(revision, down_revision, filename) for every migration on disk."""
+    out = []
+    for fn in sorted(os.listdir(MIGRATIONS)):
+        if not fn.endswith(".py"):
+            continue
+        text = open(os.path.join(MIGRATIONS, fn)).read()
+        rev = re.search(r'^revision(?::\s*str)?\s*=\s*["\']([^"\']+)["\']',
+                        text, re.M)
+        down = re.search(r'^down_revision(?::[^=]+)?\s*=\s*(?:["\']([^"\']+)["\']|None)',
+                         text, re.M)
+        if rev:
+            out.append((rev.group(1), down.group(1) if down and down.group(1) else None, fn))
+    return out
+
+
+def test_every_model_column_exists_in_the_database(app):
+    """The check that would have caught the outage.
+
+    Walks every table the app defines and asserts the real database has every
+    column. A model change with no matching migration fails here instead of
+    500-ing in front of a patient.
+    """
+    with app.app_context():
+        insp = inspect(db.engine)
+        real_tables = set(insp.get_table_names())
+        missing = []
+        for table_name, table in db.metadata.tables.items():
+            if table_name not in real_tables:
+                missing.append(f"whole table `{table_name}` is missing")
+                continue
+            actual = {c["name"] for c in insp.get_columns(table_name)}
+            for col in table.columns:
+                if col.name not in actual:
+                    missing.append(f"{table_name}.{col.name}")
+        assert not missing, (
+            "The database is missing columns the app will try to read: "
+            + ", ".join(missing)
+            + ".\nAdd a NEW migration — never edit one that has already been applied."
+        )
+
+
+def test_patient_folder_has_the_care_columns_and_no_clinical_ones(app):
+    """The specific columns involved in the outage."""
+    with app.app_context():
+        cols = {c["name"] for c in inspect(db.engine).get_columns("patient")}
+        for needed in ("preferred_lang", "assistance", "care_note"):
+            assert needed in cols, f"patient.{needed} missing — /hims/ would 500"
+        for gone in ("blood_group", "genotype", "allergies", "chronic_conditions"):
+            assert gone not in cols, f"patient.{gone} is EMR data and must not exist"
+
+
+def test_migration_revisions_are_unique():
+    revs = [r for r, _d, _f in _revisions()]
+    dupes = {r for r in revs if revs.count(r) > 1}
+    assert not dupes, f"duplicate migration revision ids: {dupes}"
+
+
+def test_migration_chain_is_linear_and_complete():
+    """Exactly one root, no orphans, no forks — otherwise upgrades misbehave."""
+    revs = _revisions()
+    ids = {r for r, _d, _f in revs}
+    roots = [f for r, d, f in revs if d is None]
+    assert len(roots) == 1, f"expected exactly one base migration, found {roots}"
+    for rev, down, fn in revs:
+        if down is not None:
+            assert down in ids, f"{fn} points at unknown parent {down!r}"
+    parents = [d for _r, d, _f in revs if d]
+    forked = {p for p in parents if parents.count(p) > 1}
+    assert not forked, f"two migrations share a parent (a fork): {forked}"
+
+
+def test_upgrading_a_real_old_database_adds_the_new_columns():
+    """THE test that would actually have caught the outage.
+
+    The other tests build a fresh database with create_all(), which always
+    produces correct columns — so they never exercise the UPGRADE path, which
+    is the only path that broke. This one builds a database in the exact shape
+    production was in (folder table with the old clinical columns, stamped at
+    the revision that created it), then runs the migrations over it and checks
+    the result — which is precisely what Render does on every deploy.
+    """
+    import sqlite3
+    import tempfile
+
+    from alembic import command
+    from alembic.config import Config
+
+    root = os.path.dirname(MIGRATIONS.rsplit("migrations", 1)[0])
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+
+    con = sqlite3.connect(tmp.name)
+    # the folder table exactly as the first Stage A deploy created it
+    con.execute("""CREATE TABLE patient (
+        id INTEGER PRIMARY KEY, org_id INTEGER NOT NULL,
+        hospital_number VARCHAR(32) NOT NULL, surname VARCHAR(80) NOT NULL,
+        first_name VARCHAR(80) NOT NULL, sex VARCHAR(1) NOT NULL,
+        payer_type VARCHAR(16) NOT NULL, category VARCHAR(16) NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT 1,
+        marital_status VARCHAR(16), religion VARCHAR(40),
+        blood_group VARCHAR(4), genotype VARCHAR(4),
+        allergies VARCHAR(300), chronic_conditions VARCHAR(300))""")
+    con.execute("INSERT INTO patient (id, org_id, hospital_number, surname, "
+                "first_name, sex, payer_type, category, blood_group) VALUES "
+                "(1, 1, 'IJD/2026/00001', 'ABATAN', 'Lekan', 'F', 'SELF', "
+                "'GENERAL', 'O+')")
+    con.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+    con.execute("INSERT INTO alembic_version VALUES ('9c2e5f7a41bb')")
+    con.commit()
+    con.close()
+
+    cfg = Config()
+    cfg.set_main_option("script_location", os.path.join(root, "migrations"))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{tmp.name}")
+    command.upgrade(cfg, "head")
+
+    con = sqlite3.connect(tmp.name)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(patient)")}
+    # the patient already on file survived the upgrade
+    kept = list(con.execute("SELECT hospital_number, surname FROM patient"))
+    con.close()
+    os.unlink(tmp.name)
+
+    for needed in ("preferred_lang", "assistance", "care_note"):
+        assert needed in cols, (
+            f"upgrading a real production database did not add patient.{needed} "
+            "— /hims/ would return 500 in production. Add a NEW migration; "
+            "never edit one that has already been applied.")
+    for gone in ("blood_group", "genotype", "allergies", "chronic_conditions"):
+        assert gone not in cols, f"patient.{gone} is EMR data and should be dropped"
+    assert kept == [("IJD/2026/00001", "ABATAN")], "existing folders were lost!"
+
+
+@pytest.mark.parametrize("path", ["/hims/", "/hims/register", "/roster"])
+def test_key_pages_load_without_a_database_error(client, seeded, path):
+    """A live smoke test of the pages a schema drift would break first."""
+    from conftest import login
+    login(client, "admin")
+    r = client.get(path)
+    assert r.status_code == 200, f"{path} returned {r.status_code}"
+    assert b"Something went wrong" not in r.data, f"{path} rendered the 500 page"

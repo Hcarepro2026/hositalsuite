@@ -62,6 +62,12 @@ COLUMNS = [
     ("user", "department_id", "INTEGER"),
     ("user", "approved", _bool_true_sql),
     ("inspection", "final_comment", "TEXT"),
+    # --- HIMS patient folder: patient-CARE fields (this app is not an EMR).
+    # Belt and braces behind migration b3f81a9d5c22: if Alembic is ever skipped
+    # or fails, /hims/ must still not 500 on a missing column.
+    ("patient", "preferred_lang", "VARCHAR(4)"),
+    ("patient", "assistance", "VARCHAR(200)"),
+    ("patient", "care_note", "VARCHAR(200)"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

@@ -18,7 +18,19 @@ from app.config import Config          # noqa: E402
 from app.models import db              # noqa: E402
 
 config = context.config
-config.set_main_option("sqlalchemy.url", Config.SQLALCHEMY_DATABASE_URI.replace("%", "%%"))
+
+# Use the URL the CALLER supplied, if there is one, and only fall back to the
+# application's configured database otherwise.
+#
+# This used to unconditionally overwrite the caller's URL with
+# Config.SQLALCHEMY_DATABASE_URI. That meant `alembic upgrade head -x
+# url=...`, a programmatic Config with an explicit url, or a test harness
+# pointing at a scratch database all SILENTLY MIGRATED THE WRONG DATABASE:
+# Alembic reported "Running upgrade ..." while the intended database was never
+# touched. Anything verifying an upgrade this way was proving nothing.
+if not config.get_main_option("sqlalchemy.url", None):
+    config.set_main_option("sqlalchemy.url",
+                           Config.SQLALCHEMY_DATABASE_URI.replace("%", "%%"))
 
 target_metadata = db.metadata
 
