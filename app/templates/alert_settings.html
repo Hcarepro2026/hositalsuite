@@ -33,6 +33,21 @@ text notifications are always shown instead. Alerts respect your quiet hours.</p
 
   <button class="btn big mt">Save preferences</button>
 </form>
+
+<div class="card pad mt" style="max-width:560px">
+  <h2 style="margin-top:0">🔊 Test the spoken alert</h2>
+  <p class="muted" style="margin-top:0">Phones and computers block sound until you tap the
+    page once. Press this to switch it on and hear exactly what an announcement sounds like.
+    Turn your volume up first.</p>
+  <button class="btn" type="button" onclick="hmsAlerts.testVoice()">▶ Play a test announcement</button>
+  <p class="hint">You should hear a chime, then:
+    <i>"{{ current_user.name }}, this is a test announcement. 3 patients are waiting for
+    your attention."</i></p>
+  <p class="hint">Hear nothing? Check the phone is not on silent, that your browser is
+    allowed to play sound for this site, and that "Speak alerts aloud" above is ticked.</p>
+</div>
+
+<script>window.hmsUserName = {{ current_user.name | tojson }};</script>
 {% endblock %}
 {% block scripts %}
 <script>

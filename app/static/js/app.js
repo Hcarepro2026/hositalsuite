@@ -187,15 +187,82 @@
 
     /* Louder, clearer spoken alerts (§19): full volume, best English voice,
        layered bell at higher gain. Voice remains an enhancement, never a dependency. */
+    /* ------------------------------------------------------------------
+       AUDIO UNLOCK.
+
+       Every modern browser blocks speech and sound until the user has
+       interacted with the page. Before this, the very first announcement was
+       silently swallowed and staff concluded "voice reminders don't work" —
+       which is exactly what was reported. We now:
+         * detect that audio is still locked,
+         * show a one-tap "Enable voice alerts" banner,
+         * unlock on the first tap anywhere and speak a short confirmation,
+         * remember the choice for next time.
+       ------------------------------------------------------------------ */
+    audioReady: false,
+
+    unlockAudio: function (announce) {
+      // Mark audio unlocked FIRST. Each step below is independently guarded so
+      // one unsupported API (common on older Android browsers) cannot leave
+      // the whole feature switched off — which is how this failed silently.
+      this.audioReady = true;
+      try { localStorage.setItem("hms-audio-ok", "1"); } catch (e) {}
+
+      try {
+        if ('speechSynthesis' in window) {
+          var u = new SpeechSynthesisUtterance(announce ? "Voice alerts are on." : " ");
+          u.volume = announce ? 1.0 : 0.01;
+          window.speechSynthesis.speak(u);
+        }
+      } catch (e) { /* speech unavailable: chime and text still work */ }
+
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) {
+          if (!this._actx) this._actx = new Ctx();
+          if (this._actx.state === "suspended") this._actx.resume();
+        }
+      } catch (e) { /* no Web Audio: speech still works */ }
+
+      try {
+        var banner = document.getElementById("voice-unlock");
+        if (banner) banner.remove();
+      } catch (e) {}
+    },
+
+    /* Shown until the user taps once. Without it the failure is invisible. */
+    showUnlockBanner: function () {
+      if (document.getElementById("voice-unlock")) return;
+      var self = this;
+      var bar = document.createElement("div");
+      bar.id = "voice-unlock";
+      bar.className = "voice-unlock";
+      var msg = document.createElement("span");
+      msg.textContent = "🔔 Tap to turn on spoken alerts";
+      var btn = document.createElement("button");
+      btn.type = "button"; btn.className = "btn small"; btn.textContent = "Enable";
+      btn.onclick = function (e) { e.stopPropagation(); self.unlockAudio(true); };
+      bar.appendChild(msg); bar.appendChild(btn);
+      document.body.appendChild(bar);
+    },
+
     speak: function (text, urgency) {
       var P = (window.hmsAlerts && window.hmsAlerts.prefs) ||
               { voice_enabled: true, voice_min_level: "standard" };
       if (!P.voice_enabled) return;
       var LV = { standard: 0, urgent: 1, emergency: 2 };
       if ((LV[urgency] || 0) < (LV[P.voice_min_level] || 0)) return;
-      if (this.inQuietHours()) return;
+      // inQuietHours lives on hmsAlerts, not here. Calling this.inQuietHours()
+      // threw a TypeError and killed EVERY spoken alert before it started —
+      // a second, independent reason voice reminders appeared not to work.
+      var alerts = window.hmsAlerts;
+      if (alerts && typeof alerts.inQuietHours === "function" && alerts.inQuietHours()) return;
       try {
         if (!('speechSynthesis' in window)) return;
+        if (!this.audioReady) {                 // browser has not unlocked audio yet
+          this.showUnlockBanner();              // make the problem VISIBLE
+          return;
+        }
         window.speechSynthesis.cancel();        // clear queue → no overlapping repeats
         var u = new SpeechSynthesisUtterance(text);
         u.lang = this.alertLang || "en-NG";      // speak in the user's chosen language
@@ -210,8 +277,19 @@
           if (v) u.voice = v;
           window.speechSynthesis.speak(u);
         };
-        if (window.speechSynthesis.getVoices().length) pick();
-        else { window.speechSynthesis.onvoiceschanged = pick; }
+        // Voice list loads asynchronously. If it is empty we wait for
+        // onvoiceschanged — but on many Android builds that event NEVER fires,
+        // which left the announcement queued forever and silent. Always speak
+        // after a short grace period regardless; the default system voice is
+        // perfectly acceptable.
+        if (window.speechSynthesis.getVoices().length) {
+          pick();
+        } else {
+          var said = false;
+          var once = function () { if (!said) { said = true; pick(); } };
+          try { window.speechSynthesis.onvoiceschanged = once; } catch (e) {}
+          setTimeout(once, 250);
+        }
       } catch (e) { /* fall back silently to text */ }
     },
 
@@ -367,12 +445,16 @@
   /* ------------------------------------------------ live alert engine (§19): bell + voice + browser notifications */
   window.hmsAlerts = {
     lastId: parseInt(localStorage.getItem("hms-alert-last") || "0", 10),
-    prefs: { voice_enabled: true, voice_min_level: "standard", quiet_start: "22:00",
-             quiet_end: "07:00", push_enabled: false },
+    prefs: { voice_enabled: true, voice_min_level: "standard", quiet_start: "",
+             quiet_end: "", push_enabled: false },
     LEVELS: { standard: 0, urgent: 1, emergency: 2 },
 
     inQuietHours: function () {
       try {
+        // Empty start/end means quiet hours are OFF. Anything else would
+        // silence night-shift staff, who need announcements most.
+        if (!this.prefs.quiet_start || !this.prefs.quiet_end) return false;
+        if (this.prefs.quiet_start === this.prefs.quiet_end) return false;
         var now = new Date();
         var cur = now.getHours() * 60 + now.getMinutes();
         var p = function (s) { var x = (s || "0:0").split(":"); return parseInt(x[0], 10) * 60 + parseInt(x[1] || 0, 10); };
@@ -396,7 +478,13 @@
       if (!zone) return;
       var el = document.createElement("div");
       el.className = "toast " + a.urgency;
-      el.innerHTML = "<div class='t-title'>" + a.subject + "</div><div class='t-body'>" + a.body + "</div>";
+      // textContent, never innerHTML: alert text can contain a patient name
+      // typed by a member of the public.
+      var t = document.createElement("div"); t.className = "t-title";
+      t.textContent = a.subject || "Alert";
+      var b = document.createElement("div"); b.className = "t-body";
+      b.textContent = a.body || "";
+      el.appendChild(t); el.appendChild(b);
       zone.appendChild(el);
       setTimeout(function () { el.style.opacity = "0"; el.style.transition = "opacity .6s";
         setTimeout(function () { el.remove(); }, 650); }, 9000);
@@ -417,8 +505,9 @@
             self.toast(a);
             self.notify(a);
             if (!self.inQuietHours()) self.bell(a.urgency);
-            self.speak(a.urgency === "emergency" ? "Attention. " + a.body
-                     : a.urgency === "urgent" ? "Alert. " + a.body : a.body, a.urgency);
+            var line = a.speech || a.body;
+            self.speak(a.urgency === "emergency" ? "Attention. " + line
+                     : a.urgency === "urgent" ? "Alert. " + line : line, a.urgency);
           });
           if (data.last_id && data.last_id > self.lastId) {
             self.lastId = data.last_id;
@@ -429,8 +518,38 @@
 
     start: function () {
       var self = this;
+
+      // Unlock audio on the FIRST interaction of any kind. Staff tap something
+      // within seconds of signing in, so in practice voice is ready before the
+      // first announcement arrives.
+      ["pointerdown", "keydown", "touchstart"].forEach(function (evt) {
+        document.addEventListener(evt, function once() {
+          if (window.hmsVoice) window.hmsVoice.unlockAudio(false);
+          ["pointerdown", "keydown", "touchstart"].forEach(function (e2) {
+            document.removeEventListener(e2, once);
+          });
+        }, { once: true, passive: true });
+      });
+
+      // If they enabled it before on this device, assume it is still allowed.
+      try {
+        if (localStorage.getItem("hms-audio-ok") === "1" && window.hmsVoice) {
+          window.hmsVoice.audioReady = true;
+        }
+      } catch (e) {}
+
       self.poll();
       setInterval(function () { self.poll(); }, 30000);
+    },
+
+    /* Lets a nurse prove voice works on THEIR device, without waiting for a
+       real patient event. Wired to the button on /alert-settings. */
+    testVoice: function () {
+      if (window.hmsVoice) window.hmsVoice.unlockAudio(false);
+      this.bell("urgent");
+      var who = (window.hmsUserName || "Colleague");
+      this.speak(who + ", this is a test announcement. "
+                 + "3 patients are waiting for your attention.", "urgent");
     }
   };
 

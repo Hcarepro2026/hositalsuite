@@ -10,7 +10,9 @@ def test_alert_prefs_defaults_and_save(client, seeded):
     prefs = r.get_json()
     assert prefs["voice_enabled"] is True
     assert prefs["voice_min_level"] == "standard"
-    assert prefs["quiet_start"] == "22:00"
+    # Quiet hours are OFF by default: the old 22:00 default silenced
+    # night-shift staff, who most need to hear that a patient is waiting.
+    assert prefs["quiet_start"] == ""
 
     tok = csrf(client, "/alert-settings")
     client.post("/alert-settings", data={"_csrf": tok, "voice_enabled": "1",

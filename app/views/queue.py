@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 import secrets
 
-from flask import (Blueprint, abort, flash, redirect, render_template,
-                   request, url_for)
+from flask import (Blueprint, abort, current_app, flash, redirect,
+                   render_template, request, url_for)
 from flask_login import current_user
 
 from .. import sms as sms_engine
@@ -47,6 +47,32 @@ def avg_service_minutes(org_id: int, department_id: int) -> float | None:
 
 
 # ================================================================ PUBLIC
+def announce_queue_depth(org_id: int, dept: Department) -> None:
+    """Tell the department how many patients are now waiting.
+
+    Goes to BOTH the individual staff of that department (their own phone) and
+    the shared station screen, which is what the founder asked for.
+    """
+    from .. import announce
+    from ..models import QueueTicket as QT
+    waiting = (db.session.query(QT)
+               .filter(QT.org_id == org_id, QT.department_id == dept.id,
+                       QT.queue_date == now_naive().date(),
+                       QT.status == "WAITING").count())
+    if waiting <= 0:
+        return
+    kind = "dispensary_waiting" if "pharm" in (dept.name or "").lower() else "queue_waiting"
+    place = dept.name
+    # personal devices: staff assigned to that department
+    for role in ("HOD", "ADMIN_MANAGER"):
+        announce.to_role(org_id, role, kind, department_id=dept.id,
+                         count=waiting, place=place,
+                         entity_type="department", entity_id=dept.id)
+    # shared station screen for the area
+    announce.to_station(org_id, kind, department_id=dept.id,
+                        name=dept.name, count=waiting, place=place)
+
+
 @bp.get("/queue/join")
 @rate_limit(limit=30, window=60.0)
 def join_page():
@@ -94,6 +120,15 @@ def join_submit():
     from .. import referrals as refeng
     refeng.stamp_queue(org.id)
     audit("QUEUE_JOINED", "queue_ticket", t.id, {"code": t.code}, org_id=org.id)
+
+    # Announce to the department: staff hear how many are now waiting.
+    # Previously nothing was raised here at all, so no announcement could
+    # ever be spoken however well the voice engine worked.
+    try:
+        announce_queue_depth(org.id, dept)
+    except Exception:                                    # noqa: BLE001
+        current_app.logger.exception("queue announcement failed")
+
     db.session.commit()
     return redirect(url_for("queue.ticket_page", key=t.access_key))
 

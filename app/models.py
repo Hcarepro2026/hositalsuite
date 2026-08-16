@@ -686,8 +686,12 @@ class UserPref(db.Model):
     DEFAULTS = {
         "voice_enabled": True,
         "voice_min_level": "standard",   # standard | urgent | emergency
-        "quiet_start": "22:00",
-        "quiet_end": "07:00",
+        # Quiet hours OFF by default. They used to default to 22:00-07:00,
+        # which silenced every announcement for night-shift staff — precisely
+        # the people who most need to hear that a patient is waiting. Staff can
+        # switch quiet hours on themselves at /alert-settings.
+        "quiet_start": "",
+        "quiet_end": "",
         "push_enabled": False,
     }
 

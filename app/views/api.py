@@ -86,6 +86,7 @@ def ready():
 
 
 # ================================================================ live alerts (§19/§37)
+# Admin/quality alerts.
 ALERT_TEMPLATES = {
     "complaint_escalated": "emergency",
     "critical_score": "emergency",
@@ -93,6 +94,20 @@ ALERT_TEMPLATES = {
     "ca_overdue": "urgent",
     "complaint_sla_warning": "standard",
 }
+
+
+def _speakable() -> dict:
+    """Admin alerts PLUS patient-flow announcements.
+
+    Previously only the five admin events above could ever be spoken, so a
+    nurse waiting on patient announcements heard nothing at all — the engine
+    worked, but nothing was ever routed into it.
+    """
+    from ..announce import PATIENT_ALERTS
+    out = dict(ALERT_TEMPLATES)
+    for key, (urgency, _subject) in PATIENT_ALERTS.items():
+        out[key] = urgency
+    return out
 
 
 @bp.get("/alerts/prefs")
@@ -113,17 +128,56 @@ def alerts_poll():
         return jsonify(error="unauthenticated"), 401
     after = request.args.get("after", type=int) or 0
     from ..models import AppNotification, UserPref
+    speakable = _speakable()
     rows = (db.session.query(AppNotification)
             .filter(AppNotification.user_id == current_user.id,
                     AppNotification.channel == "inapp",
                     AppNotification.id > after,
-                    AppNotification.template_key.in_(tuple(ALERT_TEMPLATES)))
+                    AppNotification.template_key.in_(tuple(speakable)))
             .order_by(AppNotification.id).limit(10).all())
     prefs = UserPref.bundle(current_user.id)
     return jsonify({
         "prefs": prefs,
         "alerts": [{"id": r.id, "subject": r.subject, "body": r.body,
-                    "urgency": ALERT_TEMPLATES.get(r.template_key, "standard"),
+                    # `speech` is what gets SPOKEN. Patient announcements are
+                    # already written to be heard; admin alerts fall back to
+                    # their on-screen text.
+                    "speech": r.body,
+                    "urgency": speakable.get(r.template_key, "standard"),
+                    "at": r.created_at.strftime("%H:%M")} for r in rows],
+        "last_id": rows[-1].id if rows else after,
+    })
+
+
+@bp.get("/alerts/station")
+@rate_limit(limit=120, window=60.0)
+def alerts_station():
+    """Shared station screen feed (dispensary tablet, nurses' desk).
+
+    No login: a ward tablet is not signed in as any individual. It is scoped to
+    one department and only ever returns announcements — never patient names
+    from other areas, never clinical detail.
+    """
+    from ..announce import PATIENT_ALERTS
+    from ..models import AppNotification
+    from ..services import current_org
+    org = current_org()
+    if not org:
+        return jsonify(alerts=[], last_id=0)
+    after = request.args.get("after", type=int) or 0
+    dept_id = request.args.get("dept", type=int)
+    q = (db.session.query(AppNotification)
+         .filter(AppNotification.org_id == org.id,
+                 AppNotification.channel == "station",
+                 AppNotification.id > after,
+                 AppNotification.template_key.in_(tuple(PATIENT_ALERTS))))
+    if dept_id:
+        q = q.filter(AppNotification.entity_id == dept_id)
+    rows = q.order_by(AppNotification.id).limit(10).all()
+    return jsonify({
+        "alerts": [{"id": r.id, "subject": r.subject, "body": r.body,
+                    "speech": r.body,
+                    "urgency": PATIENT_ALERTS.get(r.template_key, ("standard",))[0],
                     "at": r.created_at.strftime("%H:%M")} for r in rows],
         "last_id": rows[-1].id if rows else after,
     })

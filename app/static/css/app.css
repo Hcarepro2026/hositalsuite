@@ -295,3 +295,12 @@ summary{cursor:pointer;font-weight:750;font-size:var(--fs-sm)}
 .help-call:hover{background:#0c6f55}
 .help-sub{font-size:.79rem;color:#5a6b7b;margin-top:8px;line-height:1.4}
 .help-emerg{color:#8c1d1d;font-weight:650}
+
+/* ---------------------------------------------------------------- voice unlock
+   Browsers block audio until the user interacts. Without a visible prompt the
+   failure is silent and staff conclude the feature is broken. */
+.voice-unlock{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:9999;
+  display:flex;align-items:center;gap:12px;padding:11px 16px;border-radius:999px;
+  background:#0e5a8a;color:#fff;box-shadow:0 6px 20px rgba(0,0,0,.28);font-weight:700;
+  font-size:.9rem;max-width:92vw}
+.voice-unlock .btn{background:#fff;color:#0e5a8a;border:none;font-weight:800}
