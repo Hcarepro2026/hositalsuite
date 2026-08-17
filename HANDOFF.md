@@ -1,157 +1,399 @@
 # HANDOFF — Hospital Admin Manager Suite ("Patient Experience OS")
 
-> **Read this first** if you are a new chat session or a new developer.
-> Everything below is verified fact as of **2026-08-15 (v1.2.0, 142 tests green)**. The repo is the source of truth:
-> **https://github.com/Hcarepro2026/hositalsuite** (branch `main`).
+**GENERAL HOSPITAL IJEDE (The Family Hospital)**
+Last updated: **17 August 2026** · Code at: **`5828bae`** · Status: **live and healthy**
+
+> **Paste this whole file into a new chat as your first message.** It contains
+> everything needed to carry on without repeating work.
 
 ---
 
-## 0. The founder & how to work with them
+## 0. READ THIS FIRST (for the next assistant)
 
-- **Zero-tech, zero-budget solo founder** (Nigeria, Lagos timezone). Non-technical language only.
-- Standing instructions: (1) **always end with the pending-features menu** so they can choose;
-  (2) **ROUND UP** (stop & summarize cleanly) whenever tokens run low, work slows, or quality risks degrading.
-- They deploy-test via screenshots from **Render** and **Arena** — expect screenshots, diagnose logs patiently.
-- GitHub pushes: repo is theirs. Create a **fresh 7-day fine-grained PAT** (contents: read/write) at
-  https://github.com/settings/tokens, push with
-  `git push https://Hcarepro2026:<TOKEN>@github.com/Hcarepro2026/hositalsuite.git main`,
-  then **revoke it**. ⚠️ Never paste a token into a chat window — treat any token that appears in
-  a conversation as compromised and revoke it immediately.
+### What this app IS
+A **patient-experience system**. It exists so that a visit to the hospital
+feels calm, quick, respectful and well-organised — for the patient, and for
+the staff looking after them.
 
-## 1. Where things live
+### What this app IS NOT
+**It is NOT an EMR / medical record.** No diagnoses, no vital signs, no
+prescriptions, no test results, no blood group, no genotype, no allergies.
 
-| What | Where |
+> The founder had to correct me on this once already, and he was right.
+> I had added blood group, genotype and allergies to the patient folder with a
+> red "⚠ do not miss" banner for doctors. All removed. There is now a test —
+> `test_the_folder_holds_no_medical_record` — that **fails the build** if any
+> EMR column reappears. Do not weaken it.
+
+### The founder
+- **Zero technical background. Solo. Zero budget.** Explain everything in plain
+  English, use tables, never jargon. Reports are written for him, not engineers.
+- He tests on an **Android phone via Render screenshots**. Design mobile-first.
+- Standing instructions, in his own words:
+  - *"help me analyse and evaluate with honesty. Recommend or make suggestion where necessary."*
+  - *"Check every built and make sure there are free from bug, gap, crash etc. Don't move to next item until the one you are working on is completely fix or resolved."*
+  - *"don't forget voice reminder"* — voice is a **standing requirement of every feature**, not an extra.
+  - He asked for **"premium plus plus quality and standard"** and an MVP-SaaS mindset (per-tenant settings, never per-deploy).
+- **Always end a work batch with a numbered menu of pending features** so he can choose what's next.
+- Present a `.md` report via `present_file` at the end of each batch.
+
+### Working rules that have repeatedly proved their worth
+1. **Verify, never assume.** Prove every fix with real evidence: tests, live
+   `curl`, headless-browser assertions.
+2. **Mutation-test your own tests.** Deliberately break the code and confirm the
+   test fails. This has caught a *useless* test twice — see §7.
+3. **Full suite must pass on BOTH SQLite AND real PostgreSQL 17 before every push.**
+4. **Never edit a migration that has already been deployed.** This caused a
+   total production outage on 16 Aug. Always add a NEW migration.
+5. Round up cleanly when context runs low — leave things pushed and working.
+
+---
+
+## 1. Live system
+
+| Thing | Value |
 |---|---|
-| Code | this repo (`app/` Flask monolith, `tests/`, `loadtest/`) |
-| Live production | **https://hospital-suite.onrender.com** (Render free web service `hospital-suite`) |
-| Production DB | Supabase project ref `zhhdhfllypkzvmukilwt` — **Session pooler** URL (NOT the `db.` direct host; it is IPv6-unreachable from Render). Format: `postgresql://postgres.zhhdhfllypkzvmukilwt:<pw-%40-encoded>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require`. Founder's DB password contains `@` → must be `%40`. |
-| Workspace preview | this sandbox, port 8077, started with `bash start.sh` (SQLite at `data/app.db`, demo-seeded) |
-| Docs | `README.md`, `ROADMAP.md` (gap review + waves), `DEPLOYMENT_GUIDE.md` (founder-proof), `LOAD_TEST_REPORT.md` |
+| Live site | https://hospital-suite.onrender.com |
+| Repo | https://github.com/Hcarepro2026/hositalsuite (branch `main`) |
+| Current HEAD | `5828bae` |
+| Health (always 200) | `/api/v1/health` |
+| Readiness (503 on trouble) | `/api/v1/ready` — now also detects **schema drift** |
+| Host | Render free tier (auto-deploys on push, ~2–3 min) |
+| Database | Supabase PostgreSQL, project ref `zhhdhfllypkzvmukilwt` |
+| Monitoring | UptimeRobot on `/api/v1/health` (98%+ uptime) |
+| Hospital phone | `09154967034`, alt `09154967041` |
+| Referral link format | `https://hospital-suite.onrender.com/r/E9D1042F` |
 
-### Sandbox quirks (Arena workspace)
-- **pip packages and apt installs (PostgreSQL) are wiped between messages** — reinstall with
-  `pip3 install -r requirements.txt` (and `sudo apt-get install -y postgresql` if Postgres needed) at session start.
-- Only files under `/home/user` persist. The SQLite demo DB persists.
-- `pkill -f` will kill YOUR OWN shell if the pattern string appears in your command — use the
-  bracket trick: `pkill -f "python run[.]py"`.
-- Sandbox has web-only egress: it **cannot** open TCP to Supabase (matches Render's earlier IPv6 failure pattern).
-  Verify DB compatibility with **local** PostgreSQL 17 instead (`sudo service postgresql start`,
-  user `hms` / pw `hms_test_pw`, dbs `hms_test`, `hms_load` — recreate if wiped).
+**Push command** (token has `repo` scope only — **no `workflow` scope**, so
+`.github/workflows/` cannot be created; CI lives at `ci/github-actions-tests.yml`
+with `ci/README.md` explaining 5-minute manual activation):
 
-## 1b. HARDENING PASS — 2026-08-15 (v1.2.0) — read before changing anything below
-
-An independent audit found four P0 defects. All are fixed; **do not regress them**:
-
-1. **Uploads/PDFs are in the DATABASE, not on disk** (`app/storage.py`, `STORAGE_BACKEND=db`).
-   Render wipes the container disk on every restart — the hospital logo had already been lost
-   (`/branding/logo` was 404ing in production). Never write patient files with `open()`;
-   always go through `storage.put/get/send`.
-2. **Backups actually run on PostgreSQL** (`app/backup.py`). The old job returned immediately
-   unless the DB was SQLite, so production had *no* backups while the UI claimed otherwise.
-   Backups are per-table CSV in a zip with a manifest + RESTORE.txt, kept in durable storage.
-3. **ProxyFix + `security.client_ip()`**. Behind Render/Cloudflare every visitor shared the
-   proxy IP, so per-IP rate limits were effectively global (one abuser locked out the whole
-   hospital) and audit-log IPs were useless. Use `client_ip()`, never `request.remote_addr`.
-4. **Per-username lockout** (`LoginAttempt`): 10 failures ⇒ 15-minute lock. This is the only
-   defence against a *distributed* brute force, which the IP limiter cannot see.
-
-Also added: Alembic migrations (auto-applied at boot, since Render free has no shell),
-NDPA consent + `/privacy` + data-subject requests + retention purge job, anonymous complaints,
-CSP/HSTS/Secure cookies, tenant resolution for public portals, pinned dependencies, GitHub
-Actions CI, and a global exception handler so no traceback ever reaches a patient.
-
-**Tests: 142 passing** (was 116). New suite: `tests/test_hardening.py` — each test names the
-defect it prevents. Run `python -m pytest tests/ -q` before every push.
-
-## 2. Production-critical knowledge (do not regress)
-
-- **Render free plan has NO Shell and NO One-Off Jobs.** First-run seeding happens via `AUTO_SEED=1`
-  (empty-DB-only bootstrap in `app/seeddata.py`; prints initial creds once to logs; all accounts
-  `must_change_password=True` → forced change at first login). Founder's production admin password is
-  whatever they chose at first login (unknown to us).
-- **Workers must stay at 1** (`render.yaml`): the in-process scheduler (reminders, SLA escalation,
-  retries, backups) must run exactly once. Horizontal scale later = `DISABLE_SCHEDULER=1` on web workers.
-- **DB resilience**: `pool_pre_ping` + `pool_recycle=300` in `app/config.py` (fixes Supabase
-  `SSL SYSCALL EOF` after idle). SQLite uses WAL + busy_timeout (set in `create_app`).
-- **Reference-number race is fixed** by `services.insert_with_unique_ref` (collision retry; DB unique
-  constraint as arbiter; idem collision returns original record). Do not reintroduce `count+1` inserts.
-- **Migrations**: Alembic (`migrations/`). The baseline is written to be safe on a database
-  that already has tables (it inspects first), and pre-Alembic databases get *stamped*, not
-  replayed. `run_alembic_upgrade()` runs at boot; `ensure_schema()` remains as a fallback.
-- **Load-tested**: 4,000 req/min PASSED (0% failures) on 1 worker, SQLite & PostgreSQL; overload
-  ~8,800/min degrades gracefully. See `LOAD_TEST_REPORT.md`; suite in `loadtest/locustfile.py`
-  (needs `RATE_LIMIT_SCALE=100000` on BOTH client and server for capacity measurement).
-
-## 3. Immutable business rules (spec)
-
-1. Exactly **FIVE** inspection criteria (app/scoring.py), scores 1–5, total 25; rating bands
-   22+ EXCELLENT / 18+ GOOD / 13+ FAIR / 8+ POOR / else CRITICAL.
-2. Score 1 or 2 ⇒ **mandatory explanation** (text or voice) before submit (enforced server-side).
-3. Complaint portal: **no login, exactly 5 primary fields**, ref `HOSP-CMP-YYYY-NNNNNN`;
-   routes to AM-on-duty + department HOD; configurable SLA; auto-**ESCALATED** to MD/CEO on breach
-   (audit-logged; SLA extensions may only ADD time).
-4. Admin Manager on duty comes from the roster; reminders day-before + duty-day (configurable times).
-5. Inspection submit ⇒ lock + PDF (verification QR/code) + WhatsApp Business delivery (cloud/sandbox) + notify MD/CEO.
-6. Multi-tenant: `org_id` on every table; RLS deferred; app-layer scoping enforced.
-7. AI must stay **administrative & advisory, never clinical** (when AI features get built).
-
-## 4. What is built (all tested; **116/116 tests**, green on SQLite + PostgreSQL 17)
-
-- **Core**: auth (scrypt, RBAC 4 roles, forced password change, MFA-ready), CSRF, per-IP rate limits,
-  hash-chained audit trail (`app/audit.py`, thread-safe), safe uploads (magic bytes), idempotency keys.
-- **Inspections** (5 criteria, voice-to-text, GPS optional/mandatory/disabled, photo evidence,
-  review screen, offline draft + sync queue, controlled amendments keeping SUPERSEDED originals).
-- **Complaints** (portal + QR locations + USSD intake `/api/v1/ussd/complaint`, SLA engine, escalation,
-  status history, attachments, staff queue/detail, HOD actions).
-- **Bookings** (`/book`, slots+capacity, refs, SMS confirmation, status/cancel, check-in→queue ticket),
-  **Queue** (tickets, staff call/serve/no-show, privacy-safe display screen with voice announcement),
-  **Feedback** (stars→service recovery; 4–5★ issue a personal trackable share-link + QR),
-  **Referrals** (`/r/<code>` landing, hospital-wide + staff-named QR, click/book analytics,
-  own-link is a repeat visit not a conversion, no prizes; staff board `/referrals`).
-- **Rosters**: Admin Manager roster (manual + CSV/XLSX import w/ validation preview) and
-  **Department rosters** (HOD-managed own dept / super admin all; modes: two 12h shifts or 24h duty;
-  1–2 staff per shift; add/edit/delete/import/templates; unique date+shift).
-- **Full CRUD** (Add/Edit/Delete/Suspend): users (role edit), departments (+roster system, guarded delete),
-  sections, units, complaint categories, QR locations.
-- **Automation**: notification engine (in-app/email/WhatsApp/SMS), Termii/Twilio provider interface
-  (`app/sms.py`, sandbox default), WhatsApp Cloud API client with retry (`app/whatsapp.py`),
-  background dispatch (`app/tasks.py`), scheduler (`app/scheduler.py`).
-- **Alerts/UX**: live alert polling `/api/v1/alerts/poll`, toasts, louder/clearer voice reminders
-  (quiet hours, min-urgency prefs at `/alert-settings`), premium token-based CSS design system.
-- **i18n**: EN/Yorùbá/Hausa/Igbo on patient portals incl. voice-to-text language tags (`app/i18n.py`,
-  `/lang/<code>`), best-effort translations flagged for community validation.
-- **Patient Assistant chatbot** (`/chat` + `/api/chat`): premium multilingual dialogue library
-  (`app/chatbot/kb_*.py`, **119 intents / ~1,059 triggers**), retrieval engine with clinical
-  guardrail (never diagnoses) + handoff/complaint/emergency actions; multi-tenant KB
-  (global master org_id NULL + tenant pending-approval + promote-to-global), KB admin at
-  `/admin/kb` with "Update global library" idempotent sync (`app/chatbot/seed_kb.py`).
-- **Self-service password reset** (`/forgot-password`, phone OTP) + **referral engine**
-  (`/referrals`, from the parallel session) — both merged; see merge commit history.
-- **Management**: executive dashboard (KPIs, heatmap, Management Attention, satisfaction),
-  department performance + recurring-issue detection, 9 report types (PDF+CSV, incl. referrals), report archive,
-  QR Poster Pack generator (`/admin/posters`), admin control center, audit UI with chain verify.
-- **Ops**: Dockerfile, render.yaml, `run.py` CLI (seed/demo/tick/backup/dbcheck), AUTO_SEED bootstrap,
-  nightly SQLite backups, `dbcheck` migration helper (`app/migrate.py`).
-
-## 5. Test & run cheat-sheet
-
-```bash
-pip3 install -r requirements.txt
-python -m pytest tests/ -q            # 116 tests
-DATABASE_URL="postgresql://hms:hms_test_pw@127.0.0.1:5432/hms_test" python -m pytest tests/ -q
-bash start.sh                          # workspace preview on :8077 (SQLite demo data)
-python run.py seed | demo | tick | backup | dbcheck
+```
+git push https://Hcarepro2026:<TOKEN>@github.com/Hcarepro2026/hositalsuite.git main
 ```
 
-## 6. PENDING MENU (founder chooses)
+> ⚠️ **The token `ghp_82Db…` has been exposed in chat repeatedly and the founder
+> has been asked several times to revoke it. Ask again. If he has rotated it,
+> get the new one before attempting a push.**
 
-- 🅱️ 2. **AI service-recovery** (classify urgency/sentiment/category; free-tier AI + rule-based fallback; advisory only)
-- 🅱️ 3. **MD/CEO satisfaction dashboard** (deeper analytics)
-- 🅲 4. **Attendance + geo-fencing** (tamper-resistant, manual-correction workflow)
-- 🅳 6. **Founder's Guide** (10-year-old level manual) · 🅳 8. **Multi-branch + tenant branding**
+---
 
-## 7. Suggested opening for a new chat (founder paste)
+## 2. Environment setup (sandbox wipes these between sessions)
 
-> Clone https://github.com/Hcarepro2026/hositalsuite, read HANDOFF.md and ROADMAP.md,
-> then continue building my hospital platform. Remember: I am a zero-tech, zero-budget founder;
-> always list the pending menu at the end and round up if you run low on tokens.
+```bash
+cd /home/user/hs
+pip3 install -q -r requirements.txt
+
+# PostgreSQL 17 (REQUIRED before pushing)
+sudo apt-get install -y -q postgresql
+(sudo service postgresql start || sudo pg_ctlcluster 17 main start)
+sudo -u postgres psql -q \
+  -c "DROP ROLE IF EXISTS hms;" \
+  -c "CREATE ROLE hms LOGIN PASSWORD 'hms_test_pw';" \
+  -c "DROP DATABASE IF EXISTS hms_test;" \
+  -c "CREATE DATABASE hms_test OWNER hms;"
+
+# Playwright (for browser checks)
+pip install -q playwright && python -m playwright install --with-deps chromium
+```
+
+**Run the suite on both engines:**
+```bash
+python3 -m pytest -q                                    # SQLite
+TEST_DATABASE_URL='postgresql://hms:hms_test_pw@127.0.0.1:5432/hms_test' python3 -m pytest -q
+python3 tools/check_links.py                            # every link/form resolves
+python3 tools/hims_browser_check.py                     # 20 checks
+python3 tools/roster_browser_check.py                   # 21 checks
+```
+
+**Sandbox quirks (all learned the hard way):**
+- Only `/home/user` persists. Working clone is `/home/user/hs`.
+- pip packages, PostgreSQL and Playwright are **wiped between messages**.
+- Heredocs via `bash` sometimes fail to write files — use the `write_file` tool.
+- Single quotes in commit messages break `-m`; write to `/tmp/mN.txt`, use `git commit -F`.
+- Git identity is not set: use `git -c user.email=... -c user.name=... commit`.
+- `git worktree prune` before re-adding a wiped path.
+- Supabase direct `db.` host is IPv6-unreachable from Render — **must** use the
+  Session pooler URL; the password contains `@` which must be encoded `%40`.
+
+---
+
+## 3. CURRENT STATE: 353 tests, green on both engines
+
+| Metric | Value |
+|---|---|
+| Tests | **353 passing** on SQLite **and** real PostgreSQL 17 |
+| Test files | 27 in `tests/` |
+| Migrations | 4 in `migrations/versions/` (head = `b3f81a9d5c22`) |
+| Browser checks | HIMS 20/20 · Roster 21/21 |
+| Link checker | Clean |
+
+---
+
+## 4. WHAT HAS BEEN BUILT ✅
+
+### Patient-facing
+- **Patient hub** (`/`, `/welcome`) — six numbered colour-coded tiles: Book,
+  Queue, Assistant, Complaint, Feedback, Share. Native share sheet + WhatsApp
+  fallback. `?loc=` / `?ref=` carried through. **EN / Yorùbá / Hausa / Igbo.**
+- **Booking** (online + physical), **Queue tickets**, **Feedback**, **Complaints**
+  (incl. anonymous), **Referral links** with tracking.
+- **AI patient assistant** — 458 intents / 7,559 triggers, 31/31 department
+  coverage, English + Pidgin. AI ladder **Groq → Gemini → OpenRouter** (all
+  free tier, no card). Guardrails before *and* after the model. Per-tenant daily
+  cap (400) and metering.
+- **NDPA compliance** — consent capture, privacy page, data-subject requests,
+  retention purge, anonymisation.
+
+### Stage A — HIMS Register ✅ (`/hims/`)
+The patient folder — the thing every later stage hangs on.
+- **Search first**, always: by hospital number, phone, surname, first name, or
+  "surname firstname" in either order.
+- **Open a folder**: identity · contact · next of kin (**required**) · payment
+  route · how to look after them.
+- **Hospital numbers** auto-assigned per tenant: `IJE/2026/00001`.
+- **Duplicate prevention** — shows likely existing folders and forces a tick-box
+  override before creating a second one.
+- **Never invents a birthday** — accepts a stated age honestly.
+- **Payment routes**: LAHSMA (Lagos State insurance) · **Megalex** (Lagos State
+  revenue system) · Self-pay · NHIS · HMO · Exempt. LAHSMA/NHIS/HMO **must**
+  have a scheme number or Billing cannot claim.
+- **Patient-experience fields** (NOT medical): preferred language (EN/YO/HA/IG),
+  assistance needed (wheelchair, offer a seat, hard of hearing, poor sight,
+  walks with difficulty, carer, interpreter), free-text care note.
+- **Visits** — `PatientVisit` moves REGISTERED → TRIAGED → IN_CONSULTATION →
+  ONWARD → CLOSED. Columns for clinic / consulting room / doctor **already
+  exist and are unused**, so Stages B–D add behaviour, not another migration.
+- Age auto-corrects category: under 12 → CHILD, 65+ → ELDERLY (Triage needs this).
+- Folder retire (hides, never deletes), edit, CSV export.
+
+### Voice ✅ (`app/announce.py`)
+Previously **totally silent** — four independent causes found and fixed.
+Now speaks. Real captured sentences:
+- *"Team, Abatan has been registered and is waiting for Triage."*
+- *"Mr Tunde, 3 patients are waiting at the drug dispensary. Please attend to them."*
+- **URGENT:** *"Team, Abatan at the reception desk needs help. Needs a wheelchair; Prefers Yorùbá — greet them in it; travels from Ikorodu"*
+- *"…is back with us at reception. Please welcome them."*
+
+Design: assistance needs get their **own urgent call**; registering ahead of
+time announces nothing (so voice never becomes ignorable noise). Goes to both
+personal devices and shared station screens. Audio-unlock banner handles the
+browser rule that blocks sound until first tap.
+
+### Roster ✅ (`/roster`) — merged into ONE page
+Previously two pages that couldn't see each other.
+- Scope: **Admin Manager (hospital-wide) · Department · Section · Unit**
+- Date ranges: today · 7 days · 2 weeks · 3 weeks · 30 days · this month · custom
+- **4 working patterns**: two 12h shifts · one 24h duty · three 8h shifts ·
+  **office hours Mon–Fri** (for Procurement, Audit, Finance, ICT, Admin/HR)
+- **Unlimited staff per shift** (was hard-capped at 2)
+- **8 leave types** — annual, casual, sick, study, maternity, compassionate,
+  exam, off duty. A date range expands to one row per day.
+- **Leave blocks duty** — refuses to roster someone who is on leave, and says which leave.
+- Office departments **refuse weekend duty**.
+- Bulk upload with per-row preview and plain-English rejection reasons; CSV export.
+- Legacy rows **copied** (not moved) into the unified table at boot; old
+  `/dept-roster` URL redirects so bookmarks still work.
+
+### Staff & admin
+- **8 roles**: SUPER_ADMIN, MD_CEO, DMD, DCST, APEX_NURSE, HEAD_ADMIN_HR,
+  ADMIN_MANAGER, HOD.
+- **Bulk staff upload** — parses the founder's real nominal roll (`MEDICAL`,
+  `PUB AFF OFF`, `FIN/ACCTS`, `NUTRIT&DIET`), generates usernames, random
+  one-time passwords shown once, accounts start unapproved + must-change-password.
+- **31 standard departments**, idempotent installer button.
+- Departments with HOD name + phone (mandatory), sections, units.
+- Admin Manager daily inspections, scoring, corrective actions, SLA escalation,
+  reports centre with PDF + verification codes, audit log with hash chain.
+
+### Production hardening
+- Durable DB-backed storage (Render's disk is ephemeral and was wiping uploads).
+- Real backups (engine-independent CSV-in-zip, restore drill performed).
+- Secure cookies, HSTS, CSP, ProxyFix, per-IP + per-username login lockout.
+- `connect_timeout=5`, degraded-mode boot, health always 200, self-healing scheduler.
+- Alembic migrations auto-apply at boot.
+- **`/api/v1/ready` now detects schema drift** and reports exactly which columns are missing.
+
+---
+
+## 5. WHAT IS PENDING ⬜
+
+### The patient flow — the founder's own words
+> 1. Booking — i. Online booking, ii. Physical Booking
+> 2. HIMS Register — i. open folder for new/first visit patient, ii. Search for the folder of returning patient
+> 3. Triage — Place patient to the OPD/SOPD/MOPD/EMERGENCY according to available doctors, patients needs, Patients Categories, Day of the week, Clinics of the day etc
+> 4. The TRIAGE Assign Patients on the QUEUE to doctors in the consulting room 1, 2, 3, 4, or Emergency
+> 5. The Doctors — The doctors on duty and also ready to work by clicking to consult would see patients assigned to them from TRIAGE (the Call Room Queue)
+> 6. The Doctor after attending to the patient would now push the patient to one, two or three out of the following (LAHSMA/Billing/Megalek/Laboratory/Pharmacy/Emergency)
+
+| Stage | Status |
+|---|---|
+| Booking | ✅ built |
+| **A — HIMS Register** | ✅ **built** |
+| **B — Triage** | ⬜ **NEXT — scope agreed, see below** |
+| **C — Call Room Queue** | ⬜ pending |
+| **D — Onward routing** | ⬜ pending |
+| **E — Voice throughout** | 🟡 partial (engine done, wired into HIMS + queue; needs wiring into B/C/D) |
+
+### ⬅ START HERE: Stage B — Triage (scope agreed with founder, awaiting his "go")
+
+**Founder's clarifications (verbatim):**
+- *"LAHSMA — Lagos state owned health insurance and Megalex — is a private payment system that help all Lagos state owned hospitals to collect revenue"*
+- *"Call Room Queue is a queue waiting to see a particular doctor in one of the consulting rooms"*
+- Doctor availability: **both rostered AND clicked "ready to consult"**
+- Who hears voice: **both personal devices and station screens**
+
+| ✅ DO build | ❌ Do NOT build |
+|---|---|
+| Place patient into **OPD / SOPD / MOPD / Emergency** | Any symptom or clinical scoring |
+| Use category, day of week, clinic of the day, available doctors | Vital signs, temperature, blood pressure |
+| Show **and speak** waiting counts and wait times | Any diagnosis or clinical notes |
+| **Announce patients by name** when it's their turn | |
+| Carry wheelchair / seat / language flags forward from the folder | |
+
+`PatientVisit` already has `clinic`, `consulting_room`, `doctor_id`,
+`triaged_at`, `seen_at` — **use them; no new migration should be needed.**
+`app/announce.py` already defines `triage_backlog`, `consult_ready`,
+`queue_assigned`, `emergency_arrival`, `patient_waiting_long`.
+
+### Other outstanding items
+| # | Item | Notes |
+|---|---|---|
+| 1 | **Role Management** | Requirement #1 of the original 9 — the only one not delivered. Roles are a fixed tuple; there is **no `Role`/`Permission` table** and no UI to create/edit roles or change permissions. |
+| 2 | **Leave approval workflow** | Leave is *recorded* in the roster; there is no request → approve → balance system. |
+| 3 | Cross-department roster clash warning | Same nurse rostered by two HODs on the same night — each only sees their own list. |
+| 4 | Link existing bookings & queue tickets to patient folders | They still hold loose name/phone. Natural fit with Stage B. |
+| 5 | Roster auto-fill | "Cover the next 30 days with these 6 nurses", fairly. |
+| 6 | CSP still uses `'unsafe-inline'` | Templates carry inline `<style>`/`<script>`. Deliberate; future work. |
+| 7 | `admincp.py` ~883 lines, ~57% coverage | Least-tested, most-privileged file. P2 refactor. |
+| 8 | Load-test figures (4,000 req/min) never re-verified | Not re-run against real Supabase over the network. |
+| 9 | Patient folder has no photograph | Not requested; free-tier storage cost. |
+| 10 | HIMS search doesn't handle misspellings | `Abatam` won't find `Abatan`. Phone number always works. |
+| 11 | No bulk import of an existing paper patient register | Every folder is opened at the desk. Ask if there's a backlog. |
+
+---
+
+## 6. FOUNDER'S OUTSTANDING ACTIONS (chase these)
+
+| # | Action | Why it matters | Time |
+|---|---|---|---|
+| 1 | **Revoke GitHub token `ghp_82Db…`, issue a new one with `repo` AND `workflow`** | Exposed in chat many times. Anyone with it can push code that auto-deploys to patients. **Most urgent.** Adding `workflow` also unlocks CI. | 2 min |
+| 2 | **Confirm HIMS now loads** (it was 500-ing; fixed in `48b0de1`) | Needs his eyes on a real phone | 2 min |
+| 3 | Add a **second UptimeRobot monitor on `/api/v1/ready`** | Health says "alive"; ready says "actually working". Would have caught the 500 automatically. | 3 min |
+| 4 | Add `GROQ_API_KEY` in Render | Turns on the smarter assistant. Free, no card. | 5 min |
+| 5 | Enable Supabase backups (Database → Backups) | Second safety net | 2 min |
+| 6 | Enable CI per `ci/README.md` | Tests run on every change | 5 min |
+| 7 | Press "Add any missing standard departments" (Admin → Structure) | Installs all 31 | 1 min |
+| 8 | Set admin departments to **"Office hours, Mon–Fri"** | Procurement, Audit, Finance, ICT, Admin/HR rosters then behave correctly | 5 min |
+| 9 | Test the **voice** on his phone (tap screen once to unlock audio) | Browsers block sound until first touch | 3 min |
+
+---
+
+## 7. HARD-WON LESSONS — do not repeat these
+
+### The production outage (15 Aug) — 5 causes, all fixed
+Unbounded DB connect (no timeout → 130s boot → health check killed every
+container) · disk-rescue retried per file · every boot step retried a dead DB ·
+**my own bug: `/api/v1/health` returned 503 when the DB was down, and
+`render.yaml` used it as `healthCheckPath`, so Render read it as "deploy failed"
+and killed every deploy for hours** · scheduler thread died with no recovery.
+Result: 130s+ hang → 5.6s boot with a black-holed DB.
+
+### The HIMS 500 (16 Aug) — the migration lesson
+I removed EMR columns by **editing a migration that had already run in
+production**. Alembic saw the revision as applied and skipped it, so the live
+database never gained the new columns. Every `/hims/` request died with
+`column patient.preferred_lang does not exist`.
+
+**Rule: an applied migration is immutable history. Fixes go in a NEW migration.**
+
+Found while fixing it: **`migrations/env.py` was silently overwriting the
+caller's database URL**, so `alembic upgrade head` against a chosen database
+migrated a *different* one while logging "Running upgrade…". Any verification
+done that way proved nothing. Fixed.
+
+### Tests that pass but prove nothing — **the most important lesson here**
+Twice now, a guard test **passed against the very bug it was written to catch**:
+- The migration guard passed because the suite builds every database with
+  `create_all()`, which always produces correct columns — so it never exercised
+  the *upgrade* path, the only path that broke.
+- `tests/conftest.py` **hard-coded `DATABASE_URL` to SQLite**, so every previous
+  claim of "passes on PostgreSQL" was false. The first genuine PostgreSQL run
+  immediately failed a test issuing a SQLite `PRAGMA`.
+
+**Always mutation-test: break the code deliberately and confirm the test fails.**
+`tests/test_migration_safety.py` now builds a database in the exact shape
+production was in, stamps it at the old revision, and runs the real upgrade.
+
+### Other bugs worth remembering
+- Voice was **totally silent** for 4 independent reasons (no patient event was
+  speakable; `speak()` called a function on the wrong object; quiet hours
+  defaulted to 22:00–07:00 silencing night shift; browsers block audio until a tap).
+- **Ephemeral disk** wiped every upload/PDF/logo on restart → `app/storage.py`.
+- **Backups silently did nothing on PostgreSQL** → `app/backup.py`.
+- **Rate limits were global** (no ProxyFix) — 8 bad logins locked out everyone.
+- **Bulk upload role bug**: "Deputy Medical Director" matched `md` inside
+  "MEDical" → would have granted a deputy the MD's authority.
+- **Chat gave wrong answers** — substring matching fired `"are you"` inside
+  "what **are you**r opening hours".
+- **KB sync never updated existing intents** — improved wording was dead on
+  arrival in production.
+- **Open redirect** via `startswith("/")` allowing `//evil.com`.
+- **404s from template/route mismatches** → built `tools/check_links.py`; run it every time.
+
+---
+
+## 8. Key files
+
+**Core:** `app/models.py` · `app/__init__.py` (boot steps, ProxyFix, error
+handlers) · `app/config.py` · `app/security.py` · `app/migrate.py`
+
+**Feature engines:** `app/hims.py` (Stage A) · `app/rosterdata.py` (roster) ·
+`app/announce.py` (**voice — read this before Stage B**) · `app/storage.py` ·
+`app/backup.py` · `app/bulkusers.py` · `app/standard_departments.py` ·
+`app/chatbot/` (`engine.py`, `ai.py`, `seed_kb.py`, `kb_departments_full.py`)
+
+**Views:** `app/views/hims.py` · `roster.py` · `api.py` (health/ready/alerts) ·
+`admincp.py` · `main.py` · `queue.py` · `bookings.py` · `chat.py` · plus others
+
+**Templates:** `app/templates/hims/{desk,register,folder}.html` ·
+`roster.html` · `roster_upload_preview.html` · `patient_hub.html` · `base.html`
+
+**Tools:** `tools/check_links.py` · `tools/hims_browser_check.py` ·
+`tools/roster_browser_check.py`
+
+**Key tests:** `test_hims.py` (43) · `test_migration_safety.py` (8) ·
+`test_upgrade.py` (roster) · `test_voice_alerts.py` · `test_system.py` · `test_smoke.py`
+
+**Docs:** `docs/reports/` (16 reports incl. `HIMS_500_FIX.md`,
+`STAGE_A_CORRECTION.md`, `ROSTER_MERGE_REPORT.md`) · `OPERATIONS.md` ·
+`AI_SETUP.md` · `ci/README.md`
+
+---
+
+## 9. Config reference
+
+`STORAGE_BACKEND=db` · `COOKIE_SECURE=1` · `TRUSTED_PROXY_COUNT=1` ·
+`LOGIN_MAX_FAILURES=10` · `LOGIN_LOCKOUT_MINUTES=15` · `LOG_LEVEL=INFO` ·
+`MAX_CONTENT_LENGTH=8MB` · `DB_CONNECT_TIMEOUT=5` · `AI_FALLBACK=1` ·
+`AI_TIMEOUT=8` · `AUTO_SEED=1` (seeds only an empty DB)
+
+AI keys: `GROQ_API_KEY` / `GROQ_MODEL` (llama-3.3-70b-versatile) ·
+`GEMINI_API_KEY` / `GEMINI_MODEL` (gemini-2.0-flash) · `OPENROUTER_API_KEY` ·
+`AI_PROVIDER` · per-tenant `ai_fallback_enabled`, `ai_daily_cap` (400).
+
+Free-tier limits: Groq 30 req/min · Gemini 15 req/min, 1,500/day · OpenRouter 50/day.
+
+---
+
+## 10. Suggested opening message for the new chat
+
+> Continuing the Hospital Admin Manager Suite for GENERAL HOSPITAL IJEDE.
+> Read HANDOFF.md in the repo first — it has full context.
+>
+> Code is at `5828bae`, 353 tests green on SQLite and PostgreSQL 17, site live
+> and healthy. Stage A (HIMS Register) is done. **Next is Stage B — Triage**,
+> scope already agreed in §5.
+>
+> Remember: this is a **patient-experience app, NOT an EMR**. Voice reminders
+> are required in every feature. Explain everything in plain English.
