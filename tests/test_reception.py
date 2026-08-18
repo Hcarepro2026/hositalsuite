@@ -87,9 +87,14 @@ def test_the_walk_runs_reception_to_triage(app, seeded, client):
 
         assert intake.stage == "RECEPTION"
         reception.advance(intake, "BILLING", ref="BILL-1")
-        assert intake.stage == "BILLING" and intake.billed_at is not None
-        reception.advance(intake, "PAYMENT")
+        assert intake.stage == "BILLING"
+        # billed_at is stamped when the bill is actually RAISED (on leaving the
+        # billing desk), not when the patient is merely sent there — otherwise
+        # "how long does Billing take?" measures the wrong thing.
+        reception.advance(intake, "PAYMENT", ref="BILL-1")
         assert intake.stage == "PAYMENT"
+        assert intake.billed_at is not None
+        assert intake.bill_ref == "BILL-1", "the bill number was discarded"
         reception.advance(intake, "PAID", ref="RCT-9")
         assert intake.stage == "PAID" and intake.paid_at is not None
         assert intake.payment_ref == "RCT-9"

@@ -40,6 +40,8 @@
   {% endif %}
   {% if current_user.role in ('SUPER_ADMIN','MD_CEO','ADMIN_MANAGER','HOD') %}
     <a href="/reception/" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>
+    <a href="/billing" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a>
+    <a href="/paypoint" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>
     <a href="/hims/" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>
     <a href="/triage/" class="{{ 'active' if request.path.startswith('/triage') }}">Triage</a>
     <a href="/consulting-room" class="{{ 'active' if request.path.startswith('/consulting-room') }}">My Room</a>

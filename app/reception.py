@@ -174,6 +174,16 @@ def advance(intake: ReceptionIntake, to_stage: str, *, ref: str = "") -> None:
     now = now_naive()
     intake.stage = to_stage
     if to_stage == "BILLING":
+        # Sent to Billing. The bill itself is raised AT the billing desk, so a
+        # reference given here is unusual but accepted.
+        if ref:
+            intake.bill_ref = ref[:40]
+    elif to_stage == "PAYMENT":
+        # The bill has now actually been raised — this is the moment worth
+        # stamping. Previously a bill number entered by the billing clerk was
+        # silently discarded, and billed_at recorded when the patient was SENT
+        # to Billing rather than when the bill existed, so "how long does
+        # Billing take?" measured the wrong thing.
         intake.billed_at = now
         if ref:
             intake.bill_ref = ref[:40]

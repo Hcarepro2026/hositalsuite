@@ -122,8 +122,8 @@ python3 tools/roster_browser_check.py                   # 21 checks
 
 | Metric | Value |
 |---|---|
-| Tests | **471 passing** on SQLite **and** real PostgreSQL 17 |
-| Test files | 33 in `tests/` |
+| Tests | **483 passing** on SQLite **and** real PostgreSQL 17 |
+| Test files | 34 in `tests/` |
 | Migrations | 8 in `migrations/versions/` (head = `f7d25a6b0c93`) |
 | Browser checks | HIMS 20/20 · Roster 21/21 |
 | Link checker | Clean |
@@ -230,6 +230,8 @@ Previously two pages that couldn't see each other.
 |---|---|
 | Booking | ✅ built |
 | **Reception (front door)** | ✅ **built 18 Aug** — details, special needs, insurance, then Billing → Pay-Point |
+| **Billing Point** (`/billing`) | ✅ **built 18 Aug** — its own screen, its own queue |
+| **Megalex / Pay-Point** (`/paypoint`) | ✅ **built 18 Aug** — separation of duties: the cashier records the money, not the receptionist |
 | **A — HIMS Register** | ✅ built (special needs moved OUT to Reception) |
 | **B — Triage** | ✅ **built 18 Aug** — OPD/SOPD/MOPD/EMERGENCY, doctor rooms, blood sugar step |
 | **C — Call Room Queue** | ✅ **built 18 Aug** — `/consulting-room`: call a patient in, finish the consultation |
