@@ -7,9 +7,11 @@ from flask import (Blueprint, abort, flash, jsonify, redirect, render_template,
                    request, send_file, url_for)
 from flask_login import current_user
 
-from .. import notifications, pdfgen, scoring, services, whatsapp
+from .. import (notifications, pdfgen, rosterdata, scoring, services,
+                whatsapp)
 from ..audit import audit
 from ..config import Config
+from ..inspection_areas import INSPECTION_AREAS, match_department
 from ..models import (CorrectiveAction, Department, Inspection,
                       InspectionScore, Organization, ReportFile,
                       User, db, new_code, now_naive)
@@ -437,3 +439,156 @@ def verify(code: str):
                                ref=rf.title, org=org, date=rf.created_at.date(),
                                rating=None, total=None, submitted=rf.created_at)
     return render_template("verify.html", ok=False), 404
+
+
+# ================================================================ WALK-ROUND
+# The Admin Manager does not inspect one department a day — he walks the whole
+# hospital and scores every area he passes. This is that page: 24 self-contained
+# collapsible cards, each with its own five scores, its own staff-on-duty list
+# from the roster, and its own justification box that appears the moment a low
+# score is given.
+def _walk_areas(org_id: int, day):
+    """Build the card list: area -> matched department -> who is on duty."""
+    depts = (db.session.query(Department)
+             .filter_by(org_id=org_id, active=True).order_by(Department.name).all())
+    duty_map = rosterdata.on_duty_map(org_id, day)
+    done = {r.department_id for r in db.session.query(Inspection)
+            .filter_by(org_id=org_id, duty_date=day, status="SUBMITTED").all()
+            if r.department_id}
+    cards = []
+    for key, label, _aliases in INSPECTION_AREAS:
+        dept = match_department(key, depts)
+        cards.append({
+            "key": key,
+            "label": label,
+            "dept": dept,
+            "dept_id": dept.id if dept else None,
+            "on_duty": duty_map.get(dept.id, []) if dept else [],
+            "done": bool(dept and dept.id in done),
+        })
+    return cards
+
+
+@bp.get("/admin-manager/walk")
+@require_role("ADMIN_MANAGER", "SUPER_ADMIN")
+def walk_round():
+    today = now_naive().date()
+    duty = services.on_duty(current_user.org_id, today)
+    return render_template(
+        "admin_manager_walk.html",
+        cards=_walk_areas(current_user.org_id, today),
+        criteria=scoring.CRITERIA, today=today, duty=duty,
+        gps_mode=services.get_setting(current_user.org_id, "gps_mode"))
+
+
+@bp.post("/admin-manager/walk")
+@require_role("ADMIN_MANAGER", "SUPER_ADMIN")
+def walk_round_submit():
+    """Save every area the manager actually scored. Blank cards are skipped.
+
+    A walk-round is not all-or-nothing: if he inspected nine areas before being
+    called away, those nine must save. Refusing the lot because the other
+    fifteen are blank would lose real work and teach him not to trust the page.
+    """
+    now = now_naive()
+    today = now.date()
+    org = _my_org()
+
+    duty = services.on_duty(current_user.org_id, today)
+    if duty and duty.id != current_user.id and not current_user.is_super:
+        flash(f"Today's inspection is assigned to {duty.name}.", "error")
+        return redirect(url_for("inspections.walk_round"))
+
+    depts = (db.session.query(Department)
+             .filter_by(org_id=current_user.org_id, active=True).all())
+    already = {r.department_id for r in db.session.query(Inspection)
+               .filter_by(org_id=current_user.org_id, duty_date=today,
+                          status="SUBMITTED").all() if r.department_id}
+
+    saved, skipped, problems = [], [], []
+    for key, label, _aliases in INSPECTION_AREAS:
+        raw = [request.form.get(f"{key}_score_{n}") for n in range(1, 6)]
+        if not any(v for v in raw):
+            continue                                    # not inspected today
+        if not all(v for v in raw):
+            problems.append(f"{label}: please score all five criteria, or none.")
+            continue
+
+        dept = match_department(key, depts)
+        if dept is None:
+            problems.append(
+                f"{label}: there is no matching department yet. Add it in "
+                f"Admin → Structure, then score it.")
+            continue
+        if dept.id in already:
+            skipped.append(label)
+            continue
+
+        try:
+            scores = {n: int(raw[n - 1]) for n in range(1, 6)}
+        except (TypeError, ValueError):
+            problems.append(f"{label}: scores must be numbers from 1 to 5.")
+            continue
+        errs = scoring.validate_scores(scores)
+        if errs:
+            problems.append(f"{label}: " + " ".join(errs))
+            continue
+
+        explanations = {}
+        missing = []
+        for n in range(1, 6):
+            expl = (request.form.get(f"{key}_explanation_{n}") or "").strip()
+            if scoring.explanation_required(scores[n]) and not expl:
+                missing.append(str(n))
+            explanations[n] = expl
+        if missing:
+            problems.append(
+                f"{label}: a reason is required for the low score on "
+                f"criterion {', '.join(missing)}.")
+            continue
+
+        evald = scoring.evaluate(scores)
+        insp = Inspection(
+            org_id=current_user.org_id,
+            ref=services.next_inspection_ref(org, now),
+            verify_code=new_code(10),
+            inspector_id=current_user.id,
+            duty_date=today,
+            department_id=dept.id,
+            status="SUBMITTED",
+            started_at=now,
+            submitted_at=now,
+            total_score=evald["total"],
+            percent=evald["percent"],
+            rating=evald["rating"],
+            critical_count=evald["critical_count"],
+            poor_count=evald["poor_count"],
+            gps_mode=services.get_setting(current_user.org_id, "gps_mode"),
+            device_info=request.headers.get("User-Agent", "")[:280],
+            final_comment=(request.form.get("overall_report") or "").strip()[:4000] or None,
+        )
+        db.session.add(insp)
+        db.session.flush()
+        for n in range(1, 6):
+            db.session.add(InspectionScore(
+                inspection_id=insp.id, criterion_no=n, score=scores[n],
+                explanation=explanations[n] or None))
+        already.add(dept.id)
+        saved.append(f"{label} ({evald['total']}/25)")
+        audit("INSPECTION_SUBMITTED", "inspection", insp.id,
+              {"ref": insp.ref, "area": label, "total": evald["total"]})
+
+    if saved:
+        db.session.commit()
+    else:
+        db.session.rollback()
+
+    if saved:
+        flash(f"Saved {len(saved)} area(s): " + ", ".join(saved), "success")
+    if skipped:
+        flash("Already inspected today, left unchanged: " + ", ".join(skipped), "success")
+    for p in problems:
+        flash(p, "error")
+    if not saved and not problems:
+        flash("Nothing was scored yet. Open an area and give it five scores.", "error")
+    return redirect(url_for("inspections.walk_round"))

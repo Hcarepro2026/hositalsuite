@@ -696,3 +696,56 @@ def migrate_legacy_entries(app) -> int:
         db.session.commit()
         app.logger.info("roster: migrated %s legacy department roster rows", moved)
     return moved
+
+
+# ------------------------------------------------------------------ on duty here
+def on_duty_in(org_id: int, day: date, department_id: int | None) -> list[User]:
+    """Everyone rostered to WORK in one department on one day.
+
+    Used by the Admin Manager walk-round so each area card can name the people
+    who are supposed to be there. LEAVE rows are excluded on purpose: a card
+    that lists somebody who is on annual leave as "on duty" is worse than a
+    card that lists nobody, because the manager would go looking for them.
+    """
+    if not department_id:
+        return []
+    rows = (db.session.query(RosterEntry)
+            .filter(RosterEntry.org_id == org_id,
+                    RosterEntry.duty_date == day,
+                    RosterEntry.kind == "DUTY",
+                    RosterEntry.department_id == department_id)
+            .all())
+    seen, people = set(), []
+    for r in rows:
+        if r.user and r.user_id not in seen:
+            seen.add(r.user_id)
+            people.append(r.user)
+    people.sort(key=lambda u: (u.name or "").lower())
+    return people
+
+
+def on_duty_map(org_id: int, day: date) -> dict[int, list[User]]:
+    """department_id -> people on duty, for a whole day in ONE query.
+
+    The walk-round page shows 24 areas. Asking the database once per card would
+    be 24 round trips to Supabase on a phone over Nigerian mobile data; this
+    keeps the page to a single query.
+    """
+    rows = (db.session.query(RosterEntry)
+            .filter(RosterEntry.org_id == org_id,
+                    RosterEntry.duty_date == day,
+                    RosterEntry.kind == "DUTY")
+            .all())
+    out: dict[int, list[User]] = {}
+    seen: set[tuple[int, int]] = set()
+    for r in rows:
+        if not r.department_id or not r.user:
+            continue
+        key = (r.department_id, r.user_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.setdefault(r.department_id, []).append(r.user)
+    for people in out.values():
+        people.sort(key=lambda u: (u.name or "").lower())
+    return out

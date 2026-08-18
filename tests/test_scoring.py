@@ -65,7 +65,9 @@ def test_recurring_findings_detection():
     history += [{"criterion_scores": {n: 4 for n in range(1, 6)}} for _ in range(4)]
     msgs = scoring.recurring_findings(history, window=10, threshold=3)
     assert len(msgs) == 1
-    assert "Equipment, Facilities & Supplies" in msgs[0]
+    # Criterion 3 is Cleanliness / Environment under the criteria the founder
+    # set on 18 Aug 2026 (CRITERIA_VERSION 2).
+    assert "Cleanliness / Environment" in msgs[0]
     assert "6 of the last 10" in msgs[0]
 
 

@@ -9,39 +9,64 @@ from typing import Dict, Iterable, List, Optional
 
 # ----------------------------------------------------------- THE FIVE CRITERIA
 # Exactly five primary evaluation criteria — do not add a sixth.
+# The Admin Manager inspects PLACES (a ward, the laundry, the theatre), so the
+# criteria are the five things that make a place work. Version 2 was set by the
+# founder on 18 Aug 2026. Version 1 is kept below so inspections recorded under
+# the old wording still read correctly in old reports - an inspection is a
+# signed record and its criteria must never silently change meaning.
+CRITERIA_VERSION = 2
+
 CRITERIA: Dict[int, dict] = {
     1: {
         "code": "staff",
-        "title": "Staff & Service Delivery",
-        "items": ["Staff presence", "Duty coverage", "Punctuality", "Staff conduct",
-                  "Responsiveness", "Patient/visitor handling", "Service delivery"],
+        "title": "Staff / Personnel",
+        "items": ["Staff on duty as rostered", "Punctuality", "Conduct and courtesy",
+                  "Responsiveness to patients", "Adequate numbers for the workload",
+                  "Handover done properly"],
     },
     2: {
-        "code": "cleanliness",
-        "title": "Cleanliness & Infection Prevention",
-        "items": ["General cleanliness", "Working areas", "Toilets", "Handwashing facilities",
-                  "Waste disposal", "Bed/clinical-area hygiene", "Infection-prevention practices"],
+        "code": "equipment",
+        "title": "Equipment / Tools & Consumables",
+        "items": ["Required equipment present", "Everything working", "Consumables in stock",
+                  "Furniture sound", "Faulty items reported", "Nothing expired"],
     },
     3: {
-        "code": "equipment",
-        "title": "Equipment, Facilities & Supplies",
-        "items": ["Availability of required equipment", "Functionality", "Furniture", "Electricity",
-                  "Water", "Lighting", "Ventilation", "Essential supplies", "Faulty equipment/facilities"],
+        "code": "cleanliness",
+        "title": "Cleanliness / Environment",
+        "items": ["General cleanliness", "Toilets", "Handwashing points", "Waste disposal",
+                  "Bed and clinical-area hygiene", "Infection prevention", "Tidiness of surroundings"],
     },
     4: {
-        "code": "records",
-        "title": "Records, Compliance & Accountability",
-        "items": ["Required registers", "Documentation", "Attendance records", "Departmental records",
-                  "SOP compliance", "Handover procedures", "Previous corrective actions"],
+        "code": "power",
+        "title": "Power & Engineering Service",
+        "items": ["Mains power", "Generator / inverter backup", "Lighting", "Water supply",
+                  "Air conditioning and ventilation", "Plumbing", "Outstanding repairs"],
     },
     5: {
         "code": "safety",
-        "title": "Safety, Security & Overall Condition",
-        "items": ["Patient safety", "Staff safety", "Security", "Fire safety",
-                  "Emergency preparedness", "Physical hazards", "Infrastructure condition",
-                  "Emergency access"],
+        "title": "Safety, Security & Record-Keeping",
+        "items": ["Patient safety", "Staff safety", "Security of the area", "Fire safety",
+                  "Emergency preparedness and access", "Registers and records up to date",
+                  "Previous corrective actions closed out"],
     },
 }
+
+# Version 1 - the wording used before 18 Aug 2026. Read-only history.
+LEGACY_CRITERIA_V1: Dict[int, dict] = {
+    1: {"code": "staff", "title": "Staff & Service Delivery"},
+    2: {"code": "cleanliness", "title": "Cleanliness & Infection Prevention"},
+    3: {"code": "equipment", "title": "Equipment, Facilities & Supplies"},
+    4: {"code": "records", "title": "Records, Compliance & Accountability"},
+    5: {"code": "safety", "title": "Safety, Security & Overall Condition"},
+}
+
+
+def criteria_for(version: int | None) -> Dict[int, dict]:
+    """The criteria wording that applied when an inspection was recorded."""
+    if version is not None and int(version) <= 1:
+        return LEGACY_CRITERIA_V1
+    return CRITERIA
+
 
 CRITERIA_COUNT = 5
 MAX_SCORE = CRITERIA_COUNT * 5          # 25
