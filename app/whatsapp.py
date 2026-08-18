@@ -210,7 +210,13 @@ def send_message(msg: WhatsAppMessage) -> WhatsAppMessage:
             msg.sent_at = now_naive()
         if not (msg.last_error or "").startswith("cloud failed"):
             msg.last_error = None
-    except (WhatsAppError, requests.RequestException, OSError) as exc:
+    except Exception as exc:                              # noqa: BLE001
+        # Catch EVERYTHING. This used to list only WhatsAppError,
+        # RequestException and OSError, so any other fault — a provider
+        # returning unexpected JSON, a None where a string was expected —
+        # escaped and killed the whole sending run, leaving every other queued
+        # message stuck behind it. A failed message must be recorded and
+        # retried, never allowed to take the queue down with it.
         msg.status = "FAILED" if msg.attempts >= 3 else "QUEUED"
         msg.last_error = str(exc)[:400]
     db.session.commit()

@@ -35,7 +35,18 @@ services:
       - key: WHATSAPP_MODE
         value: sandbox           # switch to 'cloud' + credentials when Meta is approved
       - key: SMS_MODE
-        value: sandbox           # switch to 'termii' + credentials when ready
+        value: sandbox           # switch to 'termii' when ready — see
+                                 # docs/SMS_AND_WHATSAPP_SETUP.md
+      - key: TERMII_API_KEY      # from accounts.termii.com -> Settings -> API
+        sync: false
+      - key: TERMII_SENDER_ID    # e.g. GHIJEDE (must be approved by Termii)
+        sync: false
+      - key: TWILIO_ACCOUNT_SID  # WhatsApp fallback when Meta Cloud fails
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM  # e.g. +14155238886 — keep the leading +
+        sync: false
       - key: STORAGE_BACKEND
         value: db                # uploads/PDFs in the database — Render's disk is
                                  # WIPED on every deploy/restart. Do not set to
