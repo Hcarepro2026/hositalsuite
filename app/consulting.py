@@ -52,17 +52,31 @@ def doctor_queue(org_id: int, doctor_id: int) -> list[PatientVisit]:
     A doctor who is ready in Accident & Emergency must see the people waiting
     in Accident & Emergency. Anything else strands them.
     """
-    from sqlalchemy import and_, or_
+    from sqlalchemy import and_, func, or_
 
-    start = datetime.combine(now_naive().date(), datetime.min.time())
     session = _open_session_for(org_id, doctor_id)
     conditions = [PatientVisit.doctor_id == doctor_id]
     if session is not None:
-        conditions.append(and_(PatientVisit.doctor_id.is_(None),
-                               PatientVisit.clinic == session.clinic))
+        # Unassigned patients waiting in the clinic THIS doctor has open.
+        # Compared case-insensitively and ignoring stray spaces: a clinic saved
+        # as "Emergency" or " EMERGENCY " must still match, because a patient
+        # is not going to be seen by a string comparison.
+        conditions.append(and_(
+            PatientVisit.doctor_id.is_(None),
+            func.upper(func.trim(PatientVisit.clinic)) ==
+            (session.clinic or "").strip().upper()))
+
+    # NO DATE WINDOW.
+    #
+    # This used to be limited to visits started today. It looked sensible and
+    # it was wrong twice over: a patient placed at 23:50 vanished from the
+    # doctor's room at midnight while still sitting in the waiting area, and
+    # any clock or timezone difference between the app and the database could
+    # hide today's patients entirely. An OPEN visit is open until somebody
+    # closes it, whatever the calendar says. Stale rows are handled properly by
+    # the tracking cleanup job, not by hiding real patients from a doctor.
     return (db.session.query(PatientVisit)
             .filter(PatientVisit.org_id == org_id,
-                    PatientVisit.started_at >= start,
                     PatientVisit.status.in_(("TRIAGED", "IN_CONSULTATION")),
                     or_(*conditions))
             .order_by(PatientVisit.triaged_at.asc().nullsfirst())
@@ -80,11 +94,11 @@ def _open_session_for(org_id: int, doctor_id: int):
 
 def in_consultation(org_id: int, doctor_id: int) -> PatientVisit | None:
     """The patient currently in the room with this doctor, if any."""
-    start = datetime.combine(now_naive().date(), datetime.min.time())
+    # Same rule as doctor_queue: no date window. A consultation that began
+    # before midnight is still happening at 00:05.
     return (db.session.query(PatientVisit)
             .filter(PatientVisit.org_id == org_id,
                     PatientVisit.doctor_id == doctor_id,
-                    PatientVisit.started_at >= start,
                     PatientVisit.status == "IN_CONSULTATION")
             .first())
 
@@ -109,7 +123,8 @@ def call_in(visit: PatientVisit, doctor_id: int) -> str:
     # exactly how a real clinic works: whoever is free takes the next patient.
     session = _open_session_for(visit.org_id, doctor_id)
     claimable = (visit.doctor_id is None and session is not None
-                 and visit.clinic == session.clinic)
+                 and (visit.clinic or "").strip().upper()
+                 == (session.clinic or "").strip().upper())
     if visit.doctor_id != doctor_id and not claimable:
         return "That patient is not on your call room queue."
     if visit.status == "IN_CONSULTATION":

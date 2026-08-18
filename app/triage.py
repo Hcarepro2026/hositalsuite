@@ -195,13 +195,42 @@ def suggest_clinic(patient: Patient) -> str:
 
 
 def suggest_doctor(org_id: int, clinic: str) -> DoctorSession | None:
-    """The free doctor in that clinic with the shortest queue — fair, not first."""
-    candidates = [s for s in ready_doctors(org_id) if s.clinic == clinic]
+    """The free doctor in that clinic with the shortest queue — fair, not first.
+
+    Compared case-insensitively and ignoring stray spaces, for the same reason
+    the consulting room does: a patient must not be left unassigned because two
+    strings differed by a space.
+    """
+    want = (clinic or "").strip().upper()
+    candidates = [s for s in ready_doctors(org_id)
+                  if (s.clinic or "").strip().upper() == want]
     if not candidates:
         return None
     load = doctor_load(org_id)
     candidates.sort(key=lambda s: (load.get(s.doctor_id, 0), s.consulting_room))
     return candidates[0]
+
+
+def suggest_clinic_with_cover(org_id: int, patient) -> str:
+    """The clinic to offer Triage: the right one, unless nobody is there.
+
+    WHY THIS EXISTS
+    ---------------
+    suggest_clinic() answers "where does this KIND of patient normally go?" —
+    a general adult goes to OPD. But if the only doctor on duty is sitting in
+    Accident & Emergency, offering OPD means the page pre-selects a clinic with
+    nobody in it, the patient is placed with no doctor, and they wait for a
+    room that will not open today.
+
+    So: keep the clinically sensible default WHEN somebody is covering it, and
+    otherwise offer the clinic that actually has a free doctor. Triage can
+    always override — this only changes what the box says before anyone types.
+    """
+    preferred = suggest_clinic(patient)
+    if suggest_doctor(org_id, preferred) is not None:
+        return preferred
+    open_clinics = [s.clinic for s in ready_doctors(org_id)]
+    return open_clinics[0] if open_clinics else preferred
 
 
 def place(visit: PatientVisit, *, clinic: str, session: DoctorSession | None,

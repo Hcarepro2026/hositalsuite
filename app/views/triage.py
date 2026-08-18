@@ -40,11 +40,22 @@ def bench():
     rows = []
     for v in queue:
         p = patients.get(v.patient_id)
+        clinic = triage.suggest_clinic_with_cover(org_id, p) if p else "OPD"
+        # PRE-SELECT the free doctor with the shortest queue.
+        #
+        # The dropdown used to default to "— wait for a doctor —" even when
+        # somebody was ready and idle. Busy triage staff took the default, so
+        # patients were placed with no doctor and (before the queue fix) landed
+        # in nobody's room. Defaulting to a real doctor makes the safe thing
+        # the easy thing; "wait for a doctor" is still there for when nobody
+        # is free, but it now has to be chosen deliberately.
+        suggested = triage.suggest_doctor(org_id, clinic)
         rows.append({
             "visit": v,
             "patient": p,
             "waited": triage.wait_minutes(v),
-            "suggest_clinic": triage.suggest_clinic(p) if p else "OPD",
+            "suggest_clinic": clinic,
+            "suggest_session_id": suggested.id if suggested else None,
         })
     return render_template(
         "triage/bench.html", rows=rows, sessions=sessions, load=load,

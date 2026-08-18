@@ -122,7 +122,7 @@ python3 tools/roster_browser_check.py                   # 21 checks
 
 | Metric | Value |
 |---|---|
-| Tests | **489 passing** on SQLite **and** real PostgreSQL 17 |
+| Tests | **497 passing** on SQLite **and** real PostgreSQL 17 |
 | Test files | 34 in `tests/` |
 | Migrations | 8 in `migrations/versions/` (head = `f7d25a6b0c93`) |
 | Browser checks | HIMS 20/20 · Roster 21/21 |

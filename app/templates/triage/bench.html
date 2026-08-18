@@ -84,12 +84,21 @@
         <div>
           <label style="margin-top:0">Doctor / consulting room</label>
           <select name="session_id">
-            <option value="">— place in the clinic, wait for a doctor —</option>
             {% for s in sessions %}
-            <option value="{{ s.id }}">{{ s.doctor.name }} — {{ s.consulting_room }}
+            <option value="{{ s.id }}" {{ 'selected' if s.id == r.suggest_session_id }}>
+              {{ s.doctor.name }} — {{ s.consulting_room }}
               ({{ load.get(s.doctor_id, 0) }} waiting)</option>
             {% endfor %}
+            {# Last, and only pre-selected when nobody is actually free, so a
+               patient is never left unassigned by simply taking the default. #}
+            <option value="" {{ 'selected' if not r.suggest_session_id }}>
+              — no doctor yet, place in the clinic —</option>
           </select>
+          {% if not r.suggest_session_id %}
+          <p class="hint" style="margin-bottom:0">No doctor is ready in that
+            clinic yet. They will wait there, and any doctor who opens that
+            clinic will see them.</p>
+          {% endif %}
         </div>
       </div>
       <label style="font-weight:400;margin-top:10px">

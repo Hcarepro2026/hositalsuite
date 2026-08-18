@@ -608,3 +608,178 @@ def test_the_room_page_marks_which_patients_are_unclaimed(app, client, seeded):
     body = client.get("/consulting-room").get_data(as_text=True)
     assert "BABA" in body.upper(), "the waiting patient is still invisible"
     assert "for the clinic" in body, "no sign this patient is unclaimed"
+
+
+# ================================================================ round two
+# The founder reported the SAME symptom again after the first fix. Three
+# separate causes were found; each gets a test so none can come back.
+
+def test_a_patient_placed_yesterday_still_shows_this_morning(app, seeded):
+    """CAUSE 1: the queue was limited to visits started TODAY.
+
+    A patient placed at 23:50 disappeared from the doctor's room at midnight
+    while still sitting in the waiting area. An OPEN visit is open until
+    somebody closes it, whatever the calendar says.
+    """
+    from datetime import timedelta
+    with app.app_context():
+        org_id = seeded["org"]
+        doc = _doctor(org_id)
+        db.session.commit()
+        triage.open_session(org_id, doc, "EMERGENCY", "Emergency Room")
+        db.session.commit()
+
+        p = _patient(org_id)
+        v = _registered(org_id, p)
+        triage.place(v, clinic="EMERGENCY", session=None)
+        # ...placed late last night
+        v.started_at = now_naive() - timedelta(days=1, hours=2)
+        v.triaged_at = now_naive() - timedelta(days=1, hours=1)
+        db.session.commit()
+
+        assert len(consulting.doctor_queue(org_id, doc.id)) == 1, (
+            "a patient placed before midnight vanished from the doctor's room "
+            "while still waiting in the hospital")
+
+
+def test_a_consultation_started_before_midnight_is_still_in_the_room(app, seeded):
+    from datetime import timedelta
+    with app.app_context():
+        org_id = seeded["org"]
+        doc = _doctor(org_id)
+        db.session.commit()
+        p = _patient(org_id)
+        v = _triaged(org_id, p, doc)
+        consulting.call_in(v, doc.id)
+        v.started_at = now_naive() - timedelta(days=1)
+        db.session.commit()
+        assert consulting.in_consultation(org_id, doc.id) is not None
+
+
+def test_clinic_matching_tolerates_case_and_stray_spaces(app, seeded):
+    """CAUSE 2: an exact string match. A patient is not seen by a comparison."""
+    with app.app_context():
+        org_id = seeded["org"]
+        doc = _doctor(org_id)
+        db.session.commit()
+        triage.open_session(org_id, doc, "EMERGENCY", "Emergency Room")
+        db.session.commit()
+
+        p = _patient(org_id)
+        v = _registered(org_id, p)
+        triage.place(v, clinic="EMERGENCY", session=None)
+        v.clinic = " Emergency "          # however it got in the database
+        db.session.commit()
+
+        assert len(consulting.doctor_queue(org_id, doc.id)) == 1, \
+            "a clinic saved with odd casing or spacing hid the patient"
+        assert consulting.call_in(v, doc.id) == "", \
+            "the same patient could be seen but not called in"
+
+
+def test_triage_preselects_a_free_doctor_instead_of_nobody(app, client, seeded):
+    """CAUSE 3 — the root cause. The dropdown defaulted to 'wait for a doctor'.
+
+    Busy triage staff take the default. So patients were placed with no doctor
+    even when somebody was ready and idle. Defaulting to a real free doctor
+    makes the safe thing the easy thing.
+    """
+    with app.app_context():
+        org_id = seeded["org"]
+        am = db.session.query(User).filter_by(org_id=org_id,
+                                              role="ADMIN_MANAGER").first()
+        am.must_change_password = False
+        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+                                   user_id=am.id, kind="DUTY", shift="DAY",
+                                   scope="DEPARTMENT"))
+        db.session.flush()
+        session, err = triage.open_session(org_id, am, "OPD", "Room 1")
+        assert err == ""
+        p = _patient(org_id)
+        _registered(org_id, p)
+        db.session.commit()
+        username, sid = am.username, session.id
+
+    login(client, username)
+    body = client.get("/triage/").get_data(as_text=True)
+    assert f'value="{sid}"' in body
+    # the real doctor must be the pre-selected option, not "no doctor"
+    marker = body[body.find(f'value="{sid}"'):][:60]
+    assert "selected" in marker, \
+        "Triage still defaults to leaving the patient with no doctor"
+
+
+def test_no_doctor_is_still_offered_when_nobody_is_free(app, client, seeded):
+    """The escape hatch must survive: sometimes truly nobody is available."""
+    with app.app_context():
+        org_id = seeded["org"]
+        am = db.session.query(User).filter_by(org_id=org_id,
+                                              role="ADMIN_MANAGER").first()
+        am.must_change_password = False
+        p = _patient(org_id)
+        _registered(org_id, p)          # waiting, and NO doctor is ready
+        db.session.commit()
+        username = am.username
+
+    login(client, username)
+    body = client.get("/triage/").get_data(as_text=True)
+    assert "ABATAN" in body.upper(), "the patient never reached the bench"
+    # The escape hatch must always be offered, whether or not a doctor is free.
+    assert "no doctor yet, place in the clinic" in body
+
+
+def test_triage_offers_the_clinic_that_actually_has_a_doctor(app, seeded):
+    """THE ROOT CAUSE, found by running the founder's exact scenario.
+
+    suggest_clinic() answers "where does this KIND of patient normally go?" —
+    a general adult goes to OPD. But if the only doctor on duty is sitting in
+    Accident & Emergency, offering OPD pre-selects a clinic with nobody in it,
+    the patient is placed with no doctor, and they wait for a room that will
+    not open today. That is exactly what happened on the live site.
+
+    The clinically sensible default is kept WHEN somebody covers it; otherwise
+    Triage is offered the clinic that actually has a free doctor.
+    """
+    with app.app_context():
+        org_id = seeded["org"]
+        doc = _doctor(org_id)
+        db.session.commit()
+        triage.open_session(org_id, doc, "EMERGENCY", "Emergency Room")
+        db.session.commit()
+
+        adult = _patient(org_id)
+        adult.category = "GENERAL"       # normally OPD
+        db.session.commit()
+
+        assert triage.suggest_clinic(adult) == "OPD"
+        assert triage.suggest_clinic_with_cover(org_id, adult) == "EMERGENCY", (
+            "Triage offered a clinic with no doctor in it, so the patient "
+            "would be placed unassigned and wait for a room nobody opens")
+        assert triage.suggest_doctor(org_id, "EMERGENCY") is not None
+
+
+def test_the_clinically_right_clinic_wins_when_it_is_covered(app, seeded):
+    """The cover rule must not override real clinical placement."""
+    with app.app_context():
+        org_id = seeded["org"]
+        opd = _doctor(org_id, "doc_opd", "Dr OPD")
+        emg = _doctor(org_id, "doc_emg", "Dr Emergency")
+        db.session.commit()
+        triage.open_session(org_id, opd, "OPD", "Room 1")
+        triage.open_session(org_id, emg, "EMERGENCY", "Emergency Room")
+        db.session.commit()
+
+        adult = _patient(org_id)
+        adult.category = "GENERAL"
+        db.session.commit()
+        assert triage.suggest_clinic_with_cover(org_id, adult) == "OPD"
+
+
+def test_suggest_doctor_tolerates_odd_clinic_spelling(app, seeded):
+    with app.app_context():
+        org_id = seeded["org"]
+        doc = _doctor(org_id)
+        db.session.commit()
+        triage.open_session(org_id, doc, "EMERGENCY", "Emergency Room")
+        db.session.commit()
+        assert triage.suggest_doctor(org_id, " emergency ") is not None
