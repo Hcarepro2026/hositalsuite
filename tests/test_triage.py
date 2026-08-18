@@ -287,7 +287,11 @@ def test_every_triage_route_answers_without_a_server_error(app, client, seeded):
 
     _login_desk(client, app, seeded)
     assert client.get("/triage/").status_code == 200
-    assert client.get("/triage/consulting-room").status_code == 200
+    # /triage/consulting-room is superseded by the full Stage C room and now
+    # redirects there — old bookmarks must still land somewhere useful.
+    assert client.get("/triage/consulting-room").status_code == 302
+    assert client.get("/triage/consulting-room",
+                      follow_redirects=True).status_code == 200
 
     with app.app_context():
         vid = db.session.query(PatientVisit).one().id
@@ -315,13 +319,13 @@ def test_a_doctor_can_declare_ready_and_see_their_own_queue(app, client, seeded)
 
     login(client, username)
     r = client.post("/triage/ready",
-                    data={"_csrf": csrf(client, "/triage/consulting-room"),
+                    data={"_csrf": csrf(client, "/consulting-room"),
                           "clinic": "OPD", "consulting_room": "Room 1"},
                     follow_redirects=True)
     assert r.status_code == 200
     assert "ready to consult" in r.get_data(as_text=True).lower()
 
     r = client.post("/triage/not-ready",
-                    data={"_csrf": csrf(client, "/triage/consulting-room")},
+                    data={"_csrf": csrf(client, "/consulting-room")},
                     follow_redirects=True)
     assert "no longer taking new patients" in r.get_data(as_text=True).lower()

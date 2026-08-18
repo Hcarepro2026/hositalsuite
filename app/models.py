@@ -1000,10 +1000,24 @@ class Patient(db.Model):
 
     @property
     def full_name(self) -> str:
+        """Register order: SURNAME Firstname. Correct on a folder and a list."""
         bits = [(self.surname or "").upper(), self.first_name]
         if self.other_names:
             bits.append(self.other_names)
         return " ".join(b for b in bits if b)
+
+    @property
+    def spoken_name(self) -> str:
+        """Speaking order: Firstname Surname.
+
+        A folder reads "ABATAN Folake" because that is how a register is
+        written. But a person is CALLED by their first name, and Reception
+        already announced her as "Folake". Announcing "Abatan" later would be
+        calling the same patient two different names across one visit, which
+        is exactly the confusion this app exists to remove.
+        """
+        bits = [self.first_name, self.other_names, self.surname]
+        return " ".join(b for b in bits if b).strip()
 
     @property
     def age(self) -> int | None:
@@ -1276,3 +1290,76 @@ class DoctorSession(db.Model):
     @property
     def is_open(self) -> bool:
         return bool(self.ready) and self.ended_at is None
+
+
+# ---------------------------------------------------------------- onward (Stage D)
+# Where a doctor sends the patient after the consultation. The founder listed
+# these exactly, and was clear it can be MORE THAN ONE:
+#
+#   "The Doctor after attending to the patient would now push the patient to
+#    one, two or three out of the following
+#    (LAHSMA/Billing/Megalek/Laboratory/Pharmacy/Emergency)"
+#
+# Hence a separate table rather than a single column on the visit: one visit
+# can legitimately owe a lab test AND a pharmacy collection AND a bill.
+ONWARD_DESTINATIONS = (
+    ("LABORATORY", "Laboratory — tests"),
+    ("PHARMACY",   "Pharmacy / Dispensary — collect medicines"),
+    ("BILLING",    "Billing Point — settle the bill"),
+    ("MEGALEX",    "Megalex / Paying Point — make payment"),
+    ("LAHSMA",     "LAHSMA — insurance claim"),
+    ("EMERGENCY",  "Accident & Emergency — urgent"),
+)
+ONWARD_LABELS = dict(ONWARD_DESTINATIONS)
+ONWARD_CODES = tuple(c for c, _ in ONWARD_DESTINATIONS)
+
+# Where a patient physically goes for each destination — used by the voice
+# call-out so it names a place the patient can actually walk to.
+ONWARD_PLACES = {
+    "LABORATORY": "the Laboratory",
+    "PHARMACY":   "the Pharmacy",
+    "BILLING":    "the Billing Point",
+    "MEGALEX":    "the Megalex Paying Point",
+    "LAHSMA":     "the LAHSMA desk",
+    "EMERGENCY":  "Accident and Emergency",
+}
+
+
+class VisitOnward(db.Model):
+    """One place the doctor is sending this patient after the consultation.
+
+    A visit has one row per destination. Each is completed independently — the
+    laboratory can finish while the pharmacy is still waiting — and the visit
+    is only closed when every destination is done.
+
+    NOT AN EMR: this records WHERE the patient was sent and whether they got
+    there. It never records what the test was for, what was prescribed, or
+    why. "Send to Laboratory" is a direction, not a clinical order.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    visit_id = db.Column(db.Integer, db.ForeignKey("patient_visit.id"), nullable=False, index=True)
+    destination = db.Column(db.String(16), nullable=False, index=True)
+    status = db.Column(db.String(12), default="PENDING", nullable=False, index=True)  # PENDING | DONE
+    note = db.Column(db.String(200))               # e.g. "bring the card back"
+    sent_at = db.Column(db.DateTime, default=now_naive, nullable=False)
+    completed_at = db.Column(db.DateTime)
+    sent_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    completed_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+
+    visit = db.relationship("PatientVisit", backref=db.backref(
+        "onward_steps", cascade="all, delete-orphan", order_by="VisitOnward.id"))
+    doctor = db.relationship("User", foreign_keys=[sent_by])
+
+    __table_args__ = (
+        db.UniqueConstraint("visit_id", "destination", name="uq_visit_onward_dest"),
+        db.Index("ix_visit_onward_org_status", "org_id", "status"),
+    )
+
+    @property
+    def label(self) -> str:
+        return ONWARD_LABELS.get(self.destination, self.destination)
+
+    @property
+    def place(self) -> str:
+        return ONWARD_PLACES.get(self.destination, self.destination)

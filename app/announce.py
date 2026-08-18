@@ -61,6 +61,12 @@ PATIENT_ALERTS: dict[str, tuple[str, str]] = {
     "go_to_payment":       (STANDARD, "Patient sent to the Paying Point"),
     "ready_for_folder":    (URGENT, "Paid — folder to be opened"),
     "go_to_triage":        (URGENT, "Patient sent to Triage"),
+    # --- Stage C (consulting room) and Stage D (onward routing). Spoken by
+    # the browser's own synthesiser, so these cost the hospital nothing.
+    "consult_call_in":     (URGENT, "Patient called in to see the doctor"),
+    "go_onward":           (URGENT, "Patient sent onward"),
+    "desk_expecting":      (STANDARD, "Patient on the way to your desk"),
+    "visit_complete":      (STANDARD, "Visit complete"),
 }
 
 _TITLES = ("dr", "mr", "mrs", "miss", "ms", "prof", "pharm", "engr", "cno",
@@ -174,6 +180,19 @@ def phrase(kind: str, *, name: str = "", count: int = 0, place: str = "",
     if kind == "go_to_triage":
         return (f"{patient or 'Patient'}, please go to {place or 'Triage'}"
                 + (f" {detail}" if detail else "") + ".")
+    if kind == "consult_call_in":
+        # The moment the patient has been waiting for. Name, then room.
+        return (f"{patient or 'Next patient'}, please come in to "
+                f"{room or 'the consulting room'} now.")
+    if kind == "go_onward":
+        return (f"{patient or 'Patient'}, the doctor has finished with you. "
+                f"Please go to {place or 'the next desk'}.")
+    if kind == "desk_expecting":
+        return (f"{who}, {patient or 'a patient'} is on the way to "
+                f"{place or 'your desk'}.")
+    if kind == "visit_complete":
+        return (f"{patient or 'Patient'}, you are all done for today. "
+                f"Safe journey home.")
     if kind == "patient_waiting_long":
         return (f"{who}, {patient or 'a patient'} has been waiting "
                 f"{detail or 'a long time'}"

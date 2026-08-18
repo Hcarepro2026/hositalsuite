@@ -103,7 +103,15 @@ def call_long_waiters():
 @bp.get("/consulting-room")
 @require_role(*VIEWERS)
 def consulting_room():
-    """Where a doctor says 'I am ready to consult' and sees their own queue."""
+    """Superseded by the full Stage C room, which can also call patients in
+    and route them onward. Kept so older links and bookmarks still work."""
+    from flask import redirect as _redirect, url_for as _url_for
+    return _redirect(_url_for("consulting.room"))
+
+
+@bp.get("/consulting-room/legacy")
+@require_role(*VIEWERS)
+def consulting_room_legacy():
     org_id = current_user.org_id
     mine = (db.session.query(DoctorSession)
             .filter_by(org_id=org_id, doctor_id=current_user.id,

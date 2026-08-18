@@ -237,7 +237,7 @@ def place(visit: PatientVisit, *, clinic: str, session: DoctorSession | None,
 def announce_placement(visit: PatientVisit, patient: Patient,
                        session: DoctorSession | None) -> None:
     """Call the patient by name, and tell the doctor someone is coming."""
-    spoken = announce.speech_name(patient.full_name)
+    spoken = announce.speech_name(patient.spoken_name)
     room = visit.consulting_room or CLINIC_LABELS.get(visit.clinic, visit.clinic)
 
     # To the waiting area: the patient hears where to go.
@@ -265,7 +265,7 @@ def announce_long_waits(org_id: int) -> int:
             continue
         announce.to_station(
             org_id, "patient_waiting_long",
-            patient=announce.speech_name(patient.full_name),
+            patient=announce.speech_name(patient.spoken_name),
             place="the triage bench",
             detail=f"{wait_minutes(visit)} minutes")
         called += 1
@@ -275,5 +275,5 @@ def announce_long_waits(org_id: int) -> int:
 def announce_emergency(visit: PatientVisit, patient: Patient) -> None:
     announce.to_station(visit.org_id, "emergency_arrival",
                         place="Accident and Emergency",
-                        detail=f"{announce.speech_name(patient.full_name)} "
+                        detail=f"{announce.speech_name(patient.spoken_name)} "
                                f"needs immediate attention.")
