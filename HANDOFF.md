@@ -1,7 +1,7 @@
 # HANDOFF — Hospital Admin Manager Suite ("Patient Experience OS")
 
 **GENERAL HOSPITAL IJEDE (The Family Hospital)**
-Last updated: **18 August 2026** · Code at: **`f10459f`** (local, NOT pushed) · Status: **live and healthy**
+Last updated: **18 August 2026** · Code at: **`191872d`** (local, NOT pushed) · Status: **live and healthy**
 
 > **Paste this whole file into a new chat as your first message.** It contains
 > everything needed to carry on without repeating work.
@@ -122,9 +122,9 @@ python3 tools/roster_browser_check.py                   # 21 checks
 
 | Metric | Value |
 |---|---|
-| Tests | **406 passing** on SQLite **and** real PostgreSQL 17 |
-| Test files | 31 in `tests/` |
-| Migrations | 6 in `migrations/versions/` (head = `d5b03c8a2e41`) |
+| Tests | **426 passing** on SQLite **and** real PostgreSQL 17 |
+| Test files | 32 in `tests/` |
+| Migrations | 7 in `migrations/versions/` (head = `e6c14d9f3a72`) |
 | Browser checks | HIMS 20/20 · Roster 21/21 |
 | Link checker | Clean |
 
@@ -232,9 +232,20 @@ Previously two pages that couldn't see each other.
 | **Reception (front door)** | ✅ **built 18 Aug** — details, special needs, insurance, then Billing → Pay-Point |
 | **A — HIMS Register** | ✅ built (special needs moved OUT to Reception) |
 | **B — Triage** | ✅ **built 18 Aug** — OPD/SOPD/MOPD/EMERGENCY, doctor rooms, blood sugar step |
-| **C — Call Room Queue** | 🟡 partial — the doctor's own queue exists at `/triage/consulting-room`; "start/finish consultation" not built |
-| **D — Onward routing** | ⬜ pending — Billing / LAHSMA / Megalex / Lab / Pharmacy / Emergency |
-| **E — Voice throughout** | ✅ wired through Reception → Billing → Pay-Point → HIMS → Triage → doctor |
+| **C — Call Room Queue** | ✅ **built 18 Aug** — `/consulting-room`: call a patient in, finish the consultation |
+| **D — Onward routing** | ✅ **built 18 Aug** — `/onward`: Lab / Pharmacy / Billing / Megalex / LAHSMA / Emergency, one two or three at a time |
+| **E — Voice throughout** | ✅ the FULL journey speaks: front door → "safe journey home" (14 call-outs, all free) |
+
+**The patient journey is now unbroken end to end.** Verified live: one patient
+walked Reception → Billing → Pay-Point → HIMS → Triage → Room 2 → Lab →
+Pharmacy → Billing → home, and the visit closed itself only after the third
+desk finished.
+
+**Name rule:** `Patient.full_name` is register order (`ABATAN Folake`) for
+folders and lists. **`Patient.spoken_name` (`Folake Abatan`) is what every
+voice call-out must use** — otherwise Reception says "Folake" and the doctor
+says "Abatan" about the same woman. Guarded by
+`test_a_patient_is_called_the_SAME_name_at_every_step`.
 
 **AI assistant:** Groq was DEAD (retired model + a KB that never fell through
 to it). Fixed 17 Aug — see `docs/reports/`. Pinned to `openai/gpt-oss-120b`
