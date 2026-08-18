@@ -10,7 +10,7 @@ from flask import (Blueprint, flash, redirect, render_template, request,
                    url_for)
 from flask_login import current_user
 
-from .. import hims, reception
+from .. import hims, reception, tracking
 from ..audit import audit
 from ..models import (ASSISTANCE_NEEDS, INTAKE_STAGES, PATIENT_LANGS,
                       PAYER_LABELS, PAYER_TYPES, Patient, ReceptionIntake,
@@ -68,6 +68,8 @@ def new_save():
                                errors=errors, **_form_context()), 400
 
     intake = reception.create_intake(current_user.org_id, values, current_user.id)
+    tracking.safely(tracking.enter, current_user.org_id, "RECEPTION", intake_id=intake.id,
+                   staff_id=current_user.id)
     reception.announce_arrival(intake)
     audit("RECEPTION_INTAKE_CREATED", "reception_intake", intake.id,
           {"ref": intake.ref, "name": intake.full_name})
@@ -91,6 +93,8 @@ def _get(intake_id: int) -> ReceptionIntake:
 def to_billing(intake_id: int):
     intake = _get(intake_id)
     reception.advance(intake, "BILLING", ref=(request.form.get("bill_ref") or ""))
+    tracking.safely(tracking.enter, intake.org_id, "BILLING", intake_id=intake.id,
+                   staff_id=current_user.id)
     reception.announce_stage(intake)
     audit("RECEPTION_SENT_TO_BILLING", "reception_intake", intake.id,
           {"ref": intake.ref})
@@ -104,6 +108,8 @@ def to_billing(intake_id: int):
 def to_payment(intake_id: int):
     intake = _get(intake_id)
     reception.advance(intake, "PAYMENT", ref=(request.form.get("bill_ref") or ""))
+    tracking.safely(tracking.enter, intake.org_id, "PAYMENT", intake_id=intake.id,
+                   staff_id=current_user.id)
     reception.announce_stage(intake)
     audit("RECEPTION_SENT_TO_PAYMENT", "reception_intake", intake.id,
           {"ref": intake.ref})
@@ -117,6 +123,8 @@ def to_payment(intake_id: int):
 def mark_paid(intake_id: int):
     intake = _get(intake_id)
     reception.advance(intake, "PAID", ref=(request.form.get("payment_ref") or ""))
+    tracking.safely(tracking.enter, intake.org_id, "HIMS", intake_id=intake.id,
+                   staff_id=current_user.id)
     reception.announce_stage(intake)
     audit("RECEPTION_PAYMENT_RECORDED", "reception_intake", intake.id,
           {"ref": intake.ref, "receipt": intake.payment_ref})
@@ -131,6 +139,7 @@ def mark_paid(intake_id: int):
 def cancel(intake_id: int):
     intake = _get(intake_id)
     intake.stage = "CANCELLED"
+    tracking.safely(tracking.close_journey, intake.org_id, intake_id=intake.id)
     audit("RECEPTION_INTAKE_CANCELLED", "reception_intake", intake.id,
           {"ref": intake.ref})
     db.session.commit()
@@ -189,8 +198,18 @@ def open_folder(intake_id: int):
         db.session.flush()
 
     visit = hims.open_visit(patient, user_id=current_user.id, visit_type="NEW")
+    # Flush so the visit HAS an id. Without this, tracking linked the Reception
+    # half of the journey to visit_id=None, the HIMS segment was never closed,
+    # and the patient showed as waiting at HIMS forever on the live board.
+    db.session.flush()
     intake.patient_id = patient.id
     intake.visit_id = visit.id
+    # Reception's segments predate the folder — join them to the visit so the
+    # whole journey can be measured door to door, not just the back half.
+    tracking.safely(tracking.attach_visit, current_user.org_id, intake.id, visit.id, patient.id)
+    tracking.safely(tracking.enter, current_user.org_id, "TRIAGE", intake_id=intake.id,
+                   visit_id=visit.id, patient_id=patient.id,
+                   staff_id=current_user.id)
     reception.advance(intake, "REGISTERED")
     reception.announce_stage(intake)
     audit("PATIENT_FOLDER_OPENED", "patient", patient.id,

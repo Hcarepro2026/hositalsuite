@@ -52,6 +52,14 @@ def clean_form(form) -> tuple[dict, list[str]]:
     sex = (form.get("sex") or "").strip().upper()[:1]
     v["sex"] = sex if sex in ("F", "M") else None
 
+    # Age is REQUIRED here, even though it feels like a detail.
+    #
+    # HIMS cannot open a folder without it, and Triage needs it to place a
+    # child in the right clinic and to offer an elderly patient a seat. When
+    # Reception treated it as optional, the receptionist could walk a patient
+    # all the way through Billing and the Paying Point, and only be blocked at
+    # the folder — after the patient had already paid. Asking at the front
+    # door, where the patient is standing in front of you, is the kind thing.
     raw_age = (form.get("age_years") or "").strip()
     if raw_age:
         try:
@@ -64,6 +72,9 @@ def clean_form(form) -> tuple[dict, list[str]]:
             errors.append("Age must be a number.")
     else:
         v["age_years"] = None
+        errors.append("Age is required — HIMS cannot open a folder without it, "
+                      "and Triage needs it to place the patient correctly. "
+                      "If they do not know their birthday, just ask their age.")
 
     v["occupation"] = (form.get("occupation") or "").strip()[:80]
     v["address"] = (form.get("address") or "").strip()[:300]

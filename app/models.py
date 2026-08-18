@@ -1363,3 +1363,85 @@ class VisitOnward(db.Model):
     @property
     def place(self) -> str:
         return ONWARD_PLACES.get(self.destination, self.destination)
+
+
+# ---------------------------------------------------------------- tracking
+# Every place a patient stands still, and for how long. This is what turns the
+# suite from "software that works" into "proof the hospital got better".
+JOURNEY_STAGES = (
+    ("RECEPTION",  "Reception"),
+    ("BILLING",    "Billing Point"),
+    ("PAYMENT",    "Megalex / Paying Point"),
+    ("HIMS",       "HIMS — folder"),
+    ("TRIAGE",     "Triage"),
+    ("WAIT_DOCTOR", "Waiting for the doctor"),
+    ("CONSULTATION", "With the doctor"),
+    ("LABORATORY", "Laboratory"),
+    ("PHARMACY",   "Pharmacy"),
+    ("BILLING_OUT", "Billing (after consultation)"),
+    ("MEGALEX",    "Megalex (after consultation)"),
+    ("LAHSMA",     "LAHSMA desk"),
+    ("EMERGENCY",  "Accident & Emergency"),
+)
+JOURNEY_STAGE_LABELS = dict(JOURNEY_STAGES)
+JOURNEY_STAGE_CODES = tuple(c for c, _ in JOURNEY_STAGES)
+
+
+class JourneySegment(db.Model):
+    """One stretch of time a patient spent at one place.
+
+    WHY SEGMENTS AND NOT JUST EVENT POINTS
+    --------------------------------------
+    A row that says "arrived at Triage 09:14" needs the NEXT row to work out
+    how long Triage took, and the last row of the day can never be measured at
+    all. A segment carries its own start, end and duration, so every question
+    ("how long does the pharmacy take?") is a plain average over closed rows —
+    no pairing, no gaps, no arithmetic that breaks when a row is missing.
+
+    An OPEN segment (ended_at IS NULL) is where the patient is standing right
+    now. That is how the live board knows who is waiting where.
+
+    NOT AN EMR: this records WHERE a patient was and for HOW LONG. Never why.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+
+    # A journey starts at Reception, before a folder or a visit exists, so both
+    # links are optional and at least one is always set.
+    intake_id = db.Column(db.Integer, db.ForeignKey("reception_intake.id"), index=True)
+    visit_id = db.Column(db.Integer, db.ForeignKey("patient_visit.id"), index=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), index=True)
+
+    stage = db.Column(db.String(20), nullable=False, index=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), index=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
+
+    entered_at = db.Column(db.DateTime, default=now_naive, nullable=False, index=True)
+    ended_at = db.Column(db.DateTime, index=True)
+    # Stored, not computed on read: a year of reports must not re-do this
+    # arithmetic on every page load over a slow connection.
+    seconds = db.Column(db.Integer)
+
+    patient = db.relationship("Patient")
+    staff = db.relationship("User", foreign_keys=[staff_id])
+    department = db.relationship("Department")
+
+    __table_args__ = (
+        db.Index("ix_journey_org_stage", "org_id", "stage"),
+        db.Index("ix_journey_org_entered", "org_id", "entered_at"),
+        db.Index("ix_journey_open", "org_id", "ended_at"),
+    )
+
+    @property
+    def label(self) -> str:
+        return JOURNEY_STAGE_LABELS.get(self.stage, self.stage)
+
+    @property
+    def minutes(self) -> int:
+        if self.seconds is None:
+            return 0
+        return int(self.seconds // 60)
+
+    @property
+    def is_open(self) -> bool:
+        return self.ended_at is None

@@ -35,9 +35,11 @@
         </select></div>
     </div>
     <div class="grid cols2">
-      <div><label>Age (years)</label>
-        <input name="age_years" type="number" min="0" max="120" value="{{ form.get('age_years','') }}">
-        <p class="hint">If they don't know their birthday, just record their age.</p></div>
+      <div><label>Age (years) <span class="req">*</span></label>
+        <input name="age_years" type="number" min="0" max="120" required
+               value="{{ form.get('age_years','') }}">
+        <p class="hint">If they don't know their birthday, just record their age.
+          HIMS cannot open the folder without it.</p></div>
       <div><label>Occupation</label>
         <input name="occupation" value="{{ form.get('occupation','') }}"></div>
     </div>

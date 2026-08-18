@@ -5,7 +5,7 @@ from flask import (Blueprint, flash, redirect, render_template, request,
                    url_for)
 from flask_login import current_user
 
-from .. import consulting, triage
+from .. import consulting, tracking, triage
 from ..audit import audit
 from ..models import (CLINIC_LABELS, CLINICS, CONSULTING_ROOMS,
                       ONWARD_DESTINATIONS, ONWARD_LABELS, DoctorSession,
@@ -13,6 +13,15 @@ from ..models import (CLINIC_LABELS, CLINICS, CONSULTING_ROOMS,
 from ..security import require_role
 
 bp = Blueprint("consulting", __name__)
+
+# An onward destination and a journey stage are deliberately different things:
+# BILLING at the front door is not the same measurement as BILLING after the
+# consultation, and a manager needs to tell them apart.
+_ONWARD_STAGE = {
+    "LABORATORY": "LABORATORY", "PHARMACY": "PHARMACY",
+    "BILLING": "BILLING_OUT", "MEGALEX": "MEGALEX",
+    "LAHSMA": "LAHSMA", "EMERGENCY": "EMERGENCY",
+}
 
 CLINICAL = ("SUPER_ADMIN", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "APEX_NURSE",
             "HOD", "MD_CEO", "DMD", "DCST")
@@ -61,6 +70,10 @@ def call_in(vid: int):
         flash(err, "error")
         return redirect(url_for("consulting.room"))
     patient = db.session.get(Patient, visit.patient_id)
+    tracking.safely(tracking.enter, visit.org_id, "CONSULTATION", visit_id=visit.id,
+                   patient_id=visit.patient_id,
+                   department_id=visit.department_id,
+                   staff_id=current_user.id)
     consulting.announce_called_in(visit, patient)
     audit("PATIENT_CALLED_IN", "patient_visit", visit.id,
           {"room": visit.consulting_room})
@@ -82,6 +95,17 @@ def finish(vid: int):
         flash(err, "error")
         return redirect(url_for("consulting.room"))
 
+    if steps:
+        # One open segment per desk: each is measured separately, so "how long
+        # does the pharmacy take?" is answerable even when the same patient is
+        # also waiting on the laboratory.
+        tracking.safely(tracking.leave, visit.org_id, visit_id=visit.id)
+        for step in steps:
+            tracking.safely(tracking.enter, visit.org_id, _ONWARD_STAGE.get(step.destination, "PHARMACY"),
+                           visit_id=visit.id, patient_id=visit.patient_id,
+                           staff_id=current_user.id, close_previous=False)
+    else:
+        tracking.safely(tracking.close_journey, visit.org_id, visit_id=visit.id)
     consulting.announce_onward(visit, patient, steps)
     audit("CONSULTATION_FINISHED", "patient_visit", visit.id,
           {"sent_to": [s.destination for s in steps] or ["home"]})
@@ -132,7 +156,11 @@ def onward_done(step_id: int):
     visit = db.session.get(PatientVisit, step.visit_id)
     patient = db.session.get(Patient, visit.patient_id) if visit else None
 
+    tracking.safely(tracking.leave, step.org_id, visit_id=step.visit_id,
+                   stage=_ONWARD_STAGE.get(step.destination))
     closed = consulting.complete_step(step, current_user.id)
+    if closed:
+        tracking.safely(tracking.close_journey, step.org_id, visit_id=step.visit_id)
     if closed and patient is not None:
         # Everything is finished — tell them they can go home.
         consulting.announce_onward(visit, patient, [])

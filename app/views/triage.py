@@ -5,7 +5,7 @@ from flask import (Blueprint, flash, redirect, render_template, request,
                    url_for)
 from flask_login import current_user
 
-from .. import triage
+from .. import tracking, triage
 from ..audit import audit
 from ..models import (CATEGORY_LABELS, CLINIC_LABELS, CLINICS,
                       CONSULTING_ROOMS, DoctorSession, Patient, PatientVisit,
@@ -75,6 +75,10 @@ def place(vid: int):
         flash(err, "error")
         return redirect(url_for("triage.bench"))
 
+    tracking.safely(tracking.enter, visit.org_id, "WAIT_DOCTOR", visit_id=visit.id,
+                   patient_id=visit.patient_id,
+                   department_id=visit.department_id,
+                   staff_id=session.doctor_id if session else None)
     triage.announce_placement(visit, patient, session)
     if clinic == "EMERGENCY":
         triage.announce_emergency(visit, patient)

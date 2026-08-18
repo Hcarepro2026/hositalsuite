@@ -122,9 +122,9 @@ python3 tools/roster_browser_check.py                   # 21 checks
 
 | Metric | Value |
 |---|---|
-| Tests | **426 passing** on SQLite **and** real PostgreSQL 17 |
-| Test files | 32 in `tests/` |
-| Migrations | 7 in `migrations/versions/` (head = `e6c14d9f3a72`) |
+| Tests | **461 passing** on SQLite **and** real PostgreSQL 17 |
+| Test files | 33 in `tests/` |
+| Migrations | 8 in `migrations/versions/` (head = `f7d25a6b0c93`) |
 | Browser checks | HIMS 20/20 · Roster 21/21 |
 | Link checker | Clean |
 
@@ -235,6 +235,18 @@ Previously two pages that couldn't see each other.
 | **C — Call Room Queue** | ✅ **built 18 Aug** — `/consulting-room`: call a patient in, finish the consultation |
 | **D — Onward routing** | ✅ **built 18 Aug** — `/onward`: Lab / Pharmacy / Billing / Megalex / LAHSMA / Emergency, one two or three at a time |
 | **E — Voice throughout** | ✅ the FULL journey speaks: front door → "safe journey home" (14 call-outs, all free) |
+
+**Monitoring engine (`/tracking`)** measures every stage: door-to-door time,
+per-department efficiency, live "who is waiting where", week-on-week trend,
+busiest hours, and plain-English allocation advice. Two rules to respect:
+1. **Tracking may NEVER break care.** Every write is guarded twice and wrapped
+   in a SAVEPOINT (PostgreSQL aborts a whole transaction on any failed
+   statement — without the savepoint a tracking fault killed the patient work
+   that came after it). Guarded by
+   `test_a_broken_tracking_engine_never_stops_a_patient_being_seen` and
+   `test_a_failed_tracking_write_does_not_poison_the_transaction`.
+2. **Never roll back inside tracking** — the caller's un-committed patient work
+   shares that session and would be silently discarded.
 
 **The patient journey is now unbroken end to end.** Verified live: one patient
 walked Reception → Billing → Pay-Point → HIMS → Triage → Room 2 → Lab →

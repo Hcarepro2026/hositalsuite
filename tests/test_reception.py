@@ -312,3 +312,57 @@ def test_a_bad_form_is_explained_not_crashed(app, client, seeded):
     body = r.get_data(as_text=True).lower()
     assert "surname is required" in body
     assert "relationship" in body
+
+
+# ------------------------------------------------------------------ the contract
+# RECEPTION MUST NEVER COLLECT SOMETHING HIMS WILL REJECT.
+#
+# This was a real defect, found by walking a patient through rather than by a
+# unit test: age was optional at Reception but REQUIRED by HIMS. A receptionist
+# could take the details, send the patient to Billing, take their money at the
+# Paying Point — and only then be told the folder could not be opened. The
+# patient had already paid. These tests make that class of bug impossible.
+
+def test_age_is_required_at_reception_because_hims_demands_it(app, seeded):
+    _, errors = reception.clean_form(_good_form(age_years=""))
+    assert any("age is required" in e.lower() for e in errors), \
+        "Reception accepted a patient HIMS will later refuse"
+
+
+def test_everything_reception_collects_is_accepted_by_hims(app, seeded):
+    """The contract between the two desks, enforced.
+
+    Whatever Reception considers a valid patient, HIMS must be able to turn
+    into a folder. If these two ever disagree again, this fails the build
+    instead of failing a patient who has already paid.
+    """
+    from app import hims
+    with app.app_context():
+        values, errors = reception.clean_form(_good_form())
+        assert not errors, errors
+        intake = reception.create_intake(seeded["org"], values)
+        db.session.commit()
+
+        _, hims_errors = hims.validate(reception.folder_values(intake),
+                                       org_id=seeded["org"])
+        assert not hims_errors, (
+            "Reception accepted details that HIMS rejects — the patient would "
+            f"be blocked AFTER paying: {hims_errors}")
+
+
+def test_the_minimum_reception_form_still_opens_a_folder(app, seeded):
+    """The least a receptionist can type must still work end to end."""
+    from app import hims
+    minimal = _Form({
+        "surname": "Bello", "first_name": "Musa", "sex": "M", "age_years": "40",
+        "nok_name": "Aisha Bello", "nok_phone": "08031112222",
+        "nok_relationship": "Wife", "payer_type": "SELF",
+    })
+    with app.app_context():
+        values, errors = reception.clean_form(minimal)
+        assert not errors, errors
+        intake = reception.create_intake(seeded["org"], values)
+        db.session.commit()
+        _, hims_errors = hims.validate(reception.folder_values(intake),
+                                       org_id=seeded["org"])
+        assert not hims_errors, hims_errors
