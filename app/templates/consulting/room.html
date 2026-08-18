@@ -80,7 +80,8 @@
 <h2>My call room queue</h2>
 {% if not rows %}
   <div class="card pad-lg"><p class="muted" style="margin:0">
-    No patients waiting. Triage will send them to you and you will hear the call.</p></div>
+    No patients waiting. Triage will send them to you — either by name, or
+    into your clinic for whoever is free — and you will hear the call.</p></div>
 {% else %}
   {% for r in rows %}
   {% if not current or r.visit.id != current.id %}
@@ -92,7 +93,14 @@
           {{ r.patient.hospital_number if r.patient }} ·
           {{ clinic_labels.get(r.visit.clinic, r.visit.clinic) }}</div>
       </div>
-      <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }}">waiting {{ r.waited }}m</span>
+      <span>
+        {% if r.unclaimed %}
+        <span class="pill" style="background:#0e5a8a;color:#fff"
+              title="Placed in your clinic but not assigned to anyone — call them in to take them">
+          for the clinic</span>
+        {% endif %}
+        <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }}">waiting {{ r.waited }}m</span>
+      </span>
     </div>
     {% if r.patient and r.patient.care_flags %}
     <div class="notice mt" style="text-align:left">

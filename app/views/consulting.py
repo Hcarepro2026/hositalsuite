@@ -52,7 +52,10 @@ def room():
     patients = {p.id: p for p in db.session.query(Patient)
                 .filter(Patient.id.in_([v.patient_id for v in queue] or [0])).all()}
     rows = [{"visit": v, "patient": patients.get(v.patient_id),
-             "waited": consulting.wait_minutes(v)} for v in queue]
+             "waited": consulting.wait_minutes(v),
+             # Unassigned patients waiting in this doctor's clinic — anyone
+             # free may take them. Marked so the doctor knows the difference.
+             "unclaimed": v.doctor_id is None} for v in queue]
     return render_template(
         "consulting/room.html", session=session, rows=rows,
         current=consulting.in_consultation(org_id, current_user.id),

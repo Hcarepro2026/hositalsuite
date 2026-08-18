@@ -122,7 +122,7 @@ python3 tools/roster_browser_check.py                   # 21 checks
 
 | Metric | Value |
 |---|---|
-| Tests | **483 passing** on SQLite **and** real PostgreSQL 17 |
+| Tests | **489 passing** on SQLite **and** real PostgreSQL 17 |
 | Test files | 34 in `tests/` |
 | Migrations | 8 in `migrations/versions/` (head = `f7d25a6b0c93`) |
 | Browser checks | HIMS 20/20 · Roster 21/21 |
@@ -234,6 +234,7 @@ Previously two pages that couldn't see each other.
 | **Megalex / Pay-Point** (`/paypoint`) | ✅ **built 18 Aug** — separation of duties: the cashier records the money, not the receptionist |
 | **A — HIMS Register** | ✅ built (special needs moved OUT to Reception) |
 | **B — Triage** | ✅ **built 18 Aug** — OPD/SOPD/MOPD/EMERGENCY, doctor rooms, blood sugar step |
+| **⚠ Rule** | A doctor's queue shows patients named to them **AND** unassigned patients in **their own clinic**. Triage may place with no doctor; if the queue only matched `doctor_id == me` those patients are stranded in nobody's room. Guarded by `test_a_doctor_sees_unassigned_patients_waiting_in_their_clinic`. |
 | **C — Call Room Queue** | ✅ **built 18 Aug** — `/consulting-room`: call a patient in, finish the consultation |
 | **D — Onward routing** | ✅ **built 18 Aug** — `/onward`: Lab / Pharmacy / Billing / Megalex / LAHSMA / Emergency, one two or three at a time |
 | **E — Voice throughout** | ✅ the FULL journey speaks: front door → "safe journey home" (14 call-outs, all free) |

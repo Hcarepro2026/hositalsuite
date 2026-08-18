@@ -35,6 +35,16 @@ def _doctor(org_id, username="doc1", name="Dr Ade Ogun"):
     return u
 
 
+def _registered(org_id, patient):
+    """A visit waiting for Triage — no clinic, no doctor yet."""
+    v = PatientVisit(org_id=org_id, patient_id=patient.id,
+                     visit_no=f"V-REG-{patient.id}", visit_type="NEW",
+                     status="REGISTERED")
+    db.session.add(v)
+    db.session.flush()
+    return v
+
+
 def _triaged(org_id, patient, doctor, room="Room 1", minutes_ago=10):
     v = PatientVisit(org_id=org_id, patient_id=patient.id,
                      visit_no=f"V-{patient.id}", visit_type="NEW",
@@ -427,3 +437,174 @@ def test_a_patient_is_called_the_SAME_name_at_every_step(app, seeded):
         assert spoken_to_patient, "nothing was said to the patient"
         for said in spoken_to_patient:
             assert "folake" in said, f"patient called by the wrong name: {said!r}"
+
+
+# ================================================================ the live bug
+# THE FOUNDER HIT THIS ON THE LIVE SITE, MINUTES AFTER DEPLOY.
+#
+# Triage placed three patients into clinics without naming a doctor — which is
+# allowed and deliberate. The Triage board showed them as TRIAGED. But the
+# doctor's call room queue matched only `doctor_id == me`, so those patients
+# appeared in NOBODY's room. Three real people were stranded in the system.
+#
+# A doctor who is ready in Accident & Emergency must see the people waiting in
+# Accident & Emergency.
+
+def test_a_doctor_sees_unassigned_patients_waiting_in_their_clinic(app, seeded):
+    with app.app_context():
+        org_id = seeded["org"]
+        doc = _doctor(org_id)
+        db.session.commit()
+        session, err = triage.open_session(org_id, doc, "EMERGENCY",
+                                           "Emergency Room")
+        assert err == ""
+        db.session.commit()
+
+        # Triage places them into the clinic with NO doctor named.
+        for surname in ("Baba", "Dapo"):
+            p = _patient(org_id, surname, "Patient")
+            v = _registered(org_id, p)
+            v.status, v.doctor_id = "REGISTERED", None
+            assert triage.place(v, clinic="EMERGENCY", session=None) == ""
+        db.session.commit()
+
+        queue = consulting.doctor_queue(org_id, doc.id)
+        assert len(queue) == 2, (
+            "patients placed in this doctor's clinic are in nobody's room — "
+            "they are stranded exactly as they were on the live site")
+
+
+def test_a_doctor_does_not_see_another_clinics_patients(app, seeded):
+    """The fix must not swing too far and dump the whole hospital on one doctor."""
+    with app.app_context():
+        org_id = seeded["org"]
+        doc = _doctor(org_id)
+        db.session.commit()
+        triage.open_session(org_id, doc, "EMERGENCY", "Emergency Room")
+        db.session.commit()
+
+        p = _patient(org_id, "Afuwape", "Sadia")
+        v = _registered(org_id, p)
+        triage.place(v, clinic="OPD", session=None)      # different clinic
+        db.session.commit()
+
+        assert consulting.doctor_queue(org_id, doc.id) == []
+
+
+def test_a_doctor_with_no_open_room_sees_only_their_named_patients(app, seeded):
+    """Not being ready must not mean seeing every unassigned patient.
+
+    A doctor who has gone home, or has not yet clicked "ready", must not have
+    the clinic's waiting room appear in their queue. The test uses TWO doctors:
+    one ready, one not — so the unassigned patient genuinely exists and is
+    genuinely visible to somebody, and the assertion is about who.
+    """
+    with app.app_context():
+        org_id = seeded["org"]
+        ready_doc = _doctor(org_id, "doc_ready", "Dr Ready")
+        idle_doc = _doctor(org_id, "doc_idle", "Dr Idle")
+        db.session.commit()
+        triage.open_session(org_id, ready_doc, "EMERGENCY", "Emergency Room")
+        db.session.commit()
+
+        p = _patient(org_id)
+        v = _registered(org_id, p)
+        triage.place(v, clinic="EMERGENCY", session=None)
+        db.session.commit()
+
+        assert len(consulting.doctor_queue(org_id, ready_doc.id)) == 1, \
+            "the ready doctor cannot see the waiting patient"
+        assert consulting.doctor_queue(org_id, idle_doc.id) == [], \
+            "a doctor with no open room was shown the clinic's waiting room"
+
+
+def test_calling_in_an_unassigned_patient_claims_them(app, seeded):
+    """Whoever is free takes the next patient — as in a real clinic."""
+    with app.app_context():
+        org_id = seeded["org"]
+        doc = _doctor(org_id)
+        db.session.commit()
+        triage.open_session(org_id, doc, "EMERGENCY", "Emergency Room")
+        db.session.commit()
+
+        p = _patient(org_id)
+        v = _registered(org_id, p)
+        triage.place(v, clinic="EMERGENCY", session=None)
+        db.session.commit()
+        assert v.doctor_id is None
+
+        assert consulting.call_in(v, doc.id) == ""
+        db.session.commit()
+        assert v.doctor_id == doc.id, "the patient was never claimed"
+        assert v.consulting_room == "Emergency Room"
+        assert v.status == "IN_CONSULTATION"
+
+
+def test_two_doctors_cannot_take_the_same_waiting_patient(app, seeded):
+    """A TRUE race: both doctors read the patient as free, then both claim.
+
+    An earlier version of this test called the patient in one after the other,
+    so the second doctor was stopped by the status check ("already in
+    consultation") and the race guard was never exercised at all. Mutating the
+    guard away left the test still passing — it proved nothing. This version
+    forces the real condition: B claims while still holding a stale view of an
+    unassigned patient.
+    """
+    with app.app_context():
+        org_id = seeded["org"]
+        a = _doctor(org_id, "doc_a", "Dr A")
+        b = _doctor(org_id, "doc_b", "Dr B")
+        db.session.commit()
+        triage.open_session(org_id, a, "EMERGENCY", "Emergency Room")
+        triage.open_session(org_id, b, "EMERGENCY", "Room 2")
+        db.session.commit()
+
+        p = _patient(org_id)
+        v = _registered(org_id, p)
+        triage.place(v, clinic="EMERGENCY", session=None)
+        db.session.commit()
+
+        # A wins the claim.
+        assert consulting.call_in(v, a.id) == ""
+        db.session.commit()
+        assert v.doctor_id == a.id
+
+        # B is mid-request, still believing the patient is unassigned and
+        # still waiting — exactly what a stale open browser tab holds.
+        v.doctor_id = None
+        v.status = "TRIAGED"
+        db.session.flush()
+        # ...but the DATABASE already records A as the owner.
+        db.session.execute(
+            PatientVisit.__table__.update()
+            .where(PatientVisit.__table__.c.id == v.id)
+            .values(doctor_id=a.id))
+
+        err = consulting.call_in(v, b.id)
+        assert err, "the race guard let a second doctor steal the patient"
+        assert "another doctor" in err.lower()
+        db.session.commit()
+        assert db.session.get(PatientVisit, v.id).doctor_id == a.id
+
+
+def test_the_room_page_marks_which_patients_are_unclaimed(app, client, seeded):
+    with app.app_context():
+        org_id = seeded["org"]
+        am = db.session.query(User).filter_by(org_id=org_id,
+                                              role="ADMIN_MANAGER").first()
+        am.must_change_password = False
+        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+                                   user_id=am.id, kind="DUTY", shift="DAY",
+                                   scope="DEPARTMENT"))
+        db.session.flush()
+        triage.open_session(org_id, am, "EMERGENCY", "Emergency Room")
+        p = _patient(org_id, "Baba", "Omo")
+        v = _registered(org_id, p)
+        triage.place(v, clinic="EMERGENCY", session=None)
+        db.session.commit()
+        username = am.username
+
+    login(client, username)
+    body = client.get("/consulting-room").get_data(as_text=True)
+    assert "BABA" in body.upper(), "the waiting patient is still invisible"
+    assert "for the clinic" in body, "no sign this patient is unclaimed"

@@ -34,15 +34,48 @@ from .models import (ONWARD_CODES, ONWARD_LABELS, Patient, PatientVisit,
 
 # ------------------------------------------------------------------ the queue
 def doctor_queue(org_id: int, doctor_id: int) -> list[PatientVisit]:
-    """This doctor's call room queue today — longest waiting first."""
+    """This doctor's call room queue today — longest waiting first.
+
+    TWO KINDS OF PATIENT APPEAR HERE, AND MISSING THE SECOND WAS A REAL BUG
+    ----------------------------------------------------------------------
+      1. Patients Triage assigned to this doctor BY NAME.
+      2. Patients Triage placed into this doctor's CLINIC without naming a
+         doctor — "— waiting for a doctor —".
+
+    Triage is allowed to place a patient into a clinic with nobody named (that
+    is deliberate: it beats leaving them stuck in the reception backlog). But
+    the queue originally matched only `doctor_id == me`, so those patients
+    appeared on the Triage board as TRIAGED and then showed up in NOBODY's
+    room. The founder hit this immediately on the live site: three patients
+    placed, and an empty call room queue.
+
+    A doctor who is ready in Accident & Emergency must see the people waiting
+    in Accident & Emergency. Anything else strands them.
+    """
+    from sqlalchemy import and_, or_
+
     start = datetime.combine(now_naive().date(), datetime.min.time())
+    session = _open_session_for(org_id, doctor_id)
+    conditions = [PatientVisit.doctor_id == doctor_id]
+    if session is not None:
+        conditions.append(and_(PatientVisit.doctor_id.is_(None),
+                               PatientVisit.clinic == session.clinic))
     return (db.session.query(PatientVisit)
             .filter(PatientVisit.org_id == org_id,
-                    PatientVisit.doctor_id == doctor_id,
                     PatientVisit.started_at >= start,
-                    PatientVisit.status.in_(("TRIAGED", "IN_CONSULTATION")))
+                    PatientVisit.status.in_(("TRIAGED", "IN_CONSULTATION")),
+                    or_(*conditions))
             .order_by(PatientVisit.triaged_at.asc().nullsfirst())
             .all())
+
+
+def _open_session_for(org_id: int, doctor_id: int):
+    """The room this doctor currently has open, if any."""
+    from .models import DoctorSession
+    return (db.session.query(DoctorSession)
+            .filter_by(org_id=org_id, doctor_id=doctor_id,
+                       duty_date=now_naive().date(), ended_at=None)
+            .first())
 
 
 def in_consultation(org_id: int, doctor_id: int) -> PatientVisit | None:
@@ -71,7 +104,13 @@ def call_in(visit: PatientVisit, doctor_id: int) -> str:
     finish the last one, say so plainly rather than quietly having two people
     'in consultation' with the same doctor.
     """
-    if visit.doctor_id != doctor_id:
+    # A patient may be unassigned ("— waiting for a doctor —") and simply
+    # waiting in this doctor's clinic. Calling them in CLAIMS them, which is
+    # exactly how a real clinic works: whoever is free takes the next patient.
+    session = _open_session_for(visit.org_id, doctor_id)
+    claimable = (visit.doctor_id is None and session is not None
+                 and visit.clinic == session.clinic)
+    if visit.doctor_id != doctor_id and not claimable:
         return "That patient is not on your call room queue."
     if visit.status == "IN_CONSULTATION":
         return "That patient is already in your room."
@@ -82,6 +121,22 @@ def call_in(visit: PatientVisit, doctor_id: int) -> str:
     if busy is not None and busy.id != visit.id:
         return ("You already have a patient in your room. Finish that "
                 "consultation first.")
+
+    if claimable:
+        # Two doctors in the same clinic could tap the same patient at the same
+        # moment. Claim only if still free; otherwise say so plainly rather
+        # than quietly stealing a colleague's patient.
+        rows = (db.session.query(PatientVisit)
+                .filter(PatientVisit.id == visit.id,
+                        PatientVisit.doctor_id.is_(None))
+                .update({"doctor_id": doctor_id,
+                         "consulting_room": session.consulting_room},
+                        synchronize_session=False))
+        if not rows:
+            db.session.refresh(visit)
+            return ("Another doctor has just taken that patient. "
+                    "Please call the next one.")
+        db.session.refresh(visit)
 
     visit.status = "IN_CONSULTATION"
     visit.seen_at = now_naive()
