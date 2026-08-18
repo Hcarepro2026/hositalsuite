@@ -44,6 +44,28 @@ import requests
 
 from ..models import db, now_naive
 
+# Groq retired llama-3.3-70b-versatile on 16 Aug 2026. Keep this pinned to a
+# CURRENT production model and re-check https://console.groq.com/docs/deprecations
+# before every release. A dead model ID returns 400 model_decommissioned, which
+# used to fail silently into "no answer".
+# Groq labels every model PRODUCTION or PREVIEW. Preview models "may be
+# discontinued at short notice" - never pin one for a hospital. Groq offered
+# two replacements for llama-3.3-70b-versatile: openai/gpt-oss-120b
+# (PRODUCTION) and qwen/qwen3.6-27b (PREVIEW). We take the production one.
+GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b"          # PRODUCTION - the safe pin
+
+# Failover ladder: PRODUCTION models only, best first. Deliberately excludes
+# preview models - a short-notice shutdown is exactly what we are guarding
+# against. Re-check https://console.groq.com/docs/deprecations each release.
+GROQ_MODEL_FALLBACKS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
+
+# Models Groq lists as PREVIEW. Pinning one of these is a latent outage, so
+# the test suite fails the build if GROQ_DEFAULT_MODEL ever names one.
+GROQ_PREVIEW_MODELS = frozenset({
+    "qwen/qwen3.6-27b", "openai/gpt-oss-safeguard-20b", "minimaxai/minimax-m2.7",
+    "meta-llama/llama-prompt-guard-2-22m", "meta-llama/llama-prompt-guard-2-86m",
+})
+
 # ------------------------------------------------------------------ prompt
 SYSTEM_PROMPT = """You are the patient care assistant for {hospital}, a hospital in Nigeria.
 
@@ -167,13 +189,31 @@ def cap_reached(org_id) -> bool:
 def _call_groq(messages: list[dict], timeout: float) -> str | None:
     """Groq — Llama 3.3 70B. Fastest quality-per-zero-cost option available."""
     key = os.environ.get("GROQ_API_KEY")
-    model = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model = os.environ.get("GROQ_MODEL", GROQ_DEFAULT_MODEL)
     r = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         json={"model": model, "messages": messages, "temperature": 0.3,
               "max_tokens": 320, "top_p": 0.9},
         timeout=timeout)
+    if r.status_code == 400 and "decommissioned" in r.text.lower():
+        # Self-heal: the pinned model was retired. Try the known-good ladder
+        # rather than silently degrading the assistant to "no answer".
+        for alt in GROQ_MODEL_FALLBACKS:
+            if alt == model:
+                continue
+            r2 = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}",
+                         "Content-Type": "application/json"},
+                json={"model": alt, "messages": messages, "temperature": 0.3,
+                      "max_tokens": 320, "top_p": 0.9},
+                timeout=timeout)
+            if r2.status_code == 200:
+                _log(None, "groq", "model_migrated",
+                     f"{model} is decommissioned; served with {alt}")
+                return (r2.json()["choices"][0]["message"]["content"] or "").strip()
+        raise RuntimeError(f"groq model {model} decommissioned and no fallback worked")
     if r.status_code != 200:
         raise RuntimeError(f"groq {r.status_code}: {r.text[:160]}")
     return (r.json()["choices"][0]["message"]["content"] or "").strip()
@@ -332,5 +372,5 @@ def status(org_id=None) -> dict:
         "primary": chain[0] if chain else None,
         "used_today": used,
         "daily_cap": daily_cap(org_id) if org_id else None,
-        "model": os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        "model": os.environ.get("GROQ_MODEL", GROQ_DEFAULT_MODEL),
     }

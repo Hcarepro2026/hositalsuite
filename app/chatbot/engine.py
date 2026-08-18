@@ -68,6 +68,32 @@ _GENERIC_TRIGGERS = {
     "i need", "i want", "help", "please", "question",
 }
 
+# Words that carry NO subject matter. A trigger built only from these is
+# question-shape, not topic — e.g. "can i bring", "do you have", "is it
+# possible to". Those used to score 9 and 16 respectively and beat real
+# subject words, which is how "can i bring a cooking pot" was answered with
+# the WEAPONS policy. Structural test beats a hand-maintained list: the KB has
+# 7,559 triggers and nobody can enumerate every polite preamble.
+# NOTE: "much" is deliberately NOT here. "how much" is not question-shape, it
+# means COST - dropping it sent "how much is my bill" to the wrong billing
+# answer. Caught by tests/test_chat_ui.py.
+_FUNCTION_WORDS = {
+    "a", "about", "am", "an", "and", "any", "are", "at", "be", "bring", "can",
+    "come", "could", "do", "does", "for", "from", "get", "give", "go", "have",
+    "how", "i", "if", "in", "is", "it", "know", "like", "may", "me",
+    "must", "my", "need", "of", "on", "or", "please", "possible", "should",
+    "tell", "the", "there", "to", "want", "was", "we", "what", "when", "where",
+    "which", "who", "why", "will", "with", "would", "you", "your",
+}
+
+
+def _is_generic(kw: str) -> bool:
+    """True when a trigger is pure question-shape and names no subject."""
+    if kw in _GENERIC_TRIGGERS:
+        return True
+    parts = kw.split()
+    return bool(parts) and all(w in _FUNCTION_WORDS for w in parts)
+
 
 def _score(article: KnowledgeArticle, text: str) -> int:
     """Relevance of one article to the patient's message.
@@ -83,7 +109,7 @@ def _score(article: KnowledgeArticle, text: str) -> int:
             continue
         words = len(kw.split())
         weight = words * words          # 1 word -> 1, 2 -> 4, 3 -> 9
-        if kw in _GENERIC_TRIGGERS:
+        if _is_generic(kw):
             # Question-shape ("what does"), not subject matter. Scored BELOW a
             # single subject word so "what does SURGERY do" reaches Surgery,
             # not the generic terminology answer.

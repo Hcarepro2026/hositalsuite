@@ -342,3 +342,65 @@ def test_kb_sync_does_not_touch_tenant_authored_rows(app, seeded):
     seed_global_kb(app, quiet=True)
     still = db.session.get(KnowledgeArticle, mid)
     assert still.en == "Our own local answer.", "a tenant's own dialogue was overwritten"
+
+
+# ---------------------------------------------------------------- model life
+# Groq retired llama-3.3-70b-versatile on 16 Aug 2026. The app was still
+# pinned to it, so every AI fallback returned 400 model_decommissioned and the
+# patient silently got "I don't have an answer". These guard the recovery.
+
+def test_default_groq_model_is_not_a_retired_one(monkeypatch):
+    from app.chatbot import ai
+    retired = {
+        "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3-32b",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "meta-llama/llama-4-maverick-17b-128e-instruct",
+        "moonshotai/kimi-k2-instruct-0905",
+    }
+    assert ai.GROQ_DEFAULT_MODEL not in retired, (
+        f"{ai.GROQ_DEFAULT_MODEL} is decommissioned - see "
+        "https://console.groq.com/docs/deprecations")
+    assert not (retired & set(ai.GROQ_MODEL_FALLBACKS)), "retired model in the fallback ladder"
+
+
+def test_decommissioned_model_self_heals_to_a_live_one(monkeypatch):
+    """A retired model ID must not silently become 'no answer' to a patient."""
+    from app.chatbot import ai
+
+    calls = []
+
+    class Resp:
+        def __init__(self, code, payload=None, text=""):
+            self.status_code, self._p, self.text = code, payload, text
+
+        def json(self):
+            return self._p
+
+    def fake_post(url, **kw):
+        model = kw["json"]["model"]
+        calls.append(model)
+        if model == "some-retired-model":
+            return Resp(400, text='{"error":{"code":"model_decommissioned"}}')
+        return Resp(200, {"choices": [{"message": {"content": "Live answer."}}]})
+
+    monkeypatch.setattr(ai.requests, "post", fake_post)
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    monkeypatch.setenv("GROQ_MODEL", "some-retired-model")
+
+    out = ai._call_groq([{"role": "user", "content": "hi"}], 5)
+    assert out == "Live answer.", "self-heal did not recover the answer"
+    assert calls[0] == "some-retired-model" and len(calls) > 1, "no fallback attempted"
+
+
+def test_never_pin_a_preview_model(monkeypatch):
+    """Preview models 'may be discontinued at short notice' - Groq's own words.
+
+    A hospital assistant must run on PRODUCTION models only. Groq recommended
+    qwen/qwen3.6-27b as a replacement for llama-3.3-70b-versatile, but it is a
+    PREVIEW model - taking that advice would have set up the next silent outage.
+    """
+    from app.chatbot import ai
+    assert ai.GROQ_DEFAULT_MODEL not in ai.GROQ_PREVIEW_MODELS, (
+        f"{ai.GROQ_DEFAULT_MODEL} is a PREVIEW model - not safe for a hospital")
+    leaked = ai.GROQ_PREVIEW_MODELS & set(ai.GROQ_MODEL_FALLBACKS)
+    assert not leaked, f"preview model(s) in the failover ladder: {leaked}"

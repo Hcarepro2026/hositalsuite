@@ -57,7 +57,7 @@ Sign in as Super Admin → **Admin → System Health**. You'll see:
 🤖 Patient Assistant AI
 Status: on
 Providers: groq
-Model: llama-3.3-70b-versatile
+Model: openai/gpt-oss-120b  (PRODUCTION tier. llama-3.3-70b-versatile was retired by Groq on 16 Aug 2026.)
 Used today: 0 of 400
 ```
 
@@ -68,7 +68,7 @@ Used today: 0 of 400
 | Variable | Default | What it does |
 |---|---|---|
 | `GROQ_API_KEY` | — | **Recommended.** Primary provider. console.groq.com |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Change model if you want |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Change model if you want |
 | `GEMINI_API_KEY` | — | Second line. Free at aistudio.google.com |
 | `GEMINI_MODEL` | `gemini-2.0-flash` | |
 | `OPENROUTER_API_KEY` | — | Third line. openrouter.ai |
