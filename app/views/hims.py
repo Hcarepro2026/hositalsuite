@@ -37,7 +37,8 @@ def _org():
 
 def _form_context(**extra):
     ctx = dict(sexes=SEXES, payers=PAYER_TYPES, categories=PATIENT_CATEGORIES,
-               assistance_needs=ASSISTANCE_NEEDS, langs=PATIENT_LANGS,
+               assistance_needs=ASSISTANCE_NEEDS, assistance_labels=ASSISTANCE_LABELS,
+               langs=PATIENT_LANGS,
                visit_types=VISIT_TYPES,
                depts=db.session.query(Department)
                .filter_by(org_id=current_user.org_id, active=True)

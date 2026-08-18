@@ -30,6 +30,7 @@
   <a href="/inspections" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>
   {% endif %}
   {% if current_user.role in ('SUPER_ADMIN','MD_CEO','ADMIN_MANAGER','HOD') %}
+    <a href="/reception/" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>
     <a href="/hims/" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>
     <a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a>
     <a href="/queue" class="{{ 'active' if request.path == '/queue' }}">Queue</a>

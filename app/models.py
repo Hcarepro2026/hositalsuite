@@ -1124,3 +1124,106 @@ class Setting(db.Model):
             db.session.add(row)
         row.value = json.dumps(value)
         return row
+
+
+# ---------------------------------------------------------------- reception
+# Reception is the FIRST desk a new patient meets, before any folder exists.
+# The receptionist takes the details, finds out what help the person needs,
+# records their insurance, then sends them to Billing and the Paying Point.
+# HIMS later turns a PAID intake into a real patient folder.
+#
+# WHY A SEPARATE TABLE AND NOT JUST A PATIENT ROW
+# -----------------------------------------------
+# A folder is the hospital's permanent record and it carries a hospital number.
+# Somebody who walks in, is quoted a fee and leaves without paying must NOT
+# consume a hospital number or sit in the register as a patient forever. The
+# intake is the waiting room; the folder is the record.
+INTAKE_STAGES = (
+    ("RECEPTION", "At Reception — details being taken"),
+    ("BILLING",   "Sent to Billing — collecting the bill"),
+    ("PAYMENT",   "At Megalex / Paying Point — paying"),
+    ("PAID",      "Paid — waiting for HIMS to open the folder"),
+    ("REGISTERED", "Folder opened by HIMS — sent to Triage"),
+    ("CANCELLED", "Left without completing"),
+)
+INTAKE_STAGE_LABELS = dict(INTAKE_STAGES)
+INTAKE_STAGE_CODES = tuple(c for c, _ in INTAKE_STAGES)
+
+
+class ReceptionIntake(db.Model):
+    """A new patient being walked from the front door to the Triage bench.
+
+    Deliberately NOT a medical record: no complaint, no symptoms, no
+    observations. Only who the person is, who to call in an emergency, how they
+    will pay, and what help they need to get through the building.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    ref = db.Column(db.String(40), unique=True, nullable=False, index=True)
+
+    # --- identity (what Reception actually asks for)
+    surname = db.Column(db.String(80), nullable=False)
+    first_name = db.Column(db.String(80), nullable=False)
+    other_names = db.Column(db.String(80))
+    sex = db.Column(db.String(1))
+    age_years = db.Column(db.Integer)
+    occupation = db.Column(db.String(80))
+
+    # --- contact
+    phone = db.Column(db.String(32), index=True)
+    address = db.Column(db.String(300))
+
+    # --- next of kin: name, phone AND relationship, as the founder specified
+    nok_name = db.Column(db.String(120))
+    nok_phone = db.Column(db.String(32))
+    nok_relationship = db.Column(db.String(40))
+
+    # --- health insurance / how they will pay
+    payer_type = db.Column(db.String(16), default="SELF", nullable=False)
+    payer_number = db.Column(db.String(60))
+    payer_name = db.Column(db.String(120))
+
+    # --- SPECIAL NEEDS. Moved here from the HIMS folder form: the person who
+    # first meets the patient is the one who can see they need a wheelchair.
+    preferred_lang = db.Column(db.String(4), default="en")
+    assistance = db.Column(db.String(200))        # comma-separated ASSISTANCE_CODES
+    care_note = db.Column(db.String(200))
+
+    # --- where they are in the walk
+    stage = db.Column(db.String(12), default="RECEPTION", nullable=False, index=True)
+    bill_ref = db.Column(db.String(40))           # written by Billing
+    payment_ref = db.Column(db.String(40))        # receipt from Megalex/Pay-Point
+    needs_blood_sugar = db.Column(db.Boolean, default=True, nullable=False)
+
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), index=True)
+    visit_id = db.Column(db.Integer, db.ForeignKey("patient_visit.id"))
+
+    created_at = db.Column(db.DateTime, default=now_naive, nullable=False, index=True)
+    billed_at = db.Column(db.DateTime)
+    paid_at = db.Column(db.DateTime)
+    registered_at = db.Column(db.DateTime)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+
+    patient = db.relationship("Patient")
+    receptionist = db.relationship("User", foreign_keys=[created_by])
+
+    @property
+    def full_name(self) -> str:
+        bits = [self.first_name, self.other_names, self.surname]
+        return " ".join(b for b in bits if b).strip()
+
+    @property
+    def care_flags(self) -> list[str]:
+        """Plain-English list of what this person needs. Spoken aloud."""
+        out = [ASSISTANCE_LABELS[c] for c in (self.assistance or "").split(",")
+               if c and c in ASSISTANCE_LABELS]
+        if (self.preferred_lang or "en") != "en":
+            out.append(f"Prefers {PATIENT_LANG_LABELS.get(self.preferred_lang, self.preferred_lang)}"
+                       " — greet them in it")
+        if self.care_note:
+            out.append(self.care_note)
+        return out
+
+    @property
+    def stage_label(self) -> str:
+        return INTAKE_STAGE_LABELS.get(self.stage, self.stage)

@@ -144,21 +144,28 @@
         </select></div>
     </div>
 
-    <label class="mt">Do they need any help getting through the visit?</label>
-    {% set picked = (form.assistance or '').split(',') %}
-    <div class="grid cols2">
-      {% for code, label in assistance_needs %}
-      <label class="row" style="align-items:center;gap:8px;margin:2px 0">
-        <input type="checkbox" name="assistance" value="{{ code }}" style="width:auto"
-               {{ 'checked' if code in picked }}>
-        <span>{{ label }}</span>
-      </label>
-      {% endfor %}
+    {# SPECIAL NEEDS now belong to RECEPTION, not HIMS. The receptionist is the
+       first person to meet the patient and the one who can SEE that somebody
+       needs a wheelchair. Asking again here would be asking twice. The values
+       captured at Reception are carried through and shown read-only below. #}
+    {% if form.assistance or form.care_note %}
+    <div class="notice mt" style="text-align:left">
+      <b>Special needs recorded at Reception:</b>
+      {% if form.assistance %}
+        {% for code in (form.assistance or '').split(',') if code %}
+          {{ assistance_labels.get(code, code) }}{{ " · " if not loop.last }}
+        {% endfor %}
+      {% endif %}
+      {% if form.care_note %}<div class="mt">{{ form.care_note }}</div>{% endif %}
+      <input type="hidden" name="assistance" value="{{ form.assistance or '' }}">
+      <input type="hidden" name="care_note" value="{{ form.care_note or '' }}">
+      <p class="hint" style="margin-bottom:0">To change these, edit them at the
+        Reception desk — that is where they are collected.</p>
     </div>
-
-    <label class="mt">Anything else the desk should know?</label>
-    <input type="text" name="care_note" maxlength="200" value="{{ form.care_note or '' }}"
-           placeholder="e.g. travels a long way — try not to keep them waiting">
+    {% else %}
+    <div class="hint mt">Special needs (wheelchair, interpreter, help walking) are
+      collected at <b>Reception</b>, before the patient reaches this desk.</div>
+    {% endif %}
   </div>
 
   {% if not editing %}

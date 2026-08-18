@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Reception{% endblock %}
+{% block content %}
+<h1>🛎️ Reception</h1>
+<p class="muted">The front door. Take the patient's details once, find out what
+  help they need, then walk them through: Billing → Paying Point → HIMS → Triage.</p>
+
+<div class="grid cols4 mb">
+  <div class="card pad-lg" style="text-align:center">
+    <div style="font-size:1.9rem;font-weight:800">{{ counts.get('RECEPTION',0) }}</div>
+    <div class="muted" style="font-size:.8rem">At Reception</div>
+  </div>
+  <div class="card pad-lg" style="text-align:center">
+    <div style="font-size:1.9rem;font-weight:800">{{ counts.get('BILLING',0) + counts.get('PAYMENT',0) }}</div>
+    <div class="muted" style="font-size:.8rem">Billing / Paying</div>
+  </div>
+  <div class="card pad-lg" style="text-align:center">
+    <div style="font-size:1.9rem;font-weight:800">{{ counts.get('PAID',0) }}</div>
+    <div class="muted" style="font-size:.8rem">Paid — folder due</div>
+  </div>
+  <div class="card pad-lg" style="text-align:center">
+    <div style="font-size:1.9rem;font-weight:800">{{ registered_today }}</div>
+    <div class="muted" style="font-size:.8rem">Registered today</div>
+  </div>
+</div>
+
+<a class="btn big mb" href="/reception/new">➕ New patient has arrived</a>
+
+<h2>Who is being walked through</h2>
+{% if not waiting %}
+  <div class="card pad-lg"><p class="muted" style="margin:0">Nobody is waiting.
+    When a new patient walks in, press <b>New patient has arrived</b>.</p></div>
+{% else %}
+  {% for i in waiting %}
+  <div class="card pad-lg mb">
+    <div class="spread">
+      <div>
+        <div style="font-size:1.1rem;font-weight:800">{{ i.full_name }}</div>
+        <div class="muted" style="font-size:.85rem">
+          {{ i.ref }} · {{ payer_labels.get(i.payer_type, i.payer_type) }}
+          {%- if i.phone %} · {{ i.phone }}{% endif %}
+        </div>
+      </div>
+      <span class="pill {{ 'green' if i.stage=='PAID' else 'amber' }}">{{ i.stage_label }}</span>
+    </div>
+
+    {% if i.care_flags %}
+    <div class="notice mt" style="text-align:left">
+      <b>⚠ Needs help:</b> {{ i.care_flags | join(' · ') }}
+    </div>
+    {% endif %}
+
+    <div class="btn-row grid cols2 mt">
+      {% if i.stage == 'RECEPTION' %}
+        <form method="post" action="/reception/{{ i.id }}/to-billing">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small">➡ Send to Billing</button>
+        </form>
+      {% elif i.stage == 'BILLING' %}
+        <form method="post" action="/reception/{{ i.id }}/to-payment">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <input type="text" name="bill_ref" placeholder="Bill number (optional)">
+          <button class="btn small">➡ Send to Paying Point</button>
+        </form>
+      {% elif i.stage == 'PAYMENT' %}
+        <form method="post" action="/reception/{{ i.id }}/paid">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <input type="text" name="payment_ref" placeholder="Receipt number (optional)">
+          <button class="btn small">✅ Payment received</button>
+        </form>
+      {% elif i.stage == 'PAID' %}
+        <form method="post" action="/reception/{{ i.id }}/open-folder">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small">📂 HIMS: open the folder</button>
+        </form>
+      {% endif %}
+      <form method="post" action="/reception/{{ i.id }}/cancel"
+            onsubmit="return confirm('Mark {{ i.full_name }} as left without completing?')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn small secondary">Left without completing</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

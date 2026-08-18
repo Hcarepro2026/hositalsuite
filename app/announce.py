@@ -53,6 +53,14 @@ PATIENT_ALERTS: dict[str, tuple[str, str]] = {
     "patient_registered":  (STANDARD, "Patient registered"),
     "assistance_needed":   (URGENT, "Patient needs assistance"),
     "returning_patient":   (STANDARD, "Returning patient"),
+    # --- Reception walk (front door -> Billing -> Pay Point -> HIMS -> Triage).
+    # Every one of these is spoken by the BROWSER's own speech synthesiser, so
+    # the whole call-out system costs the hospital nothing per announcement.
+    "reception_arrival":   (STANDARD, "New patient at reception"),
+    "go_to_billing":       (STANDARD, "Patient sent to Billing"),
+    "go_to_payment":       (STANDARD, "Patient sent to the Paying Point"),
+    "ready_for_folder":    (URGENT, "Paid — folder to be opened"),
+    "go_to_triage":        (URGENT, "Patient sent to Triage"),
 }
 
 _TITLES = ("dr", "mr", "mrs", "miss", "ms", "prof", "pharm", "engr", "cno",
@@ -151,6 +159,21 @@ def phrase(kind: str, *, name: str = "", count: int = 0, place: str = "",
         return (f"{who}, {patient or 'a patient'} is back with us"
                 + (f" at {place}" if place else "")
                 + ". Please welcome them.")
+    if kind == "reception_arrival":
+        return (f"{who}, {patient or 'a new patient'} has arrived at "
+                f"{place or 'reception'}. Please take their details.")
+    if kind == "go_to_billing":
+        return (f"{patient or 'Patient'}, please go to {place or 'the Billing Unit'} "
+                f"to collect your bill.")
+    if kind == "go_to_payment":
+        return (f"{patient or 'Patient'}, please go to {place or 'the Paying Point'} "
+                f"to make your payment.")
+    if kind == "ready_for_folder":
+        return (f"{who}, {patient or 'a patient'} has paid and is waiting at "
+                f"{place or 'HIMS'} for a folder to be opened.")
+    if kind == "go_to_triage":
+        return (f"{patient or 'Patient'}, please go to {place or 'Triage'}"
+                + (f" {detail}" if detail else "") + ".")
     if kind == "patient_waiting_long":
         return (f"{who}, {patient or 'a patient'} has been waiting "
                 f"{detail or 'a long time'}"

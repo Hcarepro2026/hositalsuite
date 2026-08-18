@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}New patient — Reception{% endblock %}
+{% block content %}
+<h1>🛎️ New patient</h1>
+<p class="muted">Ask these once. HIMS will use the same answers to open the
+  folder, so the patient is never asked the same question twice.</p>
+
+{% if errors %}
+<div class="flash error">
+  <b>Please check the following:</b>
+  <ul style="margin:.4rem 0 0 1rem">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" action="/reception/new">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <div class="card mb">
+    <h2>1 · Who is the patient?</h2>
+    <div class="grid cols2">
+      <div><label>Surname <span class="req">*</span></label>
+        <input name="surname" required value="{{ form.get('surname','') }}"></div>
+      <div><label>First name <span class="req">*</span></label>
+        <input name="first_name" required value="{{ form.get('first_name','') }}"></div>
+    </div>
+    <div class="grid cols2">
+      <div><label>Other names</label>
+        <input name="other_names" value="{{ form.get('other_names','') }}"></div>
+      <div><label>Sex</label>
+        <select name="sex">
+          <option value="">—</option>
+          {% for code, label in sexes %}
+          <option value="{{ code }}" {{ 'selected' if form.get('sex')==code }}>{{ label }}</option>
+          {% endfor %}
+        </select></div>
+    </div>
+    <div class="grid cols2">
+      <div><label>Age (years)</label>
+        <input name="age_years" type="number" min="0" max="120" value="{{ form.get('age_years','') }}">
+        <p class="hint">If they don't know their birthday, just record their age.</p></div>
+      <div><label>Occupation</label>
+        <input name="occupation" value="{{ form.get('occupation','') }}"></div>
+    </div>
+  </div>
+
+  <div class="card mb">
+    <h2>2 · How do we reach them?</h2>
+    <label>Phone number</label>
+    <input name="phone" inputmode="tel" value="{{ form.get('phone','') }}">
+    <label>Address</label>
+    <textarea name="address" rows="2">{{ form.get('address','') }}</textarea>
+  </div>
+
+  <div class="card mb">
+    <h2>3 · Next of kin <span class="req">*</span></h2>
+    <p class="hint">Somebody must be reachable in an emergency.</p>
+    <div class="grid cols2">
+      <div><label>Name <span class="req">*</span></label>
+        <input name="nok_name" required value="{{ form.get('nok_name','') }}"></div>
+      <div><label>Phone number <span class="req">*</span></label>
+        <input name="nok_phone" inputmode="tel" required value="{{ form.get('nok_phone','') }}"></div>
+    </div>
+    <label>Relationship to the patient <span class="req">*</span></label>
+    <select name="nok_relationship" required>
+      <option value="">— Select —</option>
+      {% for r in relationships %}
+      <option value="{{ r }}" {{ 'selected' if form.get('nok_relationship')==r }}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="card mb">
+    <h2>4 · Special needs</h2>
+    <p class="hint">You are the first person to meet them — you can see what they need.
+      This is read out loud to the team so somebody comes to help.</p>
+    <label>Preferred language</label>
+    <select name="preferred_lang">
+      {% for code, label in langs %}
+      <option value="{{ code }}" {{ 'selected' if form.get('preferred_lang',
+        'en')==code }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <label>What help do they need?</label>
+    {% set picked = (form.get('assistance') or '').split(',') %}
+    <div class="grid cols2">
+      {% for code, label in assistance_needs %}
+      <label style="font-weight:400">
+        <input type="checkbox" name="assistance" value="{{ code }}" style="width:auto"
+               {{ 'checked' if code in picked }}> {{ label }}
+      </label>
+      {% endfor %}
+    </div>
+    <label>Anything else the team should know</label>
+    <textarea name="care_note" id="care_note" rows="2" maxlength="200">{{ form.get('care_note','') }}</textarea>
+    <button type="button" class="mic-btn" data-lang="en-NG"
+            onclick="hmsVoice.start(this,'care_note')">🎤 Speak</button>
+  </div>
+
+  <div class="card mb">
+    <h2>5 · How will they pay?</h2>
+    <label>Payment route</label>
+    <select name="payer_type">
+      {% for code, label in payers %}
+      <option value="{{ code }}" {{ 'selected' if form.get('payer_type','SELF')==code }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <div class="grid cols2">
+      <div><label>Scheme / policy number</label>
+        <input name="payer_number" value="{{ form.get('payer_number','') }}">
+        <p class="hint">Required for LAHSMA, NHIS and HMO — Billing cannot claim without it.</p></div>
+      <div><label>HMO or employer name</label>
+        <input name="payer_name" value="{{ form.get('payer_name','') }}"></div>
+    </div>
+    <label style="font-weight:400;margin-top:12px">
+      <input type="checkbox" name="needs_blood_sugar" value="1" style="width:auto"
+             {{ 'checked' if form.get('needs_blood_sugar','1') }}>
+      Bill for a blood sugar test as well as the folder
+    </label>
+  </div>
+
+  <button class="btn big">Take them in &amp; send to Billing</button>
+  <a class="btn secondary" href="/reception/">Cancel</a>
+</form>
+{% endblock %}
