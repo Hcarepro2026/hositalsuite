@@ -1,7 +1,7 @@
 # HANDOFF — Hospital Admin Manager Suite ("Patient Experience OS")
 
 **GENERAL HOSPITAL IJEDE (The Family Hospital)**
-Last updated: **17 August 2026** · Code at: **`5828bae`** · Status: **live and healthy**
+Last updated: **18 August 2026** · Code at: **`f10459f`** (local, NOT pushed) · Status: **live and healthy**
 
 > **Paste this whole file into a new chat as your first message.** It contains
 > everything needed to carry on without repeating work.
@@ -122,9 +122,9 @@ python3 tools/roster_browser_check.py                   # 21 checks
 
 | Metric | Value |
 |---|---|
-| Tests | **353 passing** on SQLite **and** real PostgreSQL 17 |
-| Test files | 27 in `tests/` |
-| Migrations | 4 in `migrations/versions/` (head = `b3f81a9d5c22`) |
+| Tests | **406 passing** on SQLite **and** real PostgreSQL 17 |
+| Test files | 31 in `tests/` |
+| Migrations | 6 in `migrations/versions/` (head = `d5b03c8a2e41`) |
 | Browser checks | HIMS 20/20 · Roster 21/21 |
 | Link checker | Clean |
 
@@ -229,11 +229,17 @@ Previously two pages that couldn't see each other.
 | Stage | Status |
 |---|---|
 | Booking | ✅ built |
-| **A — HIMS Register** | ✅ **built** |
-| **B — Triage** | ⬜ **NEXT — scope agreed, see below** |
-| **C — Call Room Queue** | ⬜ pending |
-| **D — Onward routing** | ⬜ pending |
-| **E — Voice throughout** | 🟡 partial (engine done, wired into HIMS + queue; needs wiring into B/C/D) |
+| **Reception (front door)** | ✅ **built 18 Aug** — details, special needs, insurance, then Billing → Pay-Point |
+| **A — HIMS Register** | ✅ built (special needs moved OUT to Reception) |
+| **B — Triage** | ✅ **built 18 Aug** — OPD/SOPD/MOPD/EMERGENCY, doctor rooms, blood sugar step |
+| **C — Call Room Queue** | 🟡 partial — the doctor's own queue exists at `/triage/consulting-room`; "start/finish consultation" not built |
+| **D — Onward routing** | ⬜ pending — Billing / LAHSMA / Megalex / Lab / Pharmacy / Emergency |
+| **E — Voice throughout** | ✅ wired through Reception → Billing → Pay-Point → HIMS → Triage → doctor |
+
+**AI assistant:** Groq was DEAD (retired model + a KB that never fell through
+to it). Fixed 17 Aug — see `docs/reports/`. Pinned to `openai/gpt-oss-120b`
+(PRODUCTION tier). Do **not** set `GROQ_MODEL` in Render; the tested default
+lives in the code.
 
 ### ⬅ START HERE: Stage B — Triage (scope agreed with founder, awaiting his "go")
 
