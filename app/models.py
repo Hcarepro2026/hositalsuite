@@ -1227,3 +1227,52 @@ class ReceptionIntake(db.Model):
     @property
     def stage_label(self) -> str:
         return INTAKE_STAGE_LABELS.get(self.stage, self.stage)
+
+
+# ---------------------------------------------------------------- triage
+# Where Triage can place a patient. These are the clinics the founder named.
+CLINICS = (
+    ("OPD",       "OPD — General Outpatient"),
+    ("SOPD",      "SOPD — Surgical Outpatient"),
+    ("MOPD",      "MOPD — Medical Outpatient"),
+    ("EMERGENCY", "Accident & Emergency"),
+)
+CLINIC_LABELS = dict(CLINICS)
+CLINIC_CODES = tuple(c for c, _ in CLINICS)
+
+CONSULTING_ROOMS = ("Room 1", "Room 2", "Room 3", "Room 4", "Emergency Room")
+
+
+class DoctorSession(db.Model):
+    """A doctor saying "I am in this room and ready to see patients".
+
+    WHY THIS EXISTS
+    ---------------
+    The founder was explicit: a doctor is available only when they are BOTH
+    rostered AND have clicked "ready to consult". The roster says who is
+    supposed to be in the building; this says who is actually sitting in a
+    consulting room with the door open. Triage must never send a patient to an
+    empty room because the roster said someone should be there.
+
+    Ending a session (going to lunch, going home) closes it. Triage then stops
+    offering that room immediately.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    doctor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    duty_date = db.Column(db.Date, nullable=False, index=True)
+    clinic = db.Column(db.String(20), nullable=False)          # OPD | SOPD | MOPD | EMERGENCY
+    consulting_room = db.Column(db.String(20), nullable=False)
+    ready = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    started_at = db.Column(db.DateTime, default=now_naive, nullable=False)
+    ended_at = db.Column(db.DateTime)
+
+    doctor = db.relationship("User", foreign_keys=[doctor_id])
+
+    __table_args__ = (
+        db.Index("ix_doctor_session_org_date", "org_id", "duty_date"),
+    )
+
+    @property
+    def is_open(self) -> bool:
+        return bool(self.ready) and self.ended_at is None
