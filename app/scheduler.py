@@ -262,9 +262,39 @@ def job_retention_purge(app):
             app.logger.info("retention: anonymised %d record(s) for org %s", purged, org.code)
 
 
+def job_patient_flow(app):
+    """Watch the flow: close forgotten stretches, and SPEAK about hold-ups.
+
+    Voice is a standing requirement of every feature. A dashboard nobody opens
+    is a dashboard nobody acts on, so the two things worth interrupting a
+    working day for are said out loud: a patient who looks forgotten, and a
+    department holding the whole hospital up.
+
+    Deliberately quiet otherwise. An alert that fires constantly is ignored
+    within a week, and then the one that mattered is ignored too.
+
+    Wrapped per-organisation: a fault measuring one hospital must never stop
+    the others, and must never stop the jobs that follow.
+    """
+    from . import tracking
+    for org in db.session.query(Organization).all():
+        try:
+            closed = tracking.close_abandoned(org.id)
+            if closed:
+                app.logger.info("flow: closed %s abandoned stretch(es) for org %s",
+                                closed, org.id)
+            tracking.announce_forgotten(org.id)
+            tracking.announce_bottleneck(org.id)
+            db.session.commit()
+        except Exception:                                  # noqa: BLE001
+            app.logger.exception("patient-flow job failed for org %s", org.id)
+            db.session.rollback()
+
+
 # ------------------------------------------------------------------ tick
 JOB_SEQUENCE = (job_duty_reminders, job_overdue_inspection, job_complaint_sla,
-                job_corrective_actions, job_whatsapp_queue, job_retention_purge)
+                job_corrective_actions, job_whatsapp_queue, job_patient_flow,
+                job_retention_purge)
 
 
 def tick(app):

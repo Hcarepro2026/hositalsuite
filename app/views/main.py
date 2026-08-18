@@ -184,8 +184,22 @@ def dashboard():
                              .filter(Complaint.org_id == org_id,
                                      Complaint.status.in_(("NEW", "ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED")))
                              .order_by(Complaint.submitted_at.desc()).limit(8).all())
+    # Patient flow on the front page. The whole point of measuring the journey
+    # is that somebody SEES it — a dashboard behind another menu is a dashboard
+    # nobody opens. Guarded: a fault in the statistics must never take down the
+    # main dashboard for everyone.
+    flow = None
+    try:
+        from .. import tracking
+        flow = {"head": tracking.headline(org_id, 7),
+                "advice": tracking.suggest_allocation(org_id)[:2]}
+    except Exception:                                      # noqa: BLE001
+        from flask import current_app
+        current_app.logger.exception("patient-flow summary unavailable")
+
     return render_template("dashboard.html", kpi=kpi, attention=attention, my_cas=my_cas,
-                           recent_complaints=recent_complaints, scoring=scoring)
+                           recent_complaints=recent_complaints, scoring=scoring,
+                           flow=flow)
 
 
 # ------------------------------------------------------------------ notifications inbox

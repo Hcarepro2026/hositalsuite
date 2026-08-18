@@ -6,6 +6,15 @@
 <meta name="theme-color" content="#0e5a8a">
 <title>{% block title %}Hospital Admin Manager Suite{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<style>
+  /* The suite now has 18 destinations. On a phone that wrapped into a wall of
+     links that pushed the actual page below the fold. One scrollable row keeps
+     every destination reachable with a thumb without stealing the screen. */
+  #mainnav{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:2px;
+           -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #mainnav::-webkit-scrollbar{display:none}
+  #mainnav a{flex:0 0 auto;white-space:nowrap}
+</style>
 </head>
 <body>
 <div class="offline-banner" id="offline-banner">📴 OFFLINE — DATA SAVED LOCALLY. You can keep working; entries sync when you're back online.</div>
@@ -24,7 +33,7 @@
   {% endif %}
 </div>
 {% if current_user.is_authenticated %}
-<nav class="nav">
+<nav class="nav" id="mainnav">
   <a href="/" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
   {% if current_user.role in ('ADMIN_MANAGER','SUPER_ADMIN','MD_CEO') %}
   <a href="/inspections" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>

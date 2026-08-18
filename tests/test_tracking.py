@@ -625,3 +625,147 @@ def test_a_failed_tracking_write_does_not_poison_the_transaction(app, seeded):
         assert saved is not None, (
             "a failed tracking write poisoned the transaction and the patient "
             "was lost — the savepoint is missing or broken")
+
+
+# ================================================================ voice + cleanup
+# Voice is a standing requirement of EVERY feature. A dashboard nobody opens is
+# a dashboard nobody acts on, so the engine speaks about the two things worth
+# interrupting a working day for — and stays quiet otherwise.
+def test_a_forgotten_patient_is_spoken_about(app, seeded):
+    from app.models import AppNotification
+    with app.app_context():
+        org_id = seeded["org"]
+        p = _patient(org_id, "Abatan", "Folake")
+        db.session.commit()
+        _seg(org_id, "PHARMACY", 90, patient_id=p.id, open_ended=True)
+        db.session.commit()
+
+        assert tracking.announce_forgotten(org_id) == 1
+        db.session.commit()
+        rows = db.session.query(AppNotification).filter_by(
+            template_key="patient_forgotten").all()
+        assert rows, "nobody was told about the forgotten patient"
+        assert "90 minutes" in rows[0].body
+        # ...and by the name she is actually CALLED, not register order.
+        assert "folake" in rows[0].body.lower(), rows[0].body
+        assert "abatan" not in rows[0].body.lower(), \
+            "announced by surname — inconsistent with every other stage"
+
+
+def test_a_department_holding_everyone_up_is_spoken_about(app, seeded):
+    from app.models import AppNotification
+    with app.app_context():
+        org_id = seeded["org"]
+        for _ in range(6):
+            _seg(org_id, "PHARMACY", 120)      # target 20
+        db.session.commit()
+        assert tracking.announce_bottleneck(org_id, days=7) == 1
+        db.session.commit()
+        rows = db.session.query(AppNotification).filter_by(
+            template_key="flow_bottleneck").all()
+        assert rows and "Pharmacy" in rows[0].body
+
+
+def test_the_engine_stays_quiet_when_nothing_is_wrong(app, seeded):
+    """An alert that fires constantly is ignored within a week."""
+    from app.models import AppNotification
+    with app.app_context():
+        org_id = seeded["org"]
+        for _ in range(6):
+            _seg(org_id, "PHARMACY", 5)        # well inside target
+        db.session.commit()
+        assert tracking.announce_bottleneck(org_id, days=7) == 0
+        assert tracking.announce_forgotten(org_id) == 0
+        db.session.commit()
+        assert db.session.query(AppNotification).filter(
+            AppNotification.template_key.in_(
+                ("flow_bottleneck", "patient_forgotten"))).count() == 0
+
+
+def test_abandoned_stretches_are_closed_with_an_HONEST_unknown_duration(app, seeded):
+    """A desk forgot to press done. Guessing a duration corrupts every average."""
+    with app.app_context():
+        org_id = seeded["org"]
+        p = _patient(org_id)
+        db.session.commit()
+        _seg(org_id, "PHARMACY", 60 * 20, patient_id=p.id, open_ended=True)
+        db.session.commit()
+
+        assert tracking.close_abandoned(org_id) == 1
+        db.session.commit()
+        row = db.session.query(JourneySegment).one()
+        assert row.ended_at is not None, "the ghost is still on the live board"
+        assert row.seconds is None, \
+            "a duration was invented for a patient nobody measured"
+
+
+def test_cleanup_does_not_touch_a_patient_who_is_genuinely_still_there(app, seeded):
+    with app.app_context():
+        org_id = seeded["org"]
+        p = _patient(org_id)
+        db.session.commit()
+        _seg(org_id, "PHARMACY", 30, patient_id=p.id, open_ended=True)
+        db.session.commit()
+        assert tracking.close_abandoned(org_id) == 0
+        assert db.session.query(JourneySegment).one().ended_at is None
+
+
+def test_the_scheduler_runs_the_flow_job_without_breaking_the_others(app, seeded):
+    """A fault measuring one hospital must not stop the rest of automation."""
+    from app.scheduler import JOB_SEQUENCE, job_patient_flow
+    assert job_patient_flow in JOB_SEQUENCE, \
+        "the flow job never runs, so nothing is ever cleaned up or announced"
+    with app.app_context():
+        job_patient_flow(app)          # empty hospital must not raise
+
+
+def test_the_flow_job_survives_a_broken_tracking_engine(app, seeded, monkeypatch):
+    from app.scheduler import job_patient_flow
+    from app import tracking as t
+
+    def explode(*a, **kw):
+        raise RuntimeError("statistics are on fire")
+
+    monkeypatch.setattr(t, "close_abandoned", explode)
+    with app.app_context():
+        job_patient_flow(app)          # must not raise
+
+
+# ================================================================ visibility
+def test_the_main_dashboard_shows_patient_flow(app, client, seeded):
+    """A dashboard behind another menu is a dashboard nobody opens."""
+    with app.app_context():
+        for _ in range(6):
+            _seg(seeded["org"], "TRIAGE", 12)
+        db.session.commit()
+    _login(client, app, seeded)
+    body = client.get("/dashboard").get_data(as_text=True)
+    assert "Patient flow" in body
+    assert "/tracking" in body
+
+
+def test_the_dashboard_survives_a_broken_flow_summary(app, client, seeded,
+                                                      monkeypatch):
+    """Statistics must never take down the front page for everyone."""
+    from app import tracking as t
+
+    def explode(*a, **kw):
+        raise RuntimeError("statistics are on fire")
+
+    # main.py imports tracking inside the view, so patch the module itself.
+    monkeypatch.setattr(t, "headline", explode)
+    _login(client, app, seeded)
+    assert client.get("/dashboard").status_code == 200
+
+
+def test_a_folder_links_to_the_journey_of_each_visit(app, client, seeded):
+    with app.app_context():
+        org_id = seeded["org"]
+        p = _patient(org_id)
+        v = _visit(org_id, p)
+        db.session.commit()
+        pid, vid = p.id, v.id
+    _login(client, app, seeded)
+    body = client.get(f"/hims/folder/{pid}").get_data(as_text=True)
+    assert f"/tracking/patient/{vid}" in body, \
+        "no way to get from a patient's folder to their journey"

@@ -83,7 +83,8 @@
     {% for v in visits %}
     <tr>
       <td>{{ v.started_at.strftime('%d %b %Y, %H:%M') }}</td>
-      <td>{{ v.visit_no }}</td>
+      <td><a href="/tracking/patient/{{ v.id }}"
+             title="See every step of this visit and how long each took">{{ v.visit_no }}</a></td>
       <td>{{ v.visit_type.replace('_',' ')|title }}</td>
       <td>{{ v.reason or '—' }}</td>
       <td><span class="pill {{ 'amber' if v.status == 'REGISTERED' else ('gray' if v.status in ('CLOSED','CANCELLED') else 'blue') }}">{{ v.status.replace('_',' ') }}</span></td>

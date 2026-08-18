@@ -67,6 +67,11 @@ PATIENT_ALERTS: dict[str, tuple[str, str]] = {
     "go_onward":           (URGENT, "Patient sent onward"),
     "desk_expecting":      (STANDARD, "Patient on the way to your desk"),
     "visit_complete":      (STANDARD, "Visit complete"),
+    # --- Monitoring engine. Voice is a standing requirement of EVERY feature,
+    # and a dashboard nobody opens is a dashboard nobody acts on. These are the
+    # only two things worth interrupting a working day for.
+    "flow_bottleneck":     (URGENT, "A department is holding everyone up"),
+    "patient_forgotten":   (URGENT, "A patient may have been forgotten"),
 }
 
 _TITLES = ("dr", "mr", "mrs", "miss", "ms", "prof", "pharm", "engr", "cno",
@@ -193,6 +198,13 @@ def phrase(kind: str, *, name: str = "", count: int = 0, place: str = "",
     if kind == "visit_complete":
         return (f"{patient or 'Patient'}, you are all done for today. "
                 f"Safe journey home.")
+    if kind == "flow_bottleneck":
+        return (f"{who}, {place or 'a department'} is holding everyone up. "
+                f"{detail or 'Patients are waiting there longer than they should.'}")
+    if kind == "patient_forgotten":
+        return (f"{who}, {patient or 'a patient'} has been waiting at "
+                f"{place or 'a desk'} for {detail or 'a very long time'}. "
+                f"Please check on them.")
     if kind == "patient_waiting_long":
         return (f"{who}, {patient or 'a patient'} has been waiting "
                 f"{detail or 'a long time'}"

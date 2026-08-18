@@ -1227,6 +1227,12 @@ class ReceptionIntake(db.Model):
         return " ".join(b for b in bits if b).strip()
 
     @property
+    def spoken_name(self) -> str:
+        """How this person is CALLED. Matches Patient.spoken_name so one
+        patient is never announced two different ways across a visit."""
+        return self.full_name
+
+    @property
     def care_flags(self) -> list[str]:
         """Plain-English list of what this person needs. Spoken aloud."""
         out = [ASSISTANCE_LABELS[c] for c in (self.assistance or "").split(",")

@@ -43,6 +43,7 @@ import functools
 import logging
 from datetime import date, datetime, timedelta
 
+from . import announce
 from .models import (JOURNEY_STAGE_CODES, JOURNEY_STAGE_LABELS, JourneySegment,
                      db, now_naive)
 
@@ -445,6 +446,11 @@ def live_board(org_id) -> list[dict]:
         out.append({
             "segment": r,
             "name": who.full_name if who else "—",
+            # Screens show register order (SURNAME First); the voice must use
+            # the name a person is actually called, or the same patient gets
+            # announced two different ways during one visit.
+            "spoken": (getattr(who, "spoken_name", None) or
+                       (who.full_name if who else "A patient")),
             "stage": r.stage,
             "label": r.label,
             "waited": waited,
@@ -596,3 +602,65 @@ def suggest_allocation(org_id) -> list[str]:
         tips.append("Nothing needs your attention right now. The hospital is "
                     "flowing well.")
     return tips
+
+
+# ------------------------------------------------------------------ voice
+# Voice is a standing requirement of every feature, and a dashboard nobody
+# opens is a dashboard nobody acts on. But an alert that fires constantly gets
+# ignored within a week, so this speaks about exactly two things: a patient who
+# looks forgotten, and a department that is holding the whole hospital up.
+def announce_forgotten(org_id) -> int:
+    """Say out loud that somebody has been left waiting far too long."""
+    said = 0
+    for row in live_board(org_id):
+        if not row["stuck"] or row["abandoned"]:
+            continue                       # abandoned ones are a cleanup job
+        announce.to_station(org_id, "patient_forgotten",
+                            patient=announce.speech_name(row["spoken"]),
+                            place=row["label"],
+                            detail=f"{row['waited']} minutes")
+        said += 1
+    return said
+
+
+def announce_bottleneck(org_id, days: int = 1) -> int:
+    """Say out loud which department is holding everyone up today."""
+    slow = [s for s in stage_performance(org_id, days)
+            if s["reliable"] and s["rating"] == "HOLDING EVERYONE UP"]
+    if not slow:
+        return 0
+    slow.sort(key=lambda s: -s["median"])
+    worst = slow[0]
+    announce.to_station(
+        org_id, "flow_bottleneck", place=worst["label"],
+        detail=f"A typical patient waits {worst['median']} minutes there, "
+               f"against a target of "
+               f"{STAGE_TARGET_MINUTES.get(worst['stage'], 20)}.")
+    return 1
+
+
+# ------------------------------------------------------------------ cleanup
+def close_abandoned(org_id, hours: int = SANITY_CAP_HOURS) -> int:
+    """Close stretches nobody ever ticked off.
+
+    WHY THIS IS NEEDED
+    ------------------
+    A desk gets busy and forgets to press "done". Without this, that patient
+    stays on the live board forever, tomorrow's board fills with yesterday's
+    ghosts, and the manager stops trusting the screen entirely — which is worse
+    than having no screen at all.
+
+    The row is CLOSED but its duration is left as None, so it is visibly
+    "unknown" rather than a made-up number. Guessing a duration here would
+    quietly corrupt every average in the system.
+    """
+    cutoff = now_naive() - timedelta(hours=hours)
+    rows = (db.session.query(JourneySegment)
+            .filter(JourneySegment.org_id == org_id,
+                    JourneySegment.ended_at.is_(None),
+                    JourneySegment.entered_at < cutoff)
+            .all())
+    for row in rows:
+        row.ended_at = now_naive()
+        row.seconds = None                 # honestly unknown, never invented
+    return len(rows)

@@ -122,7 +122,7 @@ python3 tools/roster_browser_check.py                   # 21 checks
 
 | Metric | Value |
 |---|---|
-| Tests | **461 passing** on SQLite **and** real PostgreSQL 17 |
+| Tests | **471 passing** on SQLite **and** real PostgreSQL 17 |
 | Test files | 33 in `tests/` |
 | Migrations | 8 in `migrations/versions/` (head = `f7d25a6b0c93`) |
 | Browser checks | HIMS 20/20 · Roster 21/21 |
@@ -245,7 +245,11 @@ busiest hours, and plain-English allocation advice. Two rules to respect:
    that came after it). Guarded by
    `test_a_broken_tracking_engine_never_stops_a_patient_being_seen` and
    `test_a_failed_tracking_write_does_not_poison_the_transaction`.
-2. **Never roll back inside tracking** — the caller's un-committed patient work
+2. **The engine SPEAKS** (voice is a standing requirement): `job_patient_flow`
+   in the scheduler closes abandoned stretches and announces a forgotten
+   patient or a bottleneck department. Deliberately quiet otherwise — an alert
+   that fires constantly is ignored within a week.
+3. **Never roll back inside tracking** — the caller's un-committed patient work
    shares that session and would be silently discarded.
 
 **The patient journey is now unbroken end to end.** Verified live: one patient
