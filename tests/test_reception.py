@@ -8,6 +8,7 @@ and the rule that the patient answers each question ONCE.
 """
 from app import reception
 from app.models import Patient, ReceptionIntake, db
+from tests.conftest import csrf, login
 
 
 def _good_form(**over):
@@ -224,7 +225,7 @@ def _post_new(client, **over):
         "address": "12 Ijede Road", "nok_name": "Tunde Abatan",
         "nok_phone": "08039876543", "nok_relationship": "Husband",
         "payer_type": "LAHSMA", "payer_number": "LAS/2026/771",
-        "preferred_lang": "yo", "assistance": "WHEELCHAIR",
+        "date_of_birth": "", "preferred_lang": "yo", "assistance": "WHEELCHAIR",
         "care_note": "Travels from Ikorodu", "needs_blood_sugar": "1",
     }
     data.update(over)
@@ -328,10 +329,55 @@ def test_a_bad_form_is_explained_not_crashed(app, client, seeded):
 # Paying Point — and only then be told the folder could not be opened. The
 # patient had already paid. These tests make that class of bug impossible.
 
-def test_age_is_required_at_reception_because_hims_demands_it(app, seeded):
-    _, errors = reception.clean_form(_good_form(age_years=""))
-    assert any("age is required" in e.lower() for e in errors), \
+def test_an_age_OR_a_date_of_birth_is_required(app, seeded):
+    """HIMS cannot open a folder without one, and Triage needs it to place
+    a child or an elderly patient correctly. Either answer will do — a patient
+    who knows their birthday should not be asked their age as well."""
+    _, errors = reception.clean_form(_good_form(age_years="", date_of_birth=""))
+    assert any("date of birth" in e.lower() or "age" in e.lower()
+               for e in errors), \
         "Reception accepted a patient HIMS will later refuse"
+
+    # A birthday alone is enough, and the age is worked out from it.
+    values, errors = reception.clean_form(
+        _good_form(age_years="", date_of_birth="1990-06-15"))
+    assert not errors, errors
+    assert values["age_years"] and values["age_years"] > 30
+
+    # An age alone is still enough, for patients who do not know the date.
+    values, errors = reception.clean_form(
+        _good_form(age_years="52", date_of_birth=""))
+    assert not errors, errors
+    assert values["age_years"] == 52
+
+
+def test_a_nonsense_date_of_birth_is_refused_not_stored(app, seeded):
+    for bad in ("2099-01-01", "not-a-date", "1500-01-01"):
+        _, errors = reception.clean_form(_good_form(date_of_birth=bad))
+        assert errors, f"{bad!r} was accepted as a date of birth"
+
+
+def test_the_paper_form_details_are_captured_and_carried(app, seeded):
+    """The founder's real paper admission form: religion, tribe, state, town."""
+    from app import hims
+    with app.app_context():
+        values, errors = reception.clean_form(_good_form(
+            marital_status="Married", religion="Islam",
+            state_of_origin="Lagos", town="Ikorodu",
+            tribe="Yoruba", ethnic_group="Yoruba"))
+        assert not errors, errors
+        intake = reception.create_intake(seeded["org"], values)
+        db.session.commit()
+
+        carried = reception.folder_values(intake)
+        assert carried["religion"] == "Islam"
+        assert carried["state_of_origin"] == "Lagos"
+        assert carried["tribe"] == "Yoruba"
+        # ...and HIMS must accept every one of them.
+        folder, errs = hims.validate(carried, org_id=seeded["org"])
+        assert not errs, errs
+        assert folder["religion"] == "Islam"
+        assert folder["town"] == "Ikorodu"
 
 
 def test_everything_reception_collects_is_accepted_by_hims(app, seeded):
@@ -371,3 +417,97 @@ def test_the_minimum_reception_form_still_opens_a_folder(app, seeded):
         _, hims_errors = hims.validate(reception.folder_values(intake),
                                        org_id=seeded["org"])
         assert not hims_errors, hims_errors
+
+
+# ================================================================ returning
+# REPORTED FROM THE LIVE SITE with screenshots. A patient who already had a
+# folder was given a SECOND one by Reception. The new visit then collided with
+# the one already open against their real folder — "already has an open visit
+# today" — and the patient never reached Triage.
+
+def test_a_returning_patient_reuses_their_folder(app, client, seeded):
+    """A folder is opened ONCE. That is what a hospital number is for."""
+    from app.models import Patient
+    _login_desk(client, app, seeded)
+
+    _post_new(client)                      # first visit — folder created
+    with app.app_context():
+        iid = db.session.query(ReceptionIntake).one().id
+    for step in ("to-billing", "to-payment", "paid"):
+        client.post(f"/reception/{iid}/{step}",
+                    data={"_csrf": csrf(client, "/reception/")},
+                    follow_redirects=True)
+    client.post(f"/reception/{iid}/open-folder",
+                data={"_csrf": csrf(client, "/reception/")},
+                follow_redirects=True)
+
+    with app.app_context():
+        first = db.session.query(Patient).one()
+        number = first.hospital_number
+        # close the visit so they can come back another day
+        for v in first.visits:
+            v.status = "CLOSED"
+        db.session.commit()
+
+    # ...the same person comes back
+    _post_new(client)
+    with app.app_context():
+        iid2 = (db.session.query(ReceptionIntake)
+                .filter(ReceptionIntake.stage == "RECEPTION").one().id)
+    for step in ("to-billing", "to-payment", "paid"):
+        client.post(f"/reception/{iid2}/{step}",
+                    data={"_csrf": csrf(client, "/reception/")},
+                    follow_redirects=True)
+    r = client.post(f"/reception/{iid2}/open-folder",
+                    data={"_csrf": csrf(client, "/reception/")},
+                    follow_redirects=True)
+    assert r.status_code == 200
+
+    with app.app_context():
+        patients = db.session.query(Patient).all()
+        assert len(patients) == 1, (
+            "a second folder was created for a returning patient — their "
+            "history is now split across two records")
+        assert patients[0].hospital_number == number
+
+
+def test_an_open_visit_is_reused_not_duplicated(app, client, seeded):
+    """The exact live failure: 'already has an open visit today'.
+
+    The patient must still reach Triage, not be stranded at Reception.
+    """
+    from app.models import Patient, PatientVisit
+    _login_desk(client, app, seeded)
+    _post_new(client)
+    with app.app_context():
+        iid = db.session.query(ReceptionIntake).one().id
+    for step in ("to-billing", "to-payment", "paid"):
+        client.post(f"/reception/{iid}/{step}",
+                    data={"_csrf": csrf(client, "/reception/")},
+                    follow_redirects=True)
+    client.post(f"/reception/{iid}/open-folder",
+                data={"_csrf": csrf(client, "/reception/")},
+                follow_redirects=True)
+
+    # Same person walked in again while their visit is STILL OPEN.
+    _post_new(client)
+    with app.app_context():
+        iid2 = (db.session.query(ReceptionIntake)
+                .filter(ReceptionIntake.stage == "RECEPTION").one().id)
+    for step in ("to-billing", "to-payment", "paid"):
+        client.post(f"/reception/{iid2}/{step}",
+                    data={"_csrf": csrf(client, "/reception/")},
+                    follow_redirects=True)
+    r = client.post(f"/reception/{iid2}/open-folder",
+                    data={"_csrf": csrf(client, "/reception/")},
+                    follow_redirects=True)
+
+    body = r.get_data(as_text=True).lower()
+    assert "could not be opened" not in body, \
+        "the patient was blocked at Reception and never reached Triage"
+    with app.app_context():
+        assert db.session.query(Patient).count() == 1
+        open_visits = [v for v in db.session.query(PatientVisit).all()
+                       if v.status not in ("CLOSED", "CANCELLED")]
+        assert len(open_visits) == 1, \
+            f"{len(open_visits)} visits open for one patient in the building"

@@ -34,6 +34,12 @@
       <tr><th>Address</th><td>{{ p.address or '—' }}</td></tr>
       <tr><th>LGA / State</th><td>{{ p.lga or '—' }}{% if p.state %}, {{ p.state }}{% endif %}</td></tr>
       {% if p.occupation %}<tr><th>Occupation</th><td>{{ p.occupation }}</td></tr>{% endif %}
+      {% if p.marital_status %}<tr><th>Marital status</th><td>{{ p.marital_status }}</td></tr>{% endif %}
+      {% if p.religion %}<tr><th>Religion</th><td>{{ p.religion }}</td></tr>{% endif %}
+      {% if p.state_of_origin %}<tr><th>State of origin</th><td>{{ p.state_of_origin }}</td></tr>{% endif %}
+      {% if p.town %}<tr><th>Town</th><td>{{ p.town }}</td></tr>{% endif %}
+      {% if p.tribe or p.ethnic_group %}<tr><th>Tribe / ethnic group</th>
+        <td>{{ [p.tribe, p.ethnic_group] | select | join(' · ') }}</td></tr>{% endif %}
       <tr><th>Speaks</th><td>{{ p.lang_label }}</td></tr>
     </table>
   </div>

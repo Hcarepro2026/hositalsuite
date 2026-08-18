@@ -14,6 +14,26 @@
            -webkit-overflow-scrolling:touch;scrollbar-width:none}
   #mainnav::-webkit-scrollbar{display:none}
   #mainnav a{flex:0 0 auto;white-space:nowrap}
+
+  /* A VISIBLE scrollbar under the menu. Staff did not know the menu scrolled,
+     so items past the right edge were simply never found. A thin always-on
+     bar plus a fading edge makes it obvious there is more. */
+  #mainnav{scrollbar-width:thin;scrollbar-color:#9bb8cc transparent;
+           padding-bottom:4px}
+  #mainnav::-webkit-scrollbar{display:block;height:5px}
+  #mainnav::-webkit-scrollbar-thumb{background:#9bb8cc;border-radius:3px}
+  #mainnav::-webkit-scrollbar-track{background:transparent}
+  .navwrap{position:relative}
+  .navwrap::after{content:"";position:absolute;right:0;top:0;bottom:6px;
+                  width:26px;pointer-events:none;
+                  background:linear-gradient(to right,rgba(255,255,255,0),#fff)}
+
+  /* Back arrow — always available, on every page. */
+  .backbar{padding:8px 14px 0}
+  .backlink{display:inline-block;font-weight:700;text-decoration:none;
+            font-size:.95rem;padding:7px 14px;border-radius:999px;
+            border:1px solid var(--line,#d7e3ec);background:#fff;color:#0e5a8a}
+  .backlink:active{background:#eef4f9}
 </style>
 </head>
 <body>
@@ -33,41 +53,94 @@
   {% endif %}
 </div>
 {% if current_user.is_authenticated %}
+<div class="navwrap">
 <nav class="nav" id="mainnav">
+  {# ------------------------------------------------------------------
+     MENUS ARE PER ROLE, NOT ONE BLOCK FOR EVERYONE.
+
+     An HOD of Theatre was seeing the System Administrator's menus. This is
+     the visible half of the fix; every route also enforces its own role
+     check server-side, because hiding a link is presentation, not security.
+
+     `can` is computed once in app/navigation.py so the menu and the routes
+     cannot drift apart.
+     ------------------------------------------------------------------ #}
+  {% set can = nav_permissions() %}
   <a href="/" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
-  {% if current_user.role in ('ADMIN_MANAGER','SUPER_ADMIN','MD_CEO') %}
+
+  {% if can.inspections %}
   <a href="/inspections" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>
   {% endif %}
-  {% if current_user.role in ('SUPER_ADMIN','MD_CEO','ADMIN_MANAGER','HOD') %}
-    <a href="/reception/" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>
-    <a href="/billing" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a>
-    <a href="/paypoint" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>
-    <a href="/hims/" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>
-    <a href="/triage/" class="{{ 'active' if request.path.startswith('/triage') }}">Triage</a>
-    <a href="/consulting-room" class="{{ 'active' if request.path.startswith('/consulting-room') }}">My Room</a>
-    <a href="/onward" class="{{ 'active' if request.path.startswith('/onward') }}">Onward</a>
-    <a href="/tracking" class="{{ 'active' if request.path.startswith('/tracking') }}">Patient Flow</a>
-    <a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a>
-    <a href="/queue" class="{{ 'active' if request.path == '/queue' }}">Queue</a>
-    <a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a>
-    <a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Feedback</a>
-    <a href="/referrals" class="{{ 'active' if request.path.startswith('/referrals') }}">Referrals</a>
-    <a href="/corrective-actions" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>
+  {% if can.reception %}
+  <a href="/reception/" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>
   {% endif %}
+  {% if can.cashdesk %}
+  <a href="/billing" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a>
+  <a href="/paypoint" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>
+  {% endif %}
+  {% if can.hims %}
+  <a href="/hims/" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>
+  {% endif %}
+  {% if can.triage %}
+  <a href="/triage/" class="{{ 'active' if request.path.startswith('/triage') }}">Triage</a>
+  {% endif %}
+  {% if can.consulting %}
+  <a href="/consulting-room" class="{{ 'active' if request.path.startswith('/consulting-room') }}">My Room</a>
+  {% endif %}
+  {% if can.onward %}
+  <a href="/onward" class="{{ 'active' if request.path.startswith('/onward') }}">Onward</a>
+  {% endif %}
+  {% if can.tracking %}
+  <a href="/tracking" class="{{ 'active' if request.path.startswith('/tracking') }}">Patient Flow</a>
+  {% endif %}
+  {% if can.bookings %}
+  <a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a>
+  <a href="/queue" class="{{ 'active' if request.path == '/queue' }}">Queue</a>
+  {% endif %}
+  {% if can.complaints %}
+  <a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a>
+  <a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Feedback</a>
+  {% endif %}
+  {% if can.referrals %}
+  <a href="/referrals" class="{{ 'active' if request.path.startswith('/referrals') }}">Referrals</a>
+  {% endif %}
+  {% if can.corrective %}
+  <a href="/corrective-actions" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>
+  {% endif %}
+  {% if can.roster %}
   <a href="/roster" class="{{ 'active' if request.path.startswith('/roster') or request.path.startswith('/dept-roster') }}">Roster</a>
-  {% if current_user.role in ('SUPER_ADMIN','MD_CEO') %}
-    <a href="/reports" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>
+  {% endif %}
+  {% if can.reports %}
+  <a href="/reports" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>
   {% endif %}
   <a href="/notifications" class="{{ 'active' if request.path.startswith('/notifications') }}">🔔</a>
   <a href="/alert-settings" class="{{ 'active' if request.path.startswith('/alert-settings') }}" title="Voice & alert settings">🗣</a>
-  {% if current_user.is_super %}
-    <a href="/admin" class="{{ 'active' if request.path.startswith('/admin') }}">⚙ Admin</a>
+  {% if can.admin %}
+  <a href="/admin" class="{{ 'active' if request.path.startswith('/admin') }}">⚙ Admin</a>
   {% endif %}
   <form method="post" action="/logout" style="margin-left:auto">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <button class="btn ghost small" type="submit">Sign out</button>
   </form>
 </nav>
+</div>
+
+{# ---- BACK ARROW on every page. Cheap phones have a back button, but a
+       browser tab opened from a WhatsApp link often has no history at all,
+       and staff kept getting stranded. This always works. ---- #}
+{% if request.path not in ('/', '/dashboard') %}
+<div class="backbar">
+  <a class="backlink" href="javascript:void(0)" onclick="hmsBack()">← Back</a>
+</div>
+{% endif %}
+<script>
+  // Prefer real history; fall back to the dashboard when there is none
+  // (opened from a link, or first page after signing in).
+  function hmsBack() {
+    if (document.referrer && history.length > 1) { history.back(); }
+    else { window.location.href = '/'; }
+  }
+</script>
 {% endif %}
 <main class="wrap">
   {% with messages = get_flashed_messages(with_categories=true) %}

@@ -33,6 +33,7 @@ from flask_login import current_user
 from .. import reception, tracking
 from ..audit import audit
 from ..models import (PAYER_LABELS, ReceptionIntake, db, now_naive)
+from ..navigation import require_permission
 from ..security import require_role
 
 bp = Blueprint("cashdesk", __name__)
@@ -69,6 +70,7 @@ def _waiting(stage: str):
 # ================================================================ Billing
 @bp.get("/billing")
 @require_role(*VIEWERS)
+@require_permission("cashdesk")
 def billing():
     rows = _waiting("BILLING")
     return render_template(
@@ -84,6 +86,7 @@ def billing():
 
 @bp.post("/billing/<int:intake_id>/done")
 @require_role(*DESK)
+@require_permission("cashdesk")
 def billing_done(intake_id: int):
     intake = _get(intake_id)
     if intake.stage != "BILLING":
@@ -104,6 +107,7 @@ def billing_done(intake_id: int):
 # ================================================================ Pay Point
 @bp.get("/paypoint")
 @require_role(*VIEWERS)
+@require_permission("cashdesk")
 def paypoint():
     rows = _waiting("PAYMENT")
     return render_template(
@@ -120,6 +124,7 @@ def paypoint():
 
 @bp.post("/paypoint/<int:intake_id>/paid")
 @require_role(*DESK)
+@require_permission("cashdesk")
 def paypoint_paid(intake_id: int):
     intake = _get(intake_id)
     if intake.stage != "PAYMENT":

@@ -116,6 +116,47 @@ def queue_message(org_id: int, to_number: str, body: str, kind: str = "report",
     return msg
 
 
+def _send_twilio(to_number: str, body: str) -> str:
+    """Send a WhatsApp message through Twilio.
+
+    WHY TWILIO IS HERE AS A FALLBACK
+    --------------------------------
+    Meta's WhatsApp Cloud API is free and is the right primary, but approval
+    takes time and a business can be suspended with little notice. When the
+    MD/CEO is waiting for an inspection report, "our Meta approval lapsed" is
+    not an answer. Twilio costs a little per message and can be live in an
+    afternoon, so it is the safety net rather than the default.
+
+    Twilio wants numbers as `whatsapp:+234...`, which is easy to get wrong by
+    hand, so the formatting is done here once.
+    """
+    cfg = current_app.config
+    sid = cfg.get("TWILIO_ACCOUNT_SID", "")
+    token = cfg.get("TWILIO_AUTH_TOKEN", "")
+    sender = cfg.get("TWILIO_WHATSAPP_FROM", "") or cfg.get("TWILIO_FROM", "")
+    if not (sid and token and sender):
+        raise WhatsAppError(
+            "Twilio WhatsApp is selected but TWILIO_ACCOUNT_SID, "
+            "TWILIO_AUTH_TOKEN or TWILIO_WHATSAPP_FROM is missing.")
+
+    def _wa(num: str) -> str:
+        num = (num or "").strip()
+        if num.startswith("whatsapp:"):
+            return num
+        if not num.startswith("+"):
+            num = "+" + num.lstrip("0")
+        return f"whatsapp:{num}"
+
+    resp = requests.post(
+        f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+        auth=(sid, token),
+        data={"From": _wa(sender), "To": _wa(to_number), "Body": body[:1600]},
+        timeout=float(cfg.get("WHATSAPP_TIMEOUT", 15)))
+    if resp.status_code >= 300:
+        raise WhatsAppError(f"Twilio error {resp.status_code}: {resp.text[:200]}")
+    return (resp.json() or {}).get("sid", "")
+
+
 def send_message(msg: WhatsAppMessage) -> WhatsAppMessage:
     """Attempt to deliver one queued/failed message. Updates status in place."""
     cfg = current_app.config
@@ -134,20 +175,41 @@ def send_message(msg: WhatsAppMessage) -> WhatsAppMessage:
             msg.status = "DELIVERED"
             msg.sent_at = now_naive()
             msg.delivered_at = now_naive()
+        elif m == "twilio":
+            provider = _send_twilio(msg.to_number, msg.body)
+            msg.provider_id = provider
+            msg.status = "SENT"
+            msg.sent_at = now_naive()
         else:  # cloud
             # media_path is a durable-storage key (e.g. "reports/REF.pdf"); the
             # old code required an absolute filesystem path, which silently
             # downgraded every report to a text-only message after the move.
-            if msg.media_path and _media_available(msg.media_path):
-                media_id = _upload_media(msg.media_path)
-                provider = _send_document(msg.to_number, media_id,
-                                          os.path.basename(msg.media_path), msg.body)
-            else:
-                provider = _send_text(msg.to_number, msg.body)
+            try:
+                if msg.media_path and _media_available(msg.media_path):
+                    media_id = _upload_media(msg.media_path)
+                    provider = _send_document(
+                        msg.to_number, media_id,
+                        os.path.basename(msg.media_path), msg.body)
+                else:
+                    provider = _send_text(msg.to_number, msg.body)
+            except Exception as exc:                          # noqa: BLE001
+                # AUTOMATIC FALLBACK. Meta suspends business accounts with
+                # little warning and approval can lapse. Rather than let the
+                # MD/CEO simply never receive the report, try Twilio if it is
+                # configured. Text only: a PDF needs a public URL, and putting
+                # a patient report on a public URL to save one message would
+                # be a far worse mistake than sending the summary alone.
+                if not cfg.get("TWILIO_ACCOUNT_SID"):
+                    raise
+                current_app.logger.warning(
+                    "WhatsApp Cloud failed (%s) — falling back to Twilio", exc)
+                provider = _send_twilio(msg.to_number, msg.body)
+                msg.last_error = f"cloud failed, sent via Twilio: {str(exc)[:120]}"
             msg.provider_id = provider
             msg.status = "SENT"          # webhook flips it to DELIVERED
             msg.sent_at = now_naive()
-        msg.last_error = None
+        if not (msg.last_error or "").startswith("cloud failed"):
+            msg.last_error = None
     except (WhatsAppError, requests.RequestException, OSError) as exc:
         msg.status = "FAILED" if msg.attempts >= 3 else "QUEUED"
         msg.last_error = str(exc)[:400]

@@ -103,6 +103,10 @@ class Config:
     TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
     TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
     TWILIO_FROM = os.environ.get("TWILIO_FROM", "")
+    # Twilio's WhatsApp sender is a DIFFERENT number from the SMS one, so it
+    # gets its own setting. Falls back to TWILIO_FROM if only one is set.
+    TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "")
+    WHATSAPP_TIMEOUT = float(os.environ.get("WHATSAPP_TIMEOUT", "15"))
 
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"

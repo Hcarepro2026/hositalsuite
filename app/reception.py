@@ -24,8 +24,9 @@ from __future__ import annotations
 from datetime import date
 
 from . import announce
-from .models import (ASSISTANCE_CODES, INTAKE_STAGE_CODES, PATIENT_LANGS,
-                     PAYER_CODES, ReceptionIntake, db, new_code, now_naive)
+from .models import (ASSISTANCE_CODES, INTAKE_STAGE_CODES, MARITAL_STATUSES,
+                     PATIENT_LANGS, PAYER_CODES, ReceptionIntake, db,
+                     new_code, now_naive)
 from .security import clean_phone, valid_phone
 
 LANG_CODES = tuple(c for c, _ in PATIENT_LANGS)
@@ -72,12 +73,53 @@ def clean_form(form) -> tuple[dict, list[str]]:
             errors.append("Age must be a number.")
     else:
         v["age_years"] = None
-        errors.append("Age is required — HIMS cannot open a folder without it, "
-                      "and Triage needs it to place the patient correctly. "
-                      "If they do not know their birthday, just ask their age.")
 
     v["occupation"] = (form.get("occupation") or "").strip()[:80]
     v["address"] = (form.get("address") or "").strip()[:300]
+
+    # --- the rest of the hospital's paper admission form.
+    # A real date of birth is BETTER than a stated age, so accept it when the
+    # patient knows it — but never invent one, and never demand it.
+    raw_dob = (form.get("date_of_birth") or "").strip()
+    v["date_of_birth"] = None
+    if raw_dob:
+        from datetime import date as _date
+        try:
+            dob = _date.fromisoformat(raw_dob)
+            if dob > _date.today():
+                errors.append("The date of birth is in the future.")
+            elif (_date.today().year - dob.year) > 130:
+                errors.append("That date of birth would make the patient "
+                              "over 130 years old.")
+            else:
+                v["date_of_birth"] = dob
+                # A known birthday beats a guessed age, so derive the age.
+                age = _date.today().year - dob.year - (
+                    (_date.today().month, _date.today().day)
+                    < (dob.month, dob.day))
+                v["age_years"] = age
+        except ValueError:
+            errors.append("The date of birth is not a valid date.")
+
+    # ONE of the two is required. HIMS cannot open a folder without an age,
+    # and Triage needs it to place a child or an elderly patient correctly —
+    # but a patient who knows their birthday should not be asked twice.
+    if not v.get("age_years") and not v.get("date_of_birth"):
+        errors.append("Enter the date of birth, or the age if they do not "
+                      "know their birthday. HIMS cannot open a folder "
+                      "without it.")
+
+    marital = (form.get("marital_status") or "").strip()[:16]
+    v["marital_status"] = marital if marital in MARITAL_STATUSES else None
+    # Religion, tribe and ethnic group are FREE TEXT on purpose. They are on
+    # the paper form for dietary needs, burial rites and finding a real
+    # interpreter — a hospital must never turn somebody away because their
+    # faith or language is not on a dropdown.
+    v["religion"] = (form.get("religion") or "").strip()[:40]
+    v["state_of_origin"] = (form.get("state_of_origin") or "").strip()[:60]
+    v["town"] = (form.get("town") or "").strip()[:80]
+    v["tribe"] = (form.get("tribe") or "").strip()[:60]
+    v["ethnic_group"] = (form.get("ethnic_group") or "").strip()[:60]
 
     phone = clean_phone(form.get("phone") or "")
     if phone and not valid_phone(phone):
@@ -248,6 +290,13 @@ def folder_values(intake: ReceptionIntake) -> dict:
         "sex": intake.sex or "F",
         "age_years": str(intake.age_years) if intake.age_years is not None else "",
         "occupation": intake.occupation or "",
+        "date_of_birth": intake.date_of_birth.isoformat() if intake.date_of_birth else "",
+        "marital_status": intake.marital_status or "",
+        "religion": intake.religion or "",
+        "state_of_origin": intake.state_of_origin or "",
+        "town": intake.town or "",
+        "tribe": intake.tribe or "",
+        "ethnic_group": intake.ethnic_group or "",
         "phone": intake.phone or "",
         "address": intake.address or "",
         "nok_name": intake.nok_name or "",

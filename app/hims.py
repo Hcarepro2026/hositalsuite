@@ -36,7 +36,8 @@ from datetime import date, datetime
 
 from sqlalchemy import func, or_
 
-from .models import (ASSISTANCE_CODES, CATEGORY_CODES, PATIENT_LANG_LABELS,
+from .models import (ASSISTANCE_CODES, CATEGORY_CODES, MARITAL_STATUSES,
+                     PATIENT_LANG_LABELS,
                      PAYER_CODES, Patient, PatientVisit, db, new_code, now_naive)
 from .security import clean_phone, valid_phone
 
@@ -274,6 +275,16 @@ def validate(form: dict, *, org_id: int, patient_id: int | None = None) -> tuple
     v["assistance"] = ",".join(a for a in picked if a in ASSISTANCE_CODES)[:200]
     v["care_note"] = (form.get("care_note") or "").strip()[:200]
     v["notes"] = (form.get("notes") or "").strip()[:2000]
+
+    # Demographic details from the hospital's paper admission form, carried
+    # through from Reception so nothing the patient already answered is lost.
+    marital = (form.get("marital_status") or "").strip()[:16]
+    v["marital_status"] = marital if marital in MARITAL_STATUSES else None
+    v["religion"] = (form.get("religion") or "").strip()[:40] or None
+    v["state_of_origin"] = (form.get("state_of_origin") or "").strip()[:60] or None
+    v["town"] = (form.get("town") or "").strip()[:80] or None
+    v["tribe"] = (form.get("tribe") or "").strip()[:60] or None
+    v["ethnic_group"] = (form.get("ethnic_group") or "").strip()[:60] or None
 
     # An under-12 is a child and an over-65 elderly, whatever the clerk picked —
     # Triage depends on this being right.

@@ -12,9 +12,11 @@ from flask_login import current_user
 
 from .. import hims, reception, tracking
 from ..audit import audit
-from ..models import (ASSISTANCE_NEEDS, INTAKE_STAGES, PATIENT_LANGS,
-                      PAYER_LABELS, PAYER_TYPES, Patient, ReceptionIntake,
+from ..models import (ASSISTANCE_NEEDS, INTAKE_STAGES, MARITAL_STATUSES,
+                      NIGERIAN_STATES, PATIENT_LANGS, PAYER_LABELS,
+                      PAYER_TYPES, Patient, ReceptionIntake, RELIGIONS,
                       SEXES, db, now_naive)
+from ..navigation import require_permission
 from ..security import require_role
 
 bp = Blueprint("reception", __name__, url_prefix="/reception")
@@ -32,7 +34,9 @@ NOK_RELATIONSHIPS = ("Husband", "Wife", "Father", "Mother", "Son", "Daughter",
 
 def _form_context(**extra):
     ctx = dict(sexes=SEXES, payers=PAYER_TYPES, langs=PATIENT_LANGS,
-               assistance_needs=ASSISTANCE_NEEDS, relationships=NOK_RELATIONSHIPS)
+               assistance_needs=ASSISTANCE_NEEDS, relationships=NOK_RELATIONSHIPS,
+               marital_statuses=MARITAL_STATUSES, religions=RELIGIONS,
+               states=NIGERIAN_STATES)
     ctx.update(extra)
     return ctx
 
@@ -40,6 +44,7 @@ def _form_context(**extra):
 # ================================================================ the desk
 @bp.get("/")
 @require_role(*VIEWERS)
+@require_permission("reception")
 def desk():
     """Who is waiting, and where they are in the walk."""
     org_id = current_user.org_id
@@ -54,6 +59,7 @@ def desk():
 # ================================================================ new patient
 @bp.get("/new")
 @require_role(*DESK)
+@require_permission("reception")
 def new_form():
     return render_template("reception/new.html", form={}, errors=[],
                            **_form_context())
@@ -61,6 +67,7 @@ def new_form():
 
 @bp.post("/new")
 @require_role(*DESK)
+@require_permission("reception")
 def new_save():
     values, errors = reception.clean_form(request.form)
     if errors:
@@ -90,6 +97,7 @@ def _get(intake_id: int) -> ReceptionIntake:
 
 @bp.post("/<int:intake_id>/to-billing")
 @require_role(*DESK)
+@require_permission("reception")
 def to_billing(intake_id: int):
     intake = _get(intake_id)
     reception.advance(intake, "BILLING", ref=(request.form.get("bill_ref") or ""))
@@ -105,6 +113,7 @@ def to_billing(intake_id: int):
 
 @bp.post("/<int:intake_id>/to-payment")
 @require_role(*DESK)
+@require_permission("reception")
 def to_payment(intake_id: int):
     intake = _get(intake_id)
     reception.advance(intake, "PAYMENT", ref=(request.form.get("bill_ref") or ""))
@@ -120,6 +129,7 @@ def to_payment(intake_id: int):
 
 @bp.post("/<int:intake_id>/paid")
 @require_role(*DESK)
+@require_permission("reception")
 def mark_paid(intake_id: int):
     intake = _get(intake_id)
     reception.advance(intake, "PAID", ref=(request.form.get("payment_ref") or ""))
@@ -136,6 +146,7 @@ def mark_paid(intake_id: int):
 
 @bp.post("/<int:intake_id>/cancel")
 @require_role(*DESK)
+@require_permission("reception")
 def cancel(intake_id: int):
     intake = _get(intake_id)
     intake.stage = "CANCELLED"
@@ -150,6 +161,7 @@ def cancel(intake_id: int):
 # ================================================================ hand to HIMS
 @bp.post("/<int:intake_id>/open-folder")
 @require_role(*DESK)
+@require_permission("reception")
 def open_folder(intake_id: int):
     """HIMS turns a PAID intake into a real patient folder.
 
@@ -182,22 +194,60 @@ def open_folder(intake_id: int):
         flash("The folder could not be opened: " + " ".join(errors), "error")
         return redirect(url_for("reception.desk"))
 
-    patient = Patient(org_id=current_user.org_id,
-                      hospital_number=hims.next_hospital_number(org),
-                      created_by=current_user.id, consent_at=now_naive(), **values)
-    db.session.add(patient)
-    try:
+    # RETURNING PATIENT? REUSE THE FOLDER, NEVER OPEN A SECOND ONE.
+    #
+    # A folder is opened ONCE and found again on every later visit — that is
+    # the whole point of a hospital number. Reception used to create a new
+    # Patient every time, so a returning patient got a second folder, and the
+    # visit then collided with the one already open against their real folder
+    # ("already has an open visit today"). The patient was left stranded at
+    # Reception and never reached Triage. Reported from the live site.
+    existing = hims.possible_duplicates(
+        current_user.org_id, values["surname"], values["first_name"],
+        values.get("phone"))
+    patient = existing[0] if existing else None
+
+    if patient is not None:
+        # Keep the folder; refresh only what Reception legitimately re-asks.
+        for field in ("phone", "address", "occupation", "payer_type",
+                      "payer_number", "payer_name", "preferred_lang",
+                      "assistance", "care_note", "nok_name", "nok_phone",
+                      "nok_relationship"):
+            new_value = values.get(field)
+            if new_value:
+                setattr(patient, field, new_value)
         db.session.flush()
-    except Exception:                                              # noqa: BLE001
-        # Two clerks opening a folder in the same instant: take the next number.
-        db.session.rollback()
+    else:
         patient = Patient(org_id=current_user.org_id,
                           hospital_number=hims.next_hospital_number(org),
-                          created_by=current_user.id, consent_at=now_naive(), **values)
+                          created_by=current_user.id, consent_at=now_naive(),
+                          **values)
         db.session.add(patient)
-        db.session.flush()
+        try:
+            db.session.flush()
+        except Exception:                                          # noqa: BLE001
+            # Two clerks opening a folder in the same instant: next number.
+            db.session.rollback()
+            patient = Patient(org_id=current_user.org_id,
+                              hospital_number=hims.next_hospital_number(org),
+                              created_by=current_user.id,
+                              consent_at=now_naive(), **values)
+            db.session.add(patient)
+            db.session.flush()
 
-    visit = hims.open_visit(patient, user_id=current_user.id, visit_type="NEW")
+    # If this patient already has an attendance open today (started at the HIMS
+    # desk, or a half-finished Reception walk), REUSE it. Opening a second one
+    # is what stranded the patient: the visit collided and Triage never saw
+    # them. One person in the building = one open visit.
+    visit = next((v for v in patient.visits
+                  if v.status not in ("CLOSED", "CANCELLED")
+                  and v.started_at
+                  and v.started_at.date() == now_naive().date()), None)
+    reused = visit is not None
+    if visit is None:
+        visit = hims.open_visit(
+            patient, user_id=current_user.id,
+            visit_type="NEW" if not patient.last_visit_at else "FOLLOW_UP")
     # Flush so the visit HAS an id. Without this, tracking linked the Reception
     # half of the journey to visit_id=None, the HIMS segment was never closed,
     # and the patient showed as waiting at HIMS forever on the live board.
@@ -216,6 +266,15 @@ def open_folder(intake_id: int):
           {"intake": intake.ref, "number": patient.hospital_number,
            "name": patient.full_name, "via": "reception"})
     db.session.commit()
-    flash(f"Folder {patient.hospital_number} opened for {patient.full_name}. "
-          f"Sent to Triage.", "success")
+    if reused:
+        flash(f"{patient.full_name} already had a visit open today "
+              f"({visit.visit_no}) — reusing it. Folder "
+              f"{patient.hospital_number}. Sent to Triage.", "success")
+    elif existing:
+        flash(f"Existing folder {patient.hospital_number} found for "
+              f"{patient.full_name} — no second folder created. "
+              f"Sent to Triage.", "success")
+    else:
+        flash(f"Folder {patient.hospital_number} opened for "
+              f"{patient.full_name}. Sent to Triage.", "success")
     return redirect(url_for("hims.folder", pid=patient.id))

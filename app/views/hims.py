@@ -20,6 +20,7 @@ from ..models import (ASSISTANCE_LABELS, ASSISTANCE_NEEDS, CATEGORY_LABELS,
                       PATIENT_CATEGORIES, PATIENT_LANGS, PAYER_LABELS,
                       PAYER_TYPES, SEXES, VISIT_TYPES, Department, Patient,
                       PatientVisit, db, now_naive)
+from ..navigation import require_permission
 from ..security import require_role
 
 bp = Blueprint("hims", __name__, url_prefix="/hims")
@@ -88,6 +89,7 @@ def _announce_reception_depth(org_id: int) -> None:
 # ================================================================ desk / search
 @bp.get("/")
 @require_role(*VIEWERS)
+@require_permission("hims")
 def desk():
     """The HIMS desk: search first, register second."""
     term = (request.args.get("q") or "").strip()
@@ -102,6 +104,7 @@ def desk():
 # ================================================================ open a folder
 @bp.get("/register")
 @require_role(*DESK)
+@require_permission("hims")
 def register_form():
     """Blank folder form. Any search term already typed is carried across."""
     prefill = {}
@@ -123,6 +126,7 @@ def register_form():
 
 @bp.post("/register")
 @require_role(*DESK)
+@require_permission("hims")
 def register_save():
     """Create the folder — after checking for an existing one."""
     org = _org()
@@ -176,6 +180,7 @@ def register_save():
 # ================================================================ view a folder
 @bp.get("/folder/<int:pid>")
 @require_role(*VIEWERS)
+@require_permission("hims")
 def folder(pid: int):
     p = db.session.get(Patient, pid)
     if not p or p.org_id != current_user.org_id:
@@ -192,6 +197,7 @@ def folder(pid: int):
 
 @bp.get("/folder/<int:pid>/edit")
 @require_role(*DESK)
+@require_permission("hims")
 def edit_form(pid: int):
     p = db.session.get(Patient, pid)
     if not p or p.org_id != current_user.org_id:
@@ -205,6 +211,7 @@ def edit_form(pid: int):
 
 @bp.post("/folder/<int:pid>/edit")
 @require_role(*DESK)
+@require_permission("hims")
 def edit_save(pid: int):
     p = db.session.get(Patient, pid)
     if not p or p.org_id != current_user.org_id:
@@ -229,6 +236,7 @@ def edit_save(pid: int):
 # ================================================================ visits
 @bp.post("/folder/<int:pid>/visit")
 @require_role(*DESK)
+@require_permission("hims")
 def start_visit(pid: int):
     """Returning patient found — start today's attendance."""
     p = db.session.get(Patient, pid)
@@ -258,6 +266,7 @@ def start_visit(pid: int):
 
 @bp.post("/visit/<int:vid>/close")
 @require_role(*DESK)
+@require_permission("hims")
 def close_visit(vid: int):
     v = db.session.get(PatientVisit, vid)
     if not v or v.org_id != current_user.org_id:
@@ -272,6 +281,7 @@ def close_visit(vid: int):
 
 @bp.post("/folder/<int:pid>/retire")
 @require_role("SUPER_ADMIN", "HEAD_ADMIN_HR")
+@require_permission("hims")
 def retire_folder(pid: int):
     """Hide a folder (duplicate, or opened in error). Never deletes history."""
     p = db.session.get(Patient, pid)
@@ -289,6 +299,7 @@ def retire_folder(pid: int):
 # ================================================================ export
 @bp.get("/export")
 @require_role("SUPER_ADMIN", "HEAD_ADMIN_HR", "MD_CEO")
+@require_permission("hims")
 def export():
     import csv
     import io

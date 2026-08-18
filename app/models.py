@@ -877,6 +877,19 @@ SEX_LABELS = dict(SEXES)
 
 MARITAL_STATUSES = ("Single", "Married", "Widowed", "Divorced", "Separated")
 
+# Offered as suggestions, never enforced: a patient may write anything, and a
+# hospital must not refuse somebody because their faith is not on a list.
+RELIGIONS = ("Christianity", "Islam", "Traditional", "None", "Other")
+
+# All 36 states plus the FCT, so State of Origin is a tap rather than typing.
+NIGERIAN_STATES = (
+    "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
+    "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu",
+    "FCT - Abuja", "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina",
+    "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo",
+    "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
+)
+
 # Patient categories drive Triage in Stage B: a child does not go to the same
 # clinic as an antenatal mother, and an elderly patient may be seen sooner.
 PATIENT_CATEGORIES = (
@@ -966,6 +979,14 @@ class Patient(db.Model):
     nok_relationship = db.Column(db.String(40))
     nok_phone = db.Column(db.String(32))
     nok_address = db.Column(db.String(300))
+
+    # --- from the hospital's paper admission form. Demographic, never clinical.
+    marital_status = db.Column(db.String(16))
+    religion = db.Column(db.String(40))
+    state_of_origin = db.Column(db.String(60))
+    town = db.Column(db.String(80))
+    tribe = db.Column(db.String(60))
+    ethnic_group = db.Column(db.String(60))
 
     # --- how they pay
     payer_type = db.Column(db.String(16), default="SELF", nullable=False, index=True)
@@ -1186,6 +1207,18 @@ class ReceptionIntake(db.Model):
     # --- contact
     phone = db.Column(db.String(32), index=True)
     address = db.Column(db.String(300))
+
+    # --- the rest of the hospital's paper admission form (Aug 2026).
+    # These are IDENTITY and DEMOGRAPHIC details, not clinical ones. Religion
+    # and tribe are on the paper form for real reasons: dietary needs, burial
+    # rites, and finding an interpreter who actually speaks the language.
+    date_of_birth = db.Column(db.Date)
+    marital_status = db.Column(db.String(16))
+    religion = db.Column(db.String(40))
+    state_of_origin = db.Column(db.String(60))
+    town = db.Column(db.String(80))
+    tribe = db.Column(db.String(60))
+    ethnic_group = db.Column(db.String(60))
 
     # --- next of kin: name, phone AND relationship, as the founder specified
     nok_name = db.Column(db.String(120))

@@ -178,9 +178,22 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                 hospital = db.session.query(Organization).order_by(Organization.id).first()
         except Exception:
             hospital = None
+        def nav_permissions():
+            """Menu visibility. Same source of truth as the route guards."""
+            from flask_login import current_user
+            from .navigation import permissions_for
+            try:
+                return permissions_for(current_user)
+            except Exception:                                  # noqa: BLE001
+                app.logger.exception("nav permissions failed")
+                # Fail CLOSED: show almost nothing rather than leak the
+                # administrator's menu to whoever happens to be signed in.
+                return permissions_for(None)
+
         return dict(csrf_token=csrf_token, settings=bundle, app_version="1.2.0",
                     _=i18n.translate, lang=lang, langs=i18n.LANGS,
-                    speech_lang=i18n.speech_tag(lang), hospital=hospital)
+                    speech_lang=i18n.speech_tag(lang), hospital=hospital,
+                    nav_permissions=nav_permissions)
 
     @app.errorhandler(404)
     def not_found(e):
