@@ -1075,6 +1075,70 @@ def kb_list():
     return render_template("admin/kb.html", items=items, scope=scope or "all")
 
 
+# ------------------------------------------------------------------ learning
+@bp.get("/kb/learning")
+@require_role(*SUPER_MD)
+def kb_learning():
+    """What the assistant has learned from real conversations, awaiting a tap.
+
+    The assistant NEVER changes what it tells patients on its own. It watches,
+    it proposes, a human approves. An answer nobody approved is an answer
+    nobody is accountable for — and this app talks to sick people.
+    """
+    from ..chatbot import learning
+    days = max(1, min(request.args.get("days", type=int) or 30, 180))
+    org_id = current_user.org_id
+    # Worked out once and shared: a word already proposed as a missing TRIGGER
+    # must not also be listed as a missing ANSWER.
+    _words = learning.missing_words(org_id, days)
+    return render_template(
+        "admin/kb_learning.html", days=days,
+        accuracy=learning.accuracy(org_id, days),
+        missing_words=_words,
+        missing_answers=learning.missing_answers(
+            org_id, days, exclude_words={w["word"] for w in _words}),
+        failing=learning.failing_answers(org_id),
+        coin_flips=learning.coin_flip_matches(org_id, days),
+        corrections=learning.corrections(org_id))
+
+
+@bp.post("/kb/learn-word")
+@require_role(*SUPER_MD)
+def kb_learn_word():
+    """Approve ONE new trigger word for an answer that already exists.
+
+    The safest kind of learning there is: the words a patient reads do not
+    change at all, an approved answer simply becomes findable.
+    """
+    from ..chatbot import learning
+    ok, message = learning.add_keyword(
+        current_user.org_id,
+        request.form.get("article_id", type=int) or 0,
+        request.form.get("word", ""),
+        user_id=current_user.id)
+    if ok:
+        audit("KB_LEARNED_KEYWORD", "knowledge_article",
+              request.form.get("article_id", type=int),
+              {"word": request.form.get("word", "")})
+        db.session.commit()
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("admin.kb_learning"))
+
+
+@bp.post("/kb/dismiss-note/<int:mid>")
+@require_role(*SUPER_MD)
+def kb_dismiss_note(mid: int):
+    """Mark a correction as dealt with, so the list stays honest."""
+    from ..models import ChatMessage
+    m = db.session.get(ChatMessage, mid)
+    if m is not None:
+        m.unanswered = False
+        audit("KB_NOTE_ACTIONED", "chat_message", mid, {})
+        db.session.commit()
+    flash("Marked as dealt with.", "success")
+    return redirect(url_for("admin.kb_learning"))
+
+
 @bp.post("/kb/add")
 @require_role(*SUPER_MD)
 def kb_add():
