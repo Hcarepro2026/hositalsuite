@@ -53,7 +53,53 @@ def chat_api():
         db.session.add(sess)
         db.session.flush()
 
-    res = engine.answer(text, lang=lang, org_id=org.id if org else None)
+    # ---- SOMEBODY TEACHING THE ASSISTANT.
+    # "Ai please learn this... store it permanently" used to score against
+    # whatever article shared a word with it (an OPD lecture, in the founder's
+    # case). The assistant cannot learn from a chat message, and pretending it
+    # can is a promise it will silently break. Say so, and record it.
+    if engine.is_teaching(text):
+        db.session.add(ChatMessage(session_id=sess.id, role="user", text=text,
+                                   intent="teaching_note", unanswered=True))
+        db.session.flush()
+        bot = ChatMessage(session_id=sess.id, role="bot",
+                          text=engine.TEACHING_REPLY)
+        db.session.add(bot)
+        db.session.commit()
+        return jsonify(session=sess.id, answered=True,
+                       reply=engine.TEACHING_REPLY, msg_id=bot.id,
+                       intent="teaching_note")
+
+    # ---- FOLLOW-UP FIRST. "Yes" is not a question, it is an answer to the
+    # offer we just made. Scored on its own it matches nothing, so it used to
+    # fall through to the AI, which saw only the word "yes" and invented a
+    # plausible reply — that is how "yes, book me a morning slot" came back as
+    # a phone number instead of the booking page.
+    res = None
+    if engine.is_agreement(text) or engine.is_refusal(text):
+        last = (db.session.query(ChatMessage)
+                .filter_by(session_id=sess.id, role="user")
+                .order_by(ChatMessage.id.desc()).first())
+        prev_intent = (last.intent if last else "") or ""
+        if engine.is_refusal(text):
+            res = {"text": ("No problem at all. I'm here whenever you need "
+                            "me — just ask."),
+                   "article": None, "confidence": 99.0, "action": None}
+        else:
+            res = engine.followup_for(prev_intent, prev_intent,
+                                      lang=lang,
+                                      org_id=org.id if org else None)
+            if res is None:
+                # We genuinely cannot tell what was agreed to. ASKING is far
+                # better than guessing and being confidently wrong.
+                res = {"text": ("Happy to help — could you tell me what you'd "
+                                "like me to do? For example \u201cbook an "
+                                "appointment\u201d or \u201cspeak to "
+                                "someone\u201d."),
+                       "article": None, "confidence": 99.0, "action": None}
+
+    if res is None:
+        res = engine.answer(text, lang=lang, org_id=org.id if org else None)
 
     # ---- AI fallback: only when the curated library has no confident answer.
     # The hospital's own words always win; AI fills the long tail.

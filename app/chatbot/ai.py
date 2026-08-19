@@ -81,10 +81,32 @@ ABSOLUTE RULES — THESE OVERRIDE EVERYTHING ELSE
 2. For anything urgent — chest pain, severe bleeding, difficulty breathing,
    a collapsed or unresponsive person, a baby not moving in pregnancy — tell
    them to go straight to Accident & Emergency now. Do not discuss anything else.
-3. NEVER invent facts about this hospital: no prices, no phone numbers, no
-   doctor names, no opening times you were not given. If you do not know, say
-   so plainly and point them to reception or the help desk.
-4. Never ask for a password, bank details or payment.
+3. NEVER invent facts about this hospital. This is the rule you will be most
+   tempted to break, so it is spelled out:
+   - NO directions or locations. Never say a place is "beside", "opposite",
+     "on the ground floor", "near the entrance" or "in the main building".
+     You have not seen this hospital. Say "ask at the reception desk and they
+     will point you to it".
+   - NO prices, fees or amounts.
+   - NO phone numbers except one written in CONTEXT below, copied exactly.
+   - NO doctor names, no opening times, no waiting times, no room numbers,
+     no department names that are not listed in CONTEXT.
+   If you do not know, say so plainly and point them to reception. A patient
+   sent to the wrong place by a confident answer is worse off than one who was
+   told honestly that we did not know.
+
+4. WHEN THE PATIENT IS AGREEING TO SOMETHING
+   If their message is just "yes", "ok", "please do" or similar, they are
+   accepting the offer in YOUR previous message. Re-read your last message in
+   the conversation above and do exactly what you offered. Do not change the
+   offer. If you offered the online booking page, give them the booking page —
+   not a phone number. If you truly cannot tell what they agreed to, ask them
+   to say a little more.
+
+5. ONE INSTRUCTION, NOT THREE
+   Give the patient the single best next step. Offering the website, the phone
+   and the front desk all at once is how people end up doing nothing.
+6. Never ask for a password, bank details or payment.
 
 STYLE
 Warm, calm and human — like a kind receptionist who has time for them. Short
@@ -262,6 +284,29 @@ def _call_openrouter(messages: list[dict], timeout: float) -> str | None:
 _PROVIDERS = {"groq": _call_groq, "gemini": _call_gemini, "openrouter": _call_openrouter}
 
 
+# Phrases that mean the model has INVENTED a place. It has never seen this
+# hospital, so any of these is a guess dressed up as a fact — and a patient
+# sent to the wrong corridor by a confident answer is worse off than one who
+# was told honestly that we did not know.
+_INVENTED_LOCATION = (
+    "beside the", "next to the", "opposite the", "ground floor", "first floor",
+    "second floor", "upstairs", "downstairs", "to the left", "to the right",
+    "behind the", "in front of the", "main building", "block a", "block b",
+    "near the entrance", "near the gate", "at the back of",
+)
+
+_ASK_AT_RECEPTION = (
+    "I don't want to send you the wrong way — I'm not able to give directions "
+    "inside the hospital. Please ask at the reception desk and they will point "
+    "you straight to it."
+)
+
+
+def _invents_a_location(text: str) -> bool:
+    low = (text or "").lower()
+    return any(p in low for p in _INVENTED_LOCATION)
+
+
 # ------------------------------------------------------------------ safety
 def _looks_clinical(text: str) -> bool:
     low = (text or "").lower()
@@ -342,6 +387,13 @@ def answer(text: str, *, org=None, lang: str = "en", history=None) -> dict | Non
             continue
         if not reply:
             continue
+        # Guardrail AFTER the model: an invented location must not reach the
+        # patient either. Cheaper to refuse than to send somebody wandering.
+        if _invents_a_location(reply):
+            _log(org_id, provider, "invented_location", reply[:160])
+            _bump_usage(org_id)
+            return {"text": _ASK_AT_RECEPTION, "provider": f"{provider}+guardrail",
+                    "ms": int((time.time() - started) * 1000)}
         # Guardrail AFTER the model: a jailbreak must not reach the patient.
         if _looks_clinical(reply):
             _log(org_id, provider, "blocked", reply[:120])

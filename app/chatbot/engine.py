@@ -122,6 +122,105 @@ def _score(article: KnowledgeArticle, text: str) -> int:
     return best * 10 + total
 
 
+# ------------------------------------------------------------------ follow-ups
+# A short reply like "yes" is not a question — it is an ANSWER to the offer the
+# assistant just made. Scored on its own it matches nothing, falls through to
+# the AI, and the AI (which only sees the words, not the offer) invents
+# something plausible. That is how "yes" to "shall I book you a morning slot?"
+# came back as a phone number instead of the booking page.
+_AGREEMENTS = {
+    "yes", "yes please", "yes pls", "yeah", "yep", "yup", "ok", "okay", "oky",
+    "sure", "please", "please do", "go ahead", "alright", "correct", "fine",
+    "do it", "i want", "i would like", "abeg", "na so", "oya", "make i",
+    "yes o", "e go better", "no problem", "sounds good", "why not",
+}
+_REFUSALS = {"no", "no thanks", "no thank you", "nope", "not now", "later",
+             "maybe later", "i am fine", "im fine", "no need"}
+
+
+def is_agreement(text: str) -> bool:
+    """Did the patient just say yes to whatever we offered?"""
+    t = _norm(text).strip(" .!?")
+    if not t or len(t.split()) > 4:
+        return False               # a real question, not a bare yes
+    return t in _AGREEMENTS
+
+
+# Somebody trying to TEACH the assistant. The founder typed "Ai please lean
+# this ... store it in your memory permanently" and got a lecture about OPD,
+# because those words happened to score against the OPD article. The assistant
+# cannot learn from a chat message — pretending otherwise is a promise it will
+# silently break — so it says so plainly and records the request for a human.
+_TEACHING = (
+    "remember this", "store it in your memory", "store this in your memory",
+    "learn this", "lean this", "keep this in mind", "permanently",
+    "from now on", "always say", "always tell", "don't say", "do not say",
+    "stop saying", "correct yourself", "update your answer", "you are wrong",
+    "that is wrong", "that's wrong", "wrong answer", "it is not true",
+)
+
+
+def is_teaching(text: str) -> bool:
+    """Is the user trying to correct or train the assistant?"""
+    low = _norm(text)
+    return any(p in low for p in _TEACHING)
+
+
+TEACHING_REPLY = (
+    "Thank you — that is exactly the kind of correction that makes me better, "
+    "and I have saved it for the team to review. I should be honest with you "
+    "though: I cannot change my own answers from this chat. A person has to "
+    "update my answer book, and your note is now in the list for them."
+)
+
+
+def is_refusal(text: str) -> bool:
+    t = _norm(text).strip(" .!?")
+    if not t or len(t.split()) > 4:
+        return False
+    return t in _REFUSALS
+
+
+# What "yes" MEANS, depending on what we just offered. The value is the intent
+# to answer with, so the follow-up is the hospital's own written words rather
+# than something a language model made up on the spot.
+_OFFER_FOLLOWUPS = {
+    "book":      "book_appointment",
+    "complaint": "complaint_start",
+    "handoff":   "human_handoff",
+}
+
+
+def followup_for(previous_intent: str, previous_action: str, lang: str = "en",
+                 org_id=None):
+    """The right answer to a bare 'yes', based on what was offered.
+
+    Returns the same shape as answer(), or None when we genuinely cannot tell
+    what was being agreed to — in which case the caller asks the patient to say
+    a bit more, which is far better than guessing.
+    """
+    target = _OFFER_FOLLOWUPS.get(previous_action or "")
+    if not target and previous_intent:
+        # Any intent whose own call-to-action was an offer to book.
+        if previous_intent.endswith("_book") or previous_intent in (
+                "hours_clinic", "hours_opd", "book_appointment"):
+            target = "book_appointment"
+    if not target:
+        return None
+    for a in _articles_for(org_id):
+        if a.intent == target:
+            field = LANG_FIELD.get(lang, "en")
+            body = getattr(a, field, None) or a.en
+            out = body.strip()
+            if a.cta:
+                out += "  " + a.cta.strip()
+            action = "book" if target.endswith("book_appointment") else (
+                "complaint" if target == "complaint_start" else "handoff")
+            return {"text": out, "article": a, "confidence": 99.0,
+                    "action": action}
+    return None
+
+
 def answer(text: str, lang: str = "en", org_id=None):
     """Return dict(text, article, confidence, action) or None if unanswered."""
     t = _norm(text)

@@ -166,8 +166,8 @@ dict(cat="support", intent="privacy_data", kw=[
  cta="If you'd like, I can connect you to our data-protection officer."),
 dict(cat="amenities", intent="cafeteria", kw=[
     "cafeteria","canteen","food","where to eat","restaurant","buy food","water","drinking water","snacks"],
- en="You must be hungry — our cafeteria serves fresh, affordable meals and clean drinking water, open through the day. It's just beside the main waiting hall. Can I point you to anything specific, like something light for a fasting patient's family?",
- pcm="You suppo hungry o — our cafeteria dey serve fresh, affordable meals and clean drinking water, e dey open through the day. E dey just beside the main waiting hall. Make I point you to anything specific?",
+ en="You must be hungry — our cafeteria serves fresh, affordable meals and clean drinking water, and it's open through the day. Ask anyone at the reception desk and they'll point you straight to it. Can I help with anything else?",
+ pcm="You suppo hungry o — our cafeteria dey serve fresh, affordable meals and clean drinking water, e dey open through the day. Just ask person for reception, dem go show you. Anything else?",
  cta="If a patient is fasting, ask me and I'll suggest what's allowed."),
 dict(cat="amenities", intent="parking", kw=[
     "parking","car park","where to park","parking space","park my car","parking fee"],
