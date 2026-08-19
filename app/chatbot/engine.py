@@ -42,9 +42,28 @@ def is_clinical_seek(text: str) -> bool:
 
 
 def _articles_for(org_id):
+    """Answers this hospital can use: its own, plus the shared library.
+
+    THE HOSPITAL'S OWN COPY ALWAYS WINS.
+    ------------------------------------
+    When a hospital corrects a shared answer, its correction is saved as its
+    OWN copy — the shared original is deliberately left alone so other
+    hospitals are not changed. But that left two copies of the same intent in
+    play, and the shared (wrong) one could still out-score the corrected one.
+    The founder fixed the cafeteria answer, was told "Updated", asked again,
+    and heard the old wording. Nothing is more corrosive to trust than that.
+
+    So a shared answer is dropped whenever this hospital has its own version
+    of the same intent.
+    """
     q = db.session.query(KnowledgeArticle).filter_by(status="approved")
-    q = q.filter(db.or_(KnowledgeArticle.org_id.is_(None), KnowledgeArticle.org_id == org_id))
-    return q.all()
+    q = q.filter(db.or_(KnowledgeArticle.org_id.is_(None),
+                        KnowledgeArticle.org_id == org_id))
+    rows = q.all()
+    mine = {a.intent for a in rows if a.org_id is not None}
+    if not mine:
+        return rows
+    return [a for a in rows if a.org_id is not None or a.intent not in mine]
 
 
 def _phrase_hit(kw: str, text: str) -> bool:

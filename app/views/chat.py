@@ -7,7 +7,7 @@ from flask_login import current_user
 
 from .. import services
 from ..audit import audit
-from ..chatbot import engine
+from ..chatbot import engine, quickedit
 from ..models import (ChatFeedback, ChatMessage, ChatSession, Organization, db,
                       now_naive)
 from ..security import csrf_exempt, rate_limit
@@ -52,6 +52,30 @@ def chat_api():
         sess = ChatSession(org_id=org.id if org else None, lang=lang, channel="web")
         db.session.add(sess)
         db.session.flush()
+
+    # ---- SUPER ADMIN CORRECTING AN ANSWER, IN THE CHAT.
+    # Checked before ANYTHING else so a correction is never mistaken for a
+    # question. Two locks: signed in as Super Admin AND the secret code. This
+    # endpoint is public and CSRF-exempt, so a code on its own would put the
+    # hospital's answers one lucky guess away from a stranger.
+    if quickedit.looks_like_edit(text):
+        handled, result = quickedit.apply(org.id if org else None,
+                                          current_user, text)
+        if handled:
+            if isinstance(result, dict):
+                audit("KB_QUICK_EDIT", "knowledge_article",
+                      result.get("article_id"),
+                      {"intent": result.get("intent"),
+                       "scope": result.get("scope"),
+                       "replaced": result.get("old", "")[:200]})
+                reply = result["message"]
+            else:
+                reply = result
+            bot = ChatMessage(session_id=sess.id, role="bot", text=reply)
+            db.session.add(bot)
+            db.session.commit()
+            return jsonify(session=sess.id, answered=True, reply=reply,
+                           msg_id=bot.id, intent="kb_quick_edit")
 
     # ---- SOMEBODY TEACHING THE ASSISTANT.
     # "Ai please learn this... store it permanently" used to score against

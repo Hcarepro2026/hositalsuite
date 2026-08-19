@@ -1075,6 +1075,31 @@ def kb_list():
     return render_template("admin/kb.html", items=items, scope=scope or "all")
 
 
+# ------------------------------------------------------------------ quick edit
+@bp.get("/kb/code")
+@require_role("SUPER_ADMIN")
+def kb_code():
+    """Set the word that lets the Super Admin correct answers from the chat."""
+    from ..chatbot import quickedit
+    return render_template("admin/kb_code.html",
+                           has_code=quickedit.has_code(current_user.org_id),
+                           suggestion=quickedit.suggest_code())
+
+
+@bp.post("/kb/code")
+@require_role("SUPER_ADMIN")
+def kb_code_save():
+    from ..chatbot import quickedit
+    ok, message = quickedit.set_code(current_user.org_id,
+                                     request.form.get("code", ""))
+    if ok:
+        # The code itself is NEVER written to the audit log.
+        audit("KB_QUICK_EDIT_CODE_SET", "organization", current_user.org_id, {})
+        db.session.commit()
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("admin.kb_code"))
+
+
 # ------------------------------------------------------------------ learning
 @bp.get("/kb/learning")
 @require_role(*SUPER_MD)
