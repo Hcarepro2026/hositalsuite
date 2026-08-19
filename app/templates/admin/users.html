@@ -60,14 +60,11 @@
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <button class="btn small ghost">{{ 'Suspend' if u.active else 'Activate' }}</button>
       </form>
-      <details style="display:inline-block">
-        <summary class="btn small ghost" style="list-style:none">Reset password</summary>
-        <form method="post" action="/admin/users/{{ u.id }}/reset-password" class="card mt" style="position:absolute;z-index:10;min-width:260px">
-          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-          <input type="password" name="password" placeholder="New password" required>
-          <button class="btn small mt">Reset</button>
-        </form>
-      </details>
+      {# A <details> popover positioned absolutely inside a horizontally
+         SCROLLING table is unusable on a phone: the panel is clipped by the
+         table and the tap appears to do nothing. A real page has room for the
+         rules, the confirmation and a proper error. #}
+      <a class="btn small ghost" href="/admin/users/{{ u.id }}/password">Reset password</a>
       <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline"
             onsubmit="return confirm('Permanently delete {{ u.name }}? This cannot be undone. If they have signed any inspections or held duty, use Suspend instead.')">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">

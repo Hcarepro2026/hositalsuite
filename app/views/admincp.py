@@ -237,18 +237,84 @@ def user_approve(uid: int):
     return redirect(url_for("admin.users"))
 
 
+# Every column in the database that points at a user, with a plain-English
+# name for it. Ordered so the most meaningful reason is reported first.
+#
+# WHY THE FULL LIST MATTERS
+# ------------------------
+# This guard used to check FIVE tables. There are THIRTY-TWO columns pointing
+# at user.id. Anything else the person had ever touched — a single alert in
+# their inbox is enough — made PostgreSQL refuse the delete, and the founder
+# got a bare "500 Something went wrong on our side".
+#
+# SQLite does not enforce foreign keys by default, so this could never be
+# reproduced locally: on a developer machine the delete quietly "worked".
+_USER_REFERENCES = [
+    # --- clinical and operational history: the audit trail depends on these
+    ("Inspection", "inspector_id", "inspections they signed"),
+    ("CorrectiveAction", "owner_id", "corrective actions assigned to them"),
+    ("CorrectiveAction", "verified_by_id", "corrective actions they verified"),
+    ("Department", "hod_user_id", "departments where they are the HOD"),
+    ("Section", "hod_user_id", "sections where they are the head"),
+    ("Unit", "hod_user_id", "units where they are the head"),
+    # --- rosters
+    ("DutyRoster", "user_id", "duty roster entries"),
+    ("DutyRoster", "created_by", "duty rosters they created"),
+    ("RosterEntry", "user_id", "roster entries"),
+    ("RosterEntry", "created_by", "roster entries they created"),
+    ("DeptRosterEntry", "staff1_user_id", "department roster entries"),
+    ("DeptRosterEntry", "staff2_user_id", "department roster entries"),
+    ("DeptRosterEntry", "created_by", "department rosters they created"),
+    # --- the patient journey
+    ("PatientVisit", "doctor_id", "patient visits as the doctor"),
+    ("PatientVisit", "registered_by", "patients they registered"),
+    ("DoctorSession", "doctor_id", "consulting room sessions"),
+    ("VisitOnward", "sent_by", "patients they sent on to another desk"),
+    ("VisitOnward", "completed_by", "onward steps they completed"),
+    ("JourneySegment", "staff_id", "recorded patient journey steps"),
+    ("ReceptionIntake", "created_by", "patients they took in at Reception"),
+    ("Patient", "created_by", "patient folders they opened"),
+    # --- everything else that names them
+    ("ComplaintStatusHistory", "user_id", "complaint updates they made"),
+    ("DataRequest", "handled_by_id", "data requests they handled"),
+    ("KnowledgeArticle", "submitted_by", "assistant answers they wrote"),
+    ("KnowledgeArticle", "approved_by", "assistant answers they approved"),
+    ("Referral", "created_by_id", "referral links they created"),
+    ("ReportFile", "created_by_id", "reports they generated"),
+    ("AppNotification", "user_id", "alerts in their inbox"),
+    ("WhatsAppMessage", "to_user_id", "WhatsApp messages sent to them"),
+    ("AuditLog", "user_id", "entries in the audit trail"),
+    # NOTE: UserPref and PasswordReset are deliberately NOT here. They belong
+    # to the account itself, not to the hospital's records, so they should go
+    # WITH the account rather than prevent it being removed.
+]
+
+
 def _user_has_history(u) -> str | None:
-    """Reason this user cannot be hard-deleted (their records must keep an author)."""
-    from ..models import CorrectiveAction, DutyRoster, Inspection, RosterEntry
-    checks = [(Inspection.inspector_id, "inspections"),
-              (DutyRoster.user_id, "duty roster entries"),
-              (RosterEntry.user_id, "roster entries"),
-              (CorrectiveAction.owner_id, "corrective actions")]
-    for col, label in checks:
-        if db.session.query(col).filter(col == u.id).first() is not None:
-            return label
-    if db.session.query(Department).filter(Department.hod_user_id == u.id).first():
-        return "departments (they are the HOD)"
+    """Reason this user cannot be hard-deleted (their records must keep an author).
+
+    Returns a plain-English reason, or None when the account is genuinely
+    unused and safe to remove.
+    """
+    from .. import models as M
+    for model_name, column, label in _USER_REFERENCES:
+        model = getattr(M, model_name, None)
+        if model is None:
+            continue                       # model not in this build; skip
+        col = getattr(model, column, None)
+        if col is None:
+            continue                       # column renamed; skip rather than crash
+        try:
+            # Query the COLUMN, never model.id: UserPref has a composite
+            # primary key and no `id` attribute, which made this blow up and
+            # block the deletion of EVERY user, including brand-new ones.
+            if db.session.query(col).filter(col == u.id).first() is not None:
+                return label
+        except Exception:                                    # noqa: BLE001
+            # A query we cannot run is not proof the user is clean. Refuse the
+            # delete rather than risk a 500 or an orphaned record.
+            db.session.rollback()
+            return "records we could not fully check"
     return None
 
 
@@ -282,7 +348,20 @@ def user_delete(uid: int):
     label = f"{u.name} ({u.username})"
     audit("USER_DELETED", "user", u.id, {"username": u.username, "role": u.role})
     db.session.delete(u)
-    db.session.commit()
+    # BELT AND BRACES. The list above should catch everything, but a future
+    # table could add another link to user.id and nobody would remember to
+    # update it. If the database refuses the delete, the administrator must
+    # get a sentence they can act on — never a bare "500 Something went wrong".
+    try:
+        db.session.commit()
+    except Exception:                                        # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("user delete refused by the database")
+        flash(f"{u.name} cannot be deleted because their name is still "
+              f"attached to records elsewhere in the system. Use "
+              f"\u201cSuspend\u201d instead — the account stops working "
+              f"immediately and the records keep an honest author.", "error")
+        return redirect(url_for("admin.users"))
     flash(f"User {label} permanently deleted.", "success")
     return redirect(url_for("admin.users"))
 
@@ -294,17 +373,38 @@ def user_reset_password(uid: int):
     if not u or u.org_id != current_user.org_id:
         abort(404)
     pw = request.form.get("password") or ""
+    confirm = request.form.get("confirm") or ""
     errs = password_strength_errors(pw)
+    if confirm and pw != confirm:
+        errs = ["The two passwords do not match."] + list(errs)
     if errs:
         for e in errs:
             flash(e, "error")
-        return redirect(url_for("admin.users"))
+        # Back to the page they were on, with the rules still in front of
+        # them — not to a list where the error scrolls away unseen.
+        return redirect(url_for("admin.user_password", uid=u.id))
     u.set_password(pw)
     u.must_change_password = True
     audit("PASSWORD_RESET", "user", u.id, {"target": u.username})
     db.session.commit()
     flash(f"Password reset for {u.username}. They must change it at next login.", "success")
     return redirect(url_for("admin.users"))
+
+
+@bp.get("/users/<int:uid>/password")
+@require_role(*SUPER)
+def user_password(uid: int):
+    """A real page for resetting one person's password.
+
+    This used to be a <details> popover inside a horizontally scrolling table.
+    On a phone the panel was clipped by the table, so tapping "Reset password"
+    appeared to do nothing at all. A page has room for the rules, a
+    confirmation box, and an error the administrator can actually read.
+    """
+    u = db.session.get(User, uid)
+    if not u or u.org_id != current_user.org_id:
+        abort(404)
+    return render_template("admin/user_password.html", u=u)
 
 
 # ------------------------------------------------------------------ departments
