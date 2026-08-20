@@ -44,6 +44,40 @@
   </div>
 </div>
 
+{# ============ escalate BEFORE it times out ============ #}
+{% if may_escalate %}
+<div class="card mb" style="border-left:6px solid #b58900">
+  <h2 style="margin-top:0">⬆ Escalate to higher authority</h2>
+  {% if hours_left > 0 %}
+  <p>You have <b>{{ hours_left|round(1) }} hours</b> left on this complaint.</p>
+  {% else %}
+  <p class="pill red">This complaint is already {{ (-hours_left)|round(1) }} hours past its deadline.</p>
+  {% endif %}
+  <p class="hint">If this is not something your department can fix — no budget,
+    no power, another department involved — send it up NOW rather than waiting
+    for the clock to run out. Escalating early is recorded as a decision you
+    made, not as a failure to answer in time.</p>
+  <form method="post" action="/complaints/{{ c.id }}/escalate">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Escalate to <span class="req">*</span></label>
+    <select name="to_user_id" required>
+      <option value="">— choose who should take this —</option>
+      {% for u in authorities %}
+      <option value="{{ u.id }}">{{ u.name }} — {{ u.role_name }}</option>
+      {% endfor %}
+    </select>
+    <label class="mt">Why does this need them? <span class="req">*</span></label>
+    <textarea name="reason" required minlength="10"
+      placeholder="e.g. The theatre generator has failed and there is no budget at department level to repair it."></textarea>
+    <button class="btn mt" style="background:#b58900">⬆ Escalate now</button>
+  </form>
+  <p class="hint" style="margin-bottom:0">The deadline is <b>not</b> extended by
+    escalating. It is the same promise to the same patient — otherwise
+    "escalate" would just become the button everyone presses to clear the red
+    light.</p>
+</div>
+{% endif %}
+
 {% if can_act and c.status not in ('CLOSED',) %}
 <div class="card mb">
   <h2>Take action</h2>

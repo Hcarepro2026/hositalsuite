@@ -26,15 +26,20 @@ def _days() -> int:
 @bp.get("/tracking")
 @require_role(*VIEWERS)
 def dashboard():
+    from .. import roles as R
     org_id = current_user.org_id
     days = _days()
+    # An HOD sees their own department's figures, not a league table of
+    # colleagues they have no power to manage. Management still sees it all.
+    mine = R.visible_department_ids(current_user)
     return render_template(
         "tracking/dashboard.html",
         days=days,
+        scope_note=R.scope_note(current_user),
         head=tracking.headline(org_id, days),
         stages=tracking.stage_performance(org_id, days),
-        departments=tracking.department_performance(org_id, days),
-        staff=tracking.staff_workload(org_id, days),
+        departments=tracking.department_performance(org_id, days, only_departments=mine),
+        staff=tracking.staff_workload(org_id, days, only_departments=mine),
         live=tracking.live_board(org_id),
         advice=tracking.suggest_allocation(org_id),
         weeks=tracking.trend(org_id, 4),

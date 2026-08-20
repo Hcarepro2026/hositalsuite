@@ -365,15 +365,21 @@ RATING_COLOURS = {
 
 
 # ------------------------------------------------------------------ by department
-def department_performance(org_id, days: int = 7) -> list[dict]:
+def department_performance(org_id, days: int = 7, only_departments=None) -> list[dict]:
+    """Per-department figures. `only_departments` narrows it to what the
+    viewer is allowed to see — an HOD gets their own department, not a
+    league table of colleagues they cannot manage.
+    """
     from .models import Department
     start, _ = _range(days)
-    rows = (db.session.query(JourneySegment)
-            .filter(JourneySegment.org_id == org_id,
-                    JourneySegment.entered_at >= start,
-                    JourneySegment.ended_at.isnot(None),
-                    JourneySegment.department_id.isnot(None))
-            .all())
+    q = (db.session.query(JourneySegment)
+         .filter(JourneySegment.org_id == org_id,
+                 JourneySegment.entered_at >= start,
+                 JourneySegment.ended_at.isnot(None),
+                 JourneySegment.department_id.isnot(None)))
+    if only_departments is not None:
+        q = q.filter(JourneySegment.department_id.in_(only_departments or [-1]))
+    rows = q.all()
     buckets: dict[int, list] = {}
     for r in rows:
         buckets.setdefault(r.department_id, []).append(r.seconds)
@@ -393,7 +399,7 @@ def department_performance(org_id, days: int = 7) -> list[dict]:
 
 
 # ------------------------------------------------------------------ by staff
-def staff_workload(org_id, days: int = 7) -> list[dict]:
+def staff_workload(org_id, days: int = 7, only_departments=None) -> list[dict]:
     """How many patients each person handled, and how long they took.
 
     DELIBERATELY NOT A LEAGUE TABLE. A doctor who sees the hardest patients
@@ -403,12 +409,14 @@ def staff_workload(org_id, days: int = 7) -> list[dict]:
     """
     from .models import User
     start, _ = _range(days)
-    rows = (db.session.query(JourneySegment)
-            .filter(JourneySegment.org_id == org_id,
-                    JourneySegment.entered_at >= start,
-                    JourneySegment.ended_at.isnot(None),
-                    JourneySegment.staff_id.isnot(None))
-            .all())
+    q = (db.session.query(JourneySegment)
+         .filter(JourneySegment.org_id == org_id,
+                 JourneySegment.entered_at >= start,
+                 JourneySegment.ended_at.isnot(None),
+                 JourneySegment.staff_id.isnot(None)))
+    if only_departments is not None:
+        q = q.filter(JourneySegment.department_id.in_(only_departments or [-1]))
+    rows = q.all()
     buckets: dict[int, list] = {}
     for r in rows:
         buckets.setdefault(r.staff_id, []).append(r.seconds)

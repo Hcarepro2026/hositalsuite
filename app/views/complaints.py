@@ -242,7 +242,19 @@ def _staff_only():
 @bp.get("/complaints")
 @require_login
 def staff_queue():
+    from .. import roles as R
     q = db.session.query(Complaint).filter(Complaint.org_id == current_user.org_id)
+
+    # SCOPE. "HOD and Staff should see only action and happening relating to
+    # their department/unit/Station only." Applied HERE, in the query, not in
+    # the template — a filter applied only on the page still ships every other
+    # department's complaints down the wire to the phone.
+    visible = R.visible_department_ids(current_user)
+    if visible is not None:
+        # A person with no department gets an empty list rather than
+        # everything. Failing OPEN here would have quietly undone the whole
+        # feature the first time somebody's record was incomplete.
+        q = q.filter(Complaint.department_id.in_(visible or [-1]))
     status = request.args.get("status")
     if status in ("NEW", "ACKNOWLEDGED", "IN_PROGRESS", "RESOLVED", "CLOSED", "ESCALATED"):
         q = q.filter(Complaint.status == status)
@@ -264,29 +276,86 @@ def staff_queue():
         q = q.filter(db.or_(Complaint.ref.ilike(like), Complaint.description.ilike(like),
                               Complaint.phone.ilike(like)))
     items = q.order_by(Complaint.submitted_at.desc()).limit(200).all()
-    depts = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True).all()
+    dq = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True)
+    if visible is not None:
+        dq = dq.filter(Department.id.in_(visible or [-1]))
+    depts = dq.all()
     return render_template("complaint_queue.html", items=items, depts=depts, args=request.args,
-                           now=now)
+                           now=now, scope_note=R.scope_note(current_user))
 
 
 @bp.get("/complaints/<int:cid>")
 @require_login
 def staff_detail(cid: int):
+    from .. import escalation
+    from .. import roles as R
     c = db.session.get(Complaint, cid)
     if not c or c.org_id != current_user.org_id:
         abort(404)
+    # Typing the id of another department's complaint must not work either.
+    # Hiding it from the list is presentation; THIS is the security.
+    if not R.can_see_department(current_user, c.department_id):
+        abort(403)
     hod = services.route_hod(c.department)
+    may_escalate = escalation.may_escalate(current_user, c)
     return render_template("complaint_detail.html", c=c, hod=hod, now=now_naive(),
                            can_act=current_user.role in ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER")
-                           or (hod and hod.id == current_user.id))
+                           or (hod and hod.id == current_user.id),
+                           may_escalate=may_escalate,
+                           authorities=escalation.authorities(c.org_id) if may_escalate else [],
+                           hours_left=escalation.hours_left(c))
+
+
+@bp.post("/complaints/<int:cid>/escalate")
+@require_login
+def staff_escalate(cid: int):
+    """An HOD raises it to higher authority BEFORE the clock runs out.
+
+    Deliberate escalation is a decision, not a failure. The audit trail records
+    it as a separate action from an automatic timeout so an HOD who spots a
+    problem early is never scored as one who let it lapse — otherwise every HOD
+    quickly learns to sit on problems until the deadline.
+    """
+    from .. import escalation
+    c = db.session.get(Complaint, cid)
+    if not c or c.org_id != current_user.org_id:
+        abort(404)
+    if not escalation.may_escalate(current_user, c):
+        abort(403)
+
+    to_id = request.form.get("to_user_id", type=int)
+    reason = (request.form.get("reason") or "").strip()
+    from ..models import User as _User
+    target = db.session.get(_User, to_id) if to_id else None
+    if target is None or target.org_id != c.org_id or target.role not in escalation.AUTHORITY_LADDER:
+        flash("Choose who you are escalating this to.", "error")
+        return redirect(url_for("complaints.staff_detail", cid=cid))
+    if len(reason) < 10:
+        flash("Say in one or two lines why this needs a higher authority. "
+              "The person receiving it needs to know what to do.", "error")
+        return redirect(url_for("complaints.staff_detail", cid=cid))
+
+    result = escalation.escalate(c, by_user=current_user, to_user=target, reason=reason)
+    db.session.commit()
+    if result["in_time"]:
+        flash(f"Escalated to {result['to']} with {result['hours_left']} hours still "
+              f"on the clock. They have been notified and will hear it announced.",
+              "success")
+    else:
+        flash(f"Escalated to {result['to']}. Note that this complaint was already "
+              f"past its deadline — the record shows that honestly.", "success")
+    return redirect(url_for("complaints.staff_detail", cid=cid))
 
 
 @bp.post("/complaints/<int:cid>/update")
 @require_login
 def staff_update(cid: int):
+    from .. import roles as R
     c = db.session.get(Complaint, cid)
     if not c or c.org_id != current_user.org_id:
         abort(404)
+    if not R.can_see_department(current_user, c.department_id):
+        abort(403)
     action = request.form.get("action_type")
     old_status = c.status
 

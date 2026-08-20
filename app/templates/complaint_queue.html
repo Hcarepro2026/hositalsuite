@@ -4,6 +4,9 @@
 <div class="spread mb"><h1 style="margin:0">Patient Complaints</h1>
   <a class="btn small secondary" href="/reports/complaints?format=pdf">⬇ PDF</a></div>
 
+{# Never let a short list be ambiguous between "quiet day" and "hidden". #}
+{% if scope_note %}<p class="muted" style="margin-top:-6px">{{ scope_note }}</p>{% endif %}
+
 <form class="card mb grid cols4" method="get" style="align-items:end">
   <div><label style="margin-top:0">Status</label>
     <select name="status">

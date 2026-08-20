@@ -76,12 +76,14 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.tracking import bp as tracking_bp
     from .views.cashdesk import bp as cashdesk_bp
     from .views.admincp import bp as admin_bp
+    from .views.rolesadmin import bp as rolesadmin_bp
+    from .views.deptdesk import bp as deptdesk_bp
     from .views.reports import bp as reports_bp
     from .views.api import bp as api_bp
 
     for blueprint in (auth_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
                       chat_bp, ref_bp, roster_bp, hims_bp, reception_bp, triage_bp, consulting_bp, tracking_bp, cashdesk_bp,
-                      admin_bp,
+                      admin_bp, rolesadmin_bp, deptdesk_bp,
                       reports_bp, api_bp):
         app.register_blueprint(blueprint)
 
@@ -153,6 +155,17 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
             # Load the global master dialogue library for the patient assistant.
             from .chatbot.seed_kb import seed_global_kb
             _boot_step("seed_kb", lambda: seed_global_kb(app))
+
+            # Role Management: every hospital gets the built-in roles that
+            # reproduce the old hard-coded behaviour exactly. Idempotent, and
+            # it never overwrites a role an administrator has already re-ticked.
+            def _seed_roles():
+                from .models import Organization
+                from .roles import ensure_builtin_roles
+                for org in db.session.query(Organization).all():
+                    ensure_builtin_roles(org.id)
+                db.session.commit()
+            _boot_step("seed_roles", _seed_roles)
 
     @app.context_processor
     def inject_globals():

@@ -172,3 +172,99 @@ def test_key_pages_load_without_a_database_error(client, seeded, path):
     r = client.get(path)
     assert r.status_code == 200, f"{path} returned {r.status_code}"
     assert b"Something went wrong" not in r.data, f"{path} rendered the 500 page"
+
+
+# ================================================================ ROLE MANAGEMENT
+def test_the_role_tables_arrive_on_a_real_upgrade_not_just_create_all():
+    """The upgrade path is the only path that broke in production.
+
+    create_all() on a fresh database always produces correct tables, so it
+    never exercises what Render actually does on deploy. This starts from a
+    database stamped at the PREVIOUS head, runs the migrations, and checks the
+    role tables really appeared.
+    """
+    import sqlite3
+    import tempfile
+
+    from alembic import command
+    from alembic.config import Config
+
+    root = os.path.dirname(MIGRATIONS.rsplit("migrations", 1)[0])
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+
+    con = sqlite3.connect(tmp.name)
+    # The three tables the new migration's foreign keys point at must exist,
+    # or the upgrade fails the same way it would on a real deploy.
+    con.execute("CREATE TABLE organization (id INTEGER PRIMARY KEY)")
+    con.execute("CREATE TABLE department (id INTEGER PRIMARY KEY)")
+    con.execute("CREATE TABLE unit (id INTEGER PRIMARY KEY)")
+    con.execute("CREATE TABLE \"user\" (id INTEGER PRIMARY KEY)")
+    con.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+    con.execute("INSERT INTO alembic_version VALUES ('a8e31c4f9b56')")
+    con.commit()
+    con.close()
+
+    cfg = Config()
+    cfg.set_main_option("script_location", os.path.join(root, "migrations"))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{tmp.name}")
+    command.upgrade(cfg, "head")
+
+    con = sqlite3.connect(tmp.name)
+    tables = {r[0] for r in con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    con.close()
+    os.unlink(tmp.name)
+
+    for needed in ("role", "role_permission", "user_role", "work_claim"):
+        assert needed in tables, (
+            f"upgrading a real database did not create '{needed}' — Role "
+            f"Management would 500 in production on the first click.")
+
+
+def test_the_migration_is_safe_to_run_twice():
+    """Render can retry a deploy. A migration that only works once is a trap."""
+    import sqlite3
+    import tempfile
+
+    from alembic import command
+    from alembic.config import Config
+
+    root = os.path.dirname(MIGRATIONS.rsplit("migrations", 1)[0])
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+    con = sqlite3.connect(tmp.name)
+    for t in ("organization", "department", "unit"):
+        con.execute(f"CREATE TABLE {t} (id INTEGER PRIMARY KEY)")
+    con.execute('CREATE TABLE "user" (id INTEGER PRIMARY KEY)')
+    con.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+    con.execute("INSERT INTO alembic_version VALUES ('a8e31c4f9b56')")
+    con.commit()
+    con.close()
+
+    cfg = Config()
+    cfg.set_main_option("script_location", os.path.join(root, "migrations"))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{tmp.name}")
+    command.upgrade(cfg, "head")
+    # Rewind the stamp only — the tables stay — and run it again.
+    con = sqlite3.connect(tmp.name)
+    con.execute("UPDATE alembic_version SET version_num='a8e31c4f9b56'")
+    con.commit()
+    con.close()
+    command.upgrade(cfg, "head")            # must not raise
+    os.unlink(tmp.name)
+
+
+def test_role_management_never_becomes_a_medical_record():
+    """This is NOT an EMR. A guard, because these tables are new and tempting."""
+    from app.models import Role, RolePermission, UserRole, WorkClaim
+
+    banned = ("diagnosis", "symptom", "vital", "temperature", "blood_pressure",
+              "prescription", "drug", "dose", "test_result", "blood_group",
+              "genotype", "allergy", "allergies", "condition")
+    for model in (Role, RolePermission, UserRole, WorkClaim):
+        for column in model.__table__.columns:
+            for word in banned:
+                assert word not in column.name.lower(), (
+                    f"{model.__name__}.{column.name} looks like clinical data. "
+                    f"This system is not an EMR.")

@@ -285,6 +285,15 @@ def job_patient_flow(app):
                                 closed, org.id)
             tracking.announce_forgotten(org.id)
             tracking.announce_bottleneck(org.id)
+
+            # Role Management: keep the teamwork noticeboard honest, and warn
+            # HODs while there is still time to act rather than after.
+            from . import deptwork, escalation
+            stale = deptwork.close_forgotten_claims(org.id)
+            if stale:
+                app.logger.info("flow: closed %s forgotten work claim(s) for org %s",
+                                stale, org.id)
+            escalation.warn_hods_running_out(org.id)
             db.session.commit()
         except Exception:                                  # noqa: BLE001
             app.logger.exception("patient-flow job failed for org %s", org.id)

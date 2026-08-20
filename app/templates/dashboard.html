@@ -2,6 +2,16 @@
 {% block title %}Dashboard — Hospital Suite{% endblock %}
 {% block content %}
 
+{# ---------------- your own department, first ---------------- #}
+{% set can = nav_permissions() %}
+{% if can.dept_desk and not can.admin %}
+<a class="card pad-lg mb" href="/my-department" style="display:block;border-left:6px solid #1a7f37">
+  <h2 style="margin:0">🏥 My Department →</h2>
+  <p class="muted" style="margin:.3rem 0 0">Today's patients coming to your
+    department, who is working on what right now, and how you are keeping up.</p>
+</a>
+{% endif %}
+
 {# ---------------- patient flow at a glance ---------------- #}
 {% if flow %}
 <div class="card pad-lg mb" style="border-left:6px solid #0e5a8a">

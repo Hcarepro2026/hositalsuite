@@ -13,8 +13,12 @@ from werkzeug.security import check_password_hash, generate_password_hash
 db = SQLAlchemy()
 
 # Roles, in seniority order. Labels are what staff actually see in the UI.
+# STAFF is the role the hospital always had and the software never did: an
+# ordinary member of staff. Before it existed, every account had to be given a
+# management role just to sign in — which is exactly how HODs kept turning up
+# in menus they had no business seeing.
 ROLES = ("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR",
-         "ADMIN_MANAGER", "HOD")
+         "ADMIN_MANAGER", "HOD", "STAFF")
 
 ROLE_LABELS = {
     "SUPER_ADMIN":   "Super Administrator",
@@ -25,6 +29,7 @@ ROLE_LABELS = {
     "HEAD_ADMIN_HR": "Head of Admin & HR",
     "ADMIN_MANAGER": "Admin Manager",
     "HOD":           "HOD — Head of Department",
+    "STAFF":         "Staff",
 }
 
 # Roles with hospital-wide management sight (dashboards, reports, escalation targets).
@@ -1484,3 +1489,216 @@ class JourneySegment(db.Model):
     @property
     def is_open(self) -> bool:
         return self.ended_at is None
+
+
+# ================================================================ ROLE MANAGEMENT
+# WHY A TABLE AND NOT A FIXED LIST
+# --------------------------------
+# Until now a person's job was one word in a column: HOD, ADMIN_MANAGER,
+# SUPER_ADMIN. That worked while the hospital had eight kinds of person. It
+# breaks the moment a real hospital says "our Pharmacy Technician may see the
+# pharmacy queue but must not open a folder" — because there was nowhere to
+# write that down without a developer editing Python and redeploying.
+#
+# A SaaS product cannot ask a developer to change code every time a tenant
+# hires a new kind of staff. So a role is now a ROW, owned by the hospital,
+# with a tick-list of permissions the administrator can edit from the screen.
+#
+# The old one-word roles still work exactly as before. They are seeded as
+# BUILT-IN roles, are marked as such, and cannot be deleted. Nothing that
+# worked yesterday stops working today.
+
+# A permission is a plain, boring English sentence about one thing a person may
+# do. The KEY is what code checks; the LABEL is what the administrator ticks.
+PERMISSION_GROUPS = (
+    ("Front of house", (
+        ("reception",   "Work the Reception desk"),
+        ("cashdesk",    "Work Billing and the Paying Point"),
+        ("hims",        "Open and search patient folders (HIMS)"),
+    )),
+    ("Patient flow", (
+        ("triage",      "Run the Triage bench and assign doctors"),
+        ("consulting",  "Run a consulting room and see patients"),
+        ("onward",      "Send a patient onward after consultation"),
+        ("bookings",    "Manage bookings and the queue"),
+    )),
+    ("Department work", (
+        ("dept_desk",   "See my department's own desk and today's work"),
+        ("dept_claim",  "Take on a task in my department"),
+        ("dept_staff",  "See who in my department is working on what"),
+        ("dept_manage", "Step a colleague off a task on their behalf"),
+    )),
+    ("Quality & complaints", (
+        ("complaints",  "See and answer complaints"),
+        ("escalate",    "Escalate a complaint to higher authority"),
+        ("corrective",  "Manage corrective actions"),
+        ("inspections", "Carry out the Admin Manager's walk-round"),
+    )),
+    ("Management", (
+        ("tracking",    "See patient-flow figures and staff efficiency"),
+        ("reports",     "Open the reports centre"),
+        ("referrals",   "Manage referrals"),
+        ("roster",      "See the duty roster"),
+        ("roster_edit", "Change the duty roster"),
+    )),
+    ("Administration", (
+        ("admin",       "Open the Administrator settings (full control)"),
+        ("roles_admin", "Create roles and decide who may do what"),
+    )),
+)
+PERMISSION_LABELS = {k: v for _, pairs in PERMISSION_GROUPS for k, v in pairs}
+PERMISSION_KEYS = tuple(PERMISSION_LABELS)
+
+# How WIDE a role can see. This is the answer to "HOD and Staff should see only
+# what is happening in their own department".
+ROLE_SCOPES = (
+    ("HOSPITAL",   "The whole hospital"),
+    ("DEPARTMENT", "Only their own department"),
+    ("UNIT",       "Only their own unit or station"),
+)
+ROLE_SCOPE_LABELS = dict(ROLE_SCOPES)
+ROLE_SCOPE_CODES = tuple(c for c, _ in ROLE_SCOPES)
+
+
+class Role(db.Model):
+    """A named job, owned by ONE hospital, with its own tick-list of powers."""
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(40), nullable=False)          # STABLE, uppercase
+    name = db.Column(db.String(120), nullable=False)         # what staff read
+    description = db.Column(db.String(300))
+    scope = db.Column(db.String(16), default="DEPARTMENT", nullable=False)
+    # Built-in roles mirror the original eight. They may be RE-TICKED (a
+    # hospital can decide its HODs may not touch the roster) but never deleted,
+    # because deleting one would strand every account that holds it.
+    builtin = db.Column(db.Boolean, default=False, nullable=False)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_naive)
+
+    grants = db.relationship("RolePermission", backref="role",
+                             cascade="all, delete-orphan", lazy="select")
+    __table_args__ = (db.UniqueConstraint("org_id", "code", name="uq_role_org_code"),)
+
+    @property
+    def permission_keys(self) -> set:
+        return {g.permission for g in self.grants if g.allowed}
+
+    @property
+    def scope_label(self) -> str:
+        return ROLE_SCOPE_LABELS.get(self.scope, self.scope)
+
+
+class RolePermission(db.Model):
+    """One tick on one role. A row per power, so the audit trail is readable."""
+    id = db.Column(db.Integer, primary_key=True)
+    role_id = db.Column(db.Integer, db.ForeignKey("role.id"), nullable=False, index=True)
+    permission = db.Column(db.String(40), nullable=False)
+    allowed = db.Column(db.Boolean, default=True, nullable=False)
+    __table_args__ = (db.UniqueConstraint("role_id", "permission", name="uq_roleperm"),)
+
+
+class UserRole(db.Model):
+    """This person holds this role — optionally only inside one department.
+
+    A person may hold MORE THAN ONE. A senior nurse can be Staff in Theatre on
+    Monday and Acting HOD of A&E on Tuesday, and the system must let her be
+    both at once instead of forcing somebody to edit her account twice a week.
+    Powers ADD UP; sight is the union of the places each role can see.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    role_id = db.Column(db.Integer, db.ForeignKey("role.id"), nullable=False, index=True)
+    # Where this particular hat applies. NULL department on a DEPARTMENT-scoped
+    # role falls back to the person's own department on their staff record.
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), index=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey("unit.id"), index=True)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    granted_by_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    granted_at = db.Column(db.DateTime, default=now_naive)
+
+    role = db.relationship("Role")
+    user = db.relationship("User", foreign_keys=[user_id])
+    department = db.relationship("Department")
+    unit = db.relationship("Unit")
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "role_id", "department_id", "unit_id",
+                            name="uq_userrole"),
+        db.Index("ix_userrole_org_user", "org_id", "user_id"),
+    )
+
+
+# ---------------------------------------------------------------- teamwork
+WORK_KINDS = (
+    ("RECEPTION",   "Taking patients in at Reception"),
+    ("BILLING",     "Raising bills"),
+    ("PAYMENT",     "Collecting payment"),
+    ("HIMS",        "Opening and finding folders"),
+    ("TRIAGE",      "Placing patients with doctors"),
+    ("CONSULT",     "Seeing patients in a consulting room"),
+    ("LABORATORY",  "Laboratory work"),
+    ("PHARMACY",    "Dispensing"),
+    ("COMPLAINT",   "Answering a complaint"),
+    ("CLEANING",    "Cleaning and environment"),
+    ("OTHER",       "Other department work"),
+)
+WORK_KIND_LABELS = dict(WORK_KINDS)
+WORK_KIND_CODES = tuple(c for c, _ in WORK_KINDS)
+
+
+class WorkClaim(db.Model):
+    """"I am on this." One row per person per task, NEVER an exclusive lock.
+
+    THE POINT
+    ---------
+    The founder asked for several staff to be able to work at the same time —
+    on the same task or on different ones — inside one department. The obvious
+    software answer is a lock: one person claims a job, everybody else is
+    refused. That is exactly wrong for a hospital. Two porters really do move
+    one trolley; three nurses really do clear one queue together; a second
+    clerk joining a long reception line is help, not a conflict.
+
+    So this is a NOTICEBOARD, not a lock. Anybody may join anything. What the
+    system guarantees is that everybody can SEE who else is on it, so two
+    people never silently duplicate the same call to the same patient.
+
+    The one thing it refuses is the same PERSON claiming the same task twice,
+    which is a double-tap on a phone, not a second worker.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), index=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey("unit.id"), index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+
+    kind = db.Column(db.String(20), nullable=False, index=True)
+    # What is being worked on, if it is one identifiable thing. A shared task
+    # ("clear the reception queue") has no entity at all — that is normal.
+    entity_type = db.Column(db.String(30))
+    entity_id = db.Column(db.Integer)
+    note = db.Column(db.String(200))
+
+    started_at = db.Column(db.DateTime, default=now_naive, nullable=False, index=True)
+    ended_at = db.Column(db.DateTime, index=True)
+    seconds = db.Column(db.Integer)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    department = db.relationship("Department")
+    __table_args__ = (
+        db.Index("ix_claim_open", "org_id", "ended_at"),
+        db.Index("ix_claim_task", "org_id", "kind", "entity_type", "entity_id"),
+    )
+
+    @property
+    def label(self) -> str:
+        return WORK_KIND_LABELS.get(self.kind, self.kind)
+
+    @property
+    def is_open(self) -> bool:
+        return self.ended_at is None
+
+    @property
+    def minutes(self) -> int:
+        if self.seconds is not None:
+            return int(self.seconds // 60)
+        return max(0, int((now_naive() - self.started_at).total_seconds() // 60))

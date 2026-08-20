@@ -72,6 +72,13 @@ PATIENT_ALERTS: dict[str, tuple[str, str]] = {
     # only two things worth interrupting a working day for.
     "flow_bottleneck":     (URGENT, "A department is holding everyone up"),
     "patient_forgotten":   (URGENT, "A patient may have been forgotten"),
+    # --- Role Management & the department desk. Several staff share one
+    # department's work, so the two things worth SAYING are "you are not alone
+    # on this" and "your department is falling behind what is walking in".
+    "colleague_joined":    (STANDARD, "A colleague has joined this task"),
+    "dept_falling_behind": (URGENT, "Your department is falling behind"),
+    "complaint_for_you":   (URGENT, "A complaint for your department"),
+    "complaint_running_out": (URGENT, "A complaint is about to run out of time"),
 }
 
 _TITLES = ("dr", "mr", "mrs", "miss", "ms", "prof", "pharm", "engr", "cno",
@@ -209,6 +216,19 @@ def phrase(kind: str, *, name: str = "", count: int = 0, place: str = "",
         return (f"{who}, {patient or 'a patient'} has been waiting "
                 f"{detail or 'a long time'}"
                 + (f" at {place}" if place else "") + ". Please attend to them.")
+    if kind == "colleague_joined":
+        return (f"{who}, {patient or 'a colleague'} has joined you on "
+                f"{place or 'this task'}. Please share the work so nobody is "
+                f"called twice.")
+    if kind == "dept_falling_behind":
+        return (f"{who}, {place or 'your department'} is falling behind. "
+                f"{detail or 'Patients are arriving faster than they are being seen.'}")
+    if kind == "complaint_for_you":
+        return (f"{who}, a new complaint has come in for "
+                f"{place or 'your department'}. {detail or 'Please look at it today.'}")
+    if kind == "complaint_running_out":
+        return (f"{who}, a complaint for {place or 'your department'} is about "
+                f"to run out of time. {detail or 'Answer it or escalate it now.'}")
     return detail or f"{who}, please check the system."
 
 

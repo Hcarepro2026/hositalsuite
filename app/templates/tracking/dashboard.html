@@ -4,6 +4,7 @@
 <h1>📊 Patient flow</h1>
 <p class="muted">How long a visit really takes, where the hold-ups are, and
   what to do about them today.</p>
+{% if scope_note %}<p class="muted" style="margin-top:-8px">{{ scope_note }}</p>{% endif %}
 
 <div class="row mb" style="gap:6px;flex-wrap:wrap">
   {% for d in (1, 7, 30, 90) %}

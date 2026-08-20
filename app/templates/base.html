@@ -68,6 +68,11 @@
   {% set can = nav_permissions() %}
   <a href="/" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
 
+  {# The one screen most staff live on: their own department's work today. #}
+  {% if can.dept_desk %}
+  <a href="/my-department" class="{{ 'active' if request.path.startswith('/my-department') }}">My Department</a>
+  {% endif %}
+
   {% if can.inspections %}
   <a href="/inspections" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>
   {% endif %}
@@ -115,6 +120,9 @@
   {% endif %}
   <a href="/notifications" class="{{ 'active' if request.path.startswith('/notifications') }}">🔔</a>
   <a href="/alert-settings" class="{{ 'active' if request.path.startswith('/alert-settings') }}" title="Voice & alert settings">🗣</a>
+  {% if can.roles_admin and not can.admin %}
+  <a href="/admin/roles" class="{{ 'active' if request.path.startswith('/admin/roles') }}">🔐 Roles</a>
+  {% endif %}
   {% if can.admin %}
   <a href="/admin" class="{{ 'active' if request.path.startswith('/admin') }}">⚙ Admin</a>
   {% endif %}

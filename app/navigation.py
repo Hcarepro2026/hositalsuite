@@ -57,8 +57,16 @@ def _dept_matches(user, needles) -> bool:
     return any(n in dept for n in needles)
 
 
-def permissions_for(user) -> dict:
-    """What this person may see. Plain booleans, easy to read in a template."""
+def legacy_permissions_for(user) -> dict:
+    """The ORIGINAL hard-coded map. Kept as the fail-closed fallback.
+
+    Role Management (app/roles.py) now answers this question from the database
+    so a hospital can change it without a developer. This function stays for
+    one reason: if those tables are missing, empty or broken, the app must
+    degrade to yesterday's known-good behaviour rather than to a blank menu or
+    an open door. It is also the specification the built-in roles are seeded
+    from, so the two can be compared in a test.
+    """
     if user is None or not getattr(user, "is_authenticated", False):
         return {k: False for k in (
             "inspections", "reception", "cashdesk", "hims", "triage",
@@ -117,6 +125,62 @@ def permissions_for(user) -> dict:
         "admin":       is_super,
     }
 
+
+
+# ============================================================ the live answer
+# Keys the MENU asks about. Role Management owns most of them; a few are
+# derived, because the menu asks slightly different questions from the
+# permission list ("show the Complaints link" vs "may escalate").
+MENU_KEYS = ("inspections", "reception", "cashdesk", "hims", "triage",
+             "consulting", "onward", "tracking", "bookings", "complaints",
+             "referrals", "corrective", "roster", "reports", "admin",
+             "dept_desk", "dept_claim", "dept_staff", "dept_manage", "escalate",
+             "roster_edit", "roles_admin")
+
+
+def permissions_for(user) -> dict:
+    """What this person may see and do — read from Role Management.
+
+    Falls back to the original hard-coded map if the role tables cannot be
+    read, so a database fault degrades to yesterday's behaviour instead of
+    handing somebody the administrator's menu.
+
+    ONE DEPARTMENT NUANCE SURVIVES THE MOVE. Front-desk and money-desk work
+    for an HOD is granted by DEPARTMENT, not by rank: the HOD of HIMS runs the
+    HIMS desk, the HOD of Theatre does not. A tick-list alone cannot express
+    that, and taking it out would have re-opened the exact bug this file was
+    written to fix, so it is applied on top of whatever the role grants.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return {k: False for k in MENU_KEYS}
+
+    from .roles import permissions_of
+
+    granted = permissions_of(user)
+    can = {k: (k in granted) for k in MENU_KEYS}
+
+    # The administrator's key is the master key: never let a mis-tick lock the
+    # only person who can fix a mis-tick out of the screen that fixes it.
+    if can["admin"]:
+        for k in MENU_KEYS:
+            can[k] = True
+        return can
+
+    # Department nuance for the desks (see the docstring above). Applies only
+    # to the HOD role: for everybody else the tick-list is the whole answer.
+    if (getattr(user, "role", "") or "") == "HOD":
+        if _has_department(user):
+            if not _dept_matches(user, FRONT_DESK_DEPARTMENTS):
+                can["reception"] = can["hims"] = False
+            if not _dept_matches(user, MONEY_DEPARTMENTS):
+                can["cashdesk"] = False
+        # Triage is the opposite way round: an HOD does not get the bench from
+        # the tick-list at all, only from working a triage/nursing area.
+        can["triage"] = can["triage"] or _dept_matches(user, TRIAGE_DEPARTMENTS)
+        # Bookings belong to whoever answers the phone at the front, so a
+        # front-desk HOD gets them on top of whatever the tick-list says.
+        can["bookings"] = can["bookings"] or _dept_matches(user, FRONT_DESK_DEPARTMENTS)
+    return can
 
 # ------------------------------------------------------------------ enforcement
 def require_permission(key: str):
