@@ -9,7 +9,7 @@
 
 ### 1. Check Supabase is awake (2 minutes) — this is the actual cause
 
-Log in to **supabase.com** → your project (`zhhdhfllypkzvmukilwt`).
+Log in to **supabase.com** → your project (`YOURPROJECTREF`).
 
 Free Supabase projects are **paused automatically after 7 days of inactivity**. If you see
 a **"Restore project"** or **"Project paused"** button, click it and wait ~3 minutes.

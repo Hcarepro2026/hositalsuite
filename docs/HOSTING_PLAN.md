@@ -232,7 +232,7 @@ trail and the backups — that puts you ahead of most.
 #    (a Saturday morning is the quietest window a hospital has)
 
 # 2. Take a final copy of everything from Supabase
-pg_dump "postgresql://postgres.zhhdhfllypkzvmukilwt:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require" \
+pg_dump "postgresql://postgres.YOURPROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require" \
   --no-owner --no-privileges -Fc -f ghijede-final.dump
 
 # 3. Load it into the new Lagos database

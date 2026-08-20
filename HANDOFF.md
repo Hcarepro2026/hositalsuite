@@ -59,7 +59,7 @@ prescriptions, no test results, no blood group, no genotype, no allergies.
 | Health (always 200) | `/api/v1/health` |
 | Readiness (503 on trouble) | `/api/v1/ready` — now also detects **schema drift** |
 | Host | Render free tier (auto-deploys on push, ~2–3 min) |
-| Database | Supabase PostgreSQL, project ref `zhhdhfllypkzvmukilwt` |
+| Database | Supabase PostgreSQL, project ref `YOURPROJECTREF` |
 | Monitoring | UptimeRobot on `/api/v1/health` (98%+ uptime) |
 | Hospital phone | `09154967034`, alt `09154967041` |
 | Referral link format | `https://hospital-suite.onrender.com/r/E9D1042F` |

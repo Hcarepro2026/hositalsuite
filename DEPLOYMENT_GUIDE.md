@@ -40,16 +40,16 @@ Delete any `[` `]` characters and any spaces.
 | `[` or `]` | *(delete it)* |
 | space | *(delete it — no spaces anywhere in the line)* |
 
-**Example** (password `dmq@4Supabase`):
+**Example** (password `MyPassword@123`):
 
 ✅ CORRECT (one line, no spaces, no brackets):
 ```
-postgresql://postgres.zhhdhfllypkzvmukilwt:dmq%404Supabase@aws-0-XXXX.pooler.supabase.com:5432/postgres?sslmode=require
+postgresql://postgres.YOURPROJECTREF:MyPassword%40123@aws-0-XXXX.pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
 ❌ WRONG (raw @ and brackets confuse the app):
 ```
-postgresql://postgres.zhhdhfllypkzvmukilwt:[dmq@4Supabase]@aws-0-XXXX.pooler.supabase.com:5432/postgres
+postgresql://postgres.YOURPROJECTREF:[MyPassword@123]@aws-0-XXXX.pooler.supabase.com:5432/postgres
 ```
 
 5. Finish the line with `?sslmode=require` (already shown above).
