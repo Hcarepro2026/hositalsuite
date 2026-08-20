@@ -38,10 +38,27 @@
 
        Problems this rewrite fixes (all reported from real phones):
 
-       1. REPEATED WORDS. Chrome on Android fires the same final result again
-          after a pause, and some builds replay earlier finals. We now key every
-          final on its result index, so a given phrase is committed exactly once
-          no matter how many times the browser re-sends it.
+       1. REPEATED AND SCRAMBLED WORDS ON ANDROID (reported 20 Aug 2026:
+          "working perfectly on my laptop but repeating words on my phone").
+
+          THE CAUSE. Finals used to be stored in a map keyed by the browser's
+          `resultIndex`. On a LAPTOP that is safe: desktop Chrome keeps one
+          recognition session open, so the index only ever grows. On a PHONE
+          Android ends the session after ~5s of silence and we restart it —
+          and the new session's indices RESET TO ZERO. Every phrase after the
+          first pause therefore OVERWROTE an earlier one, and Android's habit
+          of replaying the previous final on resume duplicated others.
+
+          Dictating "the patient / is waiting / at the pharmacy / please
+          attend" with pauses produced "please attend is waiting" — words lost
+          AND repeated, exactly as reported. That is why the same code behaved
+          on a laptop and misbehaved on a phone.
+
+          THE FIX. Finals are appended to a plain string the moment they
+          arrive, and each session's committed text is frozen when that session
+          ends. An index from a new session can no longer reach back and
+          corrupt a phrase that is already safely written down. A replayed
+          phrase is also detected and dropped (see _isEcho).
 
        2. THE MIC STOPPED ON ITS OWN. Android ends recognition after ~5s of
           silence. The old code treated that as "user finished". Now onend
@@ -54,8 +71,90 @@
 
        4. NO FEEDBACK. The button now shows a live "listening" state and the
           interim words appear as you speak.
+
+       5. NO PUNCTUATION (reported 20 Aug 2026: "it's not applying or sensitive
+          to comma, full-stop etc").
+
+          Android's speech engine does NOT insert punctuation — it only ever
+          returns bare words, so a long complaint arrives as one unbroken run
+          of text that is hard to read and impossible to skim. Desktop Chrome
+          sometimes adds it, which is why the laptop again looked fine.
+
+          Rather than guess where sentences end (guessing would put full stops
+          in the wrong places and be worse than none), the user SAYS the mark:
+          "full stop", "comma", "question mark", "new line". Those spoken words
+          are converted to real punctuation, and the next letter is capitalised.
+          This is how professional dictation has always worked, and it means
+          the person speaking stays in control of their own sentences.
        ------------------------------------------------------------------ */
     MAX_MS: 180000,          /* 3-minute hard cap */
+
+    /* ------------------------------------------------------------------
+       SPOKEN PUNCTUATION.
+
+       Longest phrases first: "question mark" must be matched before "mark",
+       and "full stop" before "stop", or the shorter word wins and eats half
+       the phrase. Nigerian English usage is included alongside the American
+       forms ("full stop" AND "period"), because staff here say both.
+       ------------------------------------------------------------------ */
+    PUNCTUATION: [
+      [/\b(full stop|fullstop|period)\b/gi, "."],
+      [/\b(question mark|questionmark)\b/gi, "?"],
+      [/\b(exclamation mark|exclamation point)\b/gi, "!"],
+      [/\b(open bracket|open parenthesis)\b/gi, "("],
+      [/\b(close bracket|close parenthesis)\b/gi, ")"],
+      [/\b(semi colon|semicolon)\b/gi, ";"],
+      [/\bcolon\b/gi, ":"],
+      [/\bcomma\b/gi, ","],
+      [/\b(dash|hyphen)\b/gi, "-"],
+      [/\b(new line|newline|next line)\b/gi, "\n"],
+      [/\b(new paragraph|next paragraph)\b/gi, "\n\n"]
+    ],
+
+    /* Turn spoken marks into real ones, then tidy the spacing around them. */
+    _punctuate: function (text) {
+      if (!text) return "";
+      var out = text;
+      for (var i = 0; i < this.PUNCTUATION.length; i++) {
+        out = out.replace(this.PUNCTUATION[i][0], this.PUNCTUATION[i][1]);
+      }
+      /* No space BEFORE a mark, exactly one after it. */
+      out = out.replace(/\s+([,.;:!?)])/g, "$1")
+               .replace(/([(])\s+/g, "$1")
+               .replace(/([,;:])(?=[^\s])/g, "$1 ")
+               .replace(/([.!?])(?=[A-Za-z0-9])/g, "$1 ")
+               .replace(/[ \t]{2,}/g, " ")
+               .replace(/[ \t]*\n[ \t]*/g, "\n");
+      /* Capitalise the first letter, and the first letter of each sentence.
+         Someone dictating a complaint should not have to fix case by hand. */
+      out = out.replace(/(^\s*|[.!?]\s+|\n\s*)([a-z])/g, function (m, lead, ch) {
+        return lead + ch.toUpperCase();
+      });
+      /* The standalone pronoun "I". Android returns it lower-case, and "i
+         waited three hours" looks careless on a complaint a manager will read. */
+      out = out.replace(/\bi\b/g, "I");
+      return out;
+    },
+
+    /* ------------------------------------------------------------------
+       Is this final just Android replaying something we already wrote down?
+
+       On resume Android often re-sends the tail of the previous session. We
+       compare against the end of what we already hold. Deliberately exact
+       (after normalising case and spacing) rather than fuzzy: a person really
+       may say "yes yes" or "no no", and swallowing a genuine repetition would
+       be a worse bug than the one being fixed.
+       ------------------------------------------------------------------ */
+    _isEcho: function (existing, phrase) {
+      if (!existing || !phrase) return false;
+      var norm = function (s) {
+        return s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ")
+                .replace(/\s+/g, " ").trim();
+      };
+      var a = norm(existing), b = norm(phrase);
+      if (!b) return false;
+      return a === b || a.slice(-b.length) === b;
+    },
 
     start: function (btn, targetId) {
       var target = document.getElementById(targetId);
@@ -76,20 +175,56 @@
 
       var self = this;
       var base = (target.value || "").replace(/\s+$/, "");
-      var committed = {};        /* resultIndex -> transcript, so nothing repeats */
+      /* Text safely written down and beyond the reach of a session restart. */
+      var locked = "";
+      /* Finals from the CURRENT session only, keyed by this session's index.
+         Keying is still right WITHIN a session (Chrome re-sends a final it is
+         still refining), but it is frozen into `locked` the moment the session
+         ends — which is what stops Android's index reset corrupting it. */
+      var session = {};
       var wantStop = false;
       var limit = parseInt(target.getAttribute("maxlength") || "0", 10);
 
       btn._rec = rec;
       btn._stopFn = function () { wantStop = true; try { rec.stop(); } catch (e) {} };
       this._setRecording(btn, true);
+      /* Nobody guesses that you can SAY punctuation, so tell them, once, at
+         the moment it is useful. Shown next to the button rather than in a
+         manual nobody reads. */
+      this._showHint(btn);
+
+      /* Append this session's finals to `text`, dropping any that Android is
+         merely replaying from before the pause.
+         Used BOTH for live rendering and for locking, so what the user watches
+         being typed is exactly what gets kept. Doing the echo check only at
+         lock time showed the duplicate on screen first, which is precisely the
+         thing being complained about. */
+      function withSession(text) {
+        Object.keys(session).sort(function (a, b) { return a - b; })
+          .forEach(function (k) {
+            var phrase = session[k];
+            if (!phrase) return;
+            if (self._isEcho(text, phrase)) return;     /* Android replay */
+            text += (text ? " " : "") + phrase;
+          });
+        return text;
+      }
+
+      /* Fold this session's finals into the permanent text. Called on every
+         session end, so a phrase can never be overwritten by a later index. */
+      function lockSession() {
+        locked = withSession(locked);
+        session = {};
+      }
 
       function render(interim) {
-        var finals = "";
-        Object.keys(committed).sort(function (a, b) { return a - b; })
-          .forEach(function (k) { finals += committed[k] + " "; });
-        var merged = (base ? base + " " : "") + finals + (interim || "");
-        merged = merged.replace(/[ \t]+/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
+        var spoken = withSession(locked);
+        if (interim && !self._isEcho(spoken, interim)) {
+          spoken += (spoken ? " " : "") + interim;
+        }
+
+        var merged = (base ? base + " " : "") + spoken;
+        merged = self._punctuate(merged);
         if (limit > 0 && merged.length >= limit) {
           merged = merged.slice(0, limit);
           self._toast(btn, "That is the maximum length — microphone stopped.");
@@ -106,8 +241,7 @@
           var txt = (r[0] && r[0].transcript ? r[0].transcript : "").trim();
           if (!txt) continue;
           if (r.isFinal) {
-            /* keyed by index: re-sent finals overwrite, never append twice */
-            committed[i] = txt;
+            session[i] = txt;
           } else {
             interim += (interim ? " " : "") + txt;
           }
@@ -133,9 +267,16 @@
         }
       };
 
-      /* THE KEY FIX: Android ends recognition on silence. Restart unless the
-         USER asked to stop (or the safety cap fired). */
+      /* Android ends recognition on silence. Restart unless the USER asked to
+         stop (or the safety cap fired).
+
+         LOCKING BEFORE THE RESTART IS THE WHOLE FIX. The next session's result
+         indices begin again at 0, so anything still held per-index would be
+         overwritten by the next phrase. Freezing it into `locked` first puts it
+         permanently out of reach. */
       rec.onend = function () {
+        lockSession();
+        render("");
         if (wantStop) { self._cleanup(btn); return; }
         try { rec.start(); } catch (e) { self._cleanup(btn); }
       };
@@ -170,7 +311,33 @@
       if (btn._timer) { clearTimeout(btn._timer); btn._timer = null; }
       btn._rec = null;
       btn._stopFn = null;
+      this._hideHint(btn);
       this._setRecording(btn, false);
+    },
+
+    /* Tell the user they can speak their punctuation. Shown while the mic is
+       live, removed when it stops. Deliberately not a pop-up: a dialog in the
+       middle of dictation would interrupt the very thing it is explaining. */
+    _showHint: function (btn) {
+      try {
+        if (btn._hint) return;
+        var host = (btn && btn.parentNode) || document.body;
+        var h = document.createElement("div");
+        h.className = "voice-hint";
+        h.textContent = "Tip: say \u201ccomma\u201d, \u201cfull stop\u201d, \u201cquestion mark\u201d "
+                      + "or \u201cnew line\u201d and they will be typed for you.";
+        host.appendChild(h);
+        btn._hint = h;
+      } catch (e) { /* a missing tip must never stop dictation */ }
+    },
+
+    _hideHint: function (btn) {
+      try {
+        if (btn && btn._hint && btn._hint.parentNode) {
+          btn._hint.parentNode.removeChild(btn._hint);
+        }
+        if (btn) btn._hint = null;
+      } catch (e) {}
     },
 
     /* Small inline message — never a blocking alert() mid-dictation. */

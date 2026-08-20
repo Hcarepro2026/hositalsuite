@@ -179,6 +179,9 @@ textarea{min-height:96px;resize:vertical}
 /* dictation feedback: a small inline notice, never a blocking alert() */
 .voice-toast{display:block;margin-top:6px;padding:8px 11px;border-radius:9px;
   background:#fff7e6;border:1px solid #f0d9a8;color:#7a5b12;font-size:.82rem;line-height:1.35}
+/* Spoken-punctuation tip, shown only while the microphone is live. */
+.voice-hint{display:block;margin-top:6px;padding:7px 10px;border-radius:9px;
+  background:#eef6fb;border:1px solid #cfe3f0;color:#12506f;font-size:.8rem;line-height:1.35}
 /* chat mic uses the same recording state */
 .composer .mic.recording,.mic.recording{background:#c62828;border-color:#c62828;color:#fff;
   animation:pulse 1.2s infinite}
