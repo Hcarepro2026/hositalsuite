@@ -89,6 +89,11 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
 
     register_security_hooks(app)
 
+    # Scope every request to the signed-in user's hospital, at the DATABASE
+    # level. Registered AFTER the security hooks so login has already resolved.
+    from .rls import register as register_rls
+    register_rls(app)
+
     with app.app_context():
         # SQLite hardening: WAL lets the scheduler thread and web requests write
         # concurrently without "database is locked" errors; busy_timeout makes
@@ -155,6 +160,14 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
             # Load the global master dialogue library for the patient assistant.
             from .chatbot.seed_kb import seed_global_kb
             _boot_step("seed_kb", lambda: seed_global_kb(app))
+
+            # Row-Level Security: make the DATABASE refuse to leak between
+            # hospitals, so a future forgotten org_id filter returns nothing
+            # instead of somebody else's patients. No-op on SQLite.
+            def _enable_rls():
+                from .rls import enable
+                enable(app)
+            _boot_step("row_level_security", _enable_rls)
 
             # Role Management: every hospital gets the built-in roles that
             # reproduce the old hard-coded behaviour exactly. Idempotent, and

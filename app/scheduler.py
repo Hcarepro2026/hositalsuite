@@ -309,6 +309,12 @@ JOB_SEQUENCE = (job_duty_reminders, job_overdue_inspection, job_complaint_sla,
 def tick(app):
     """Run one full automation pass (used by the scheduler thread and by tests/CLI)."""
     with app.app_context():
+        # Row-Level Security scopes ordinary requests to one hospital. The
+        # automation genuinely works across all of them (SLA escalation,
+        # reminders, retries), so it declares that intent explicitly rather
+        # than relying on an unset variable — which would see nothing.
+        from .rls import all_orgs
+        all_orgs()
         try:
             for job in JOB_SEQUENCE:
                 try:

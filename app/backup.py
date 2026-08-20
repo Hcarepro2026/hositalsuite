@@ -75,6 +75,11 @@ def create_backup(app, *, kind: str = "auto") -> tuple[str, int]:
         "tables": {},
     }
 
+    # A backup is deliberately hospital-wide; say so, because RLS would
+    # otherwise hand back an empty archive that LOOKS like a success.
+    from .rls import all_orgs
+    all_orgs()
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for table in _tables():
