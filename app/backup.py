@@ -110,7 +110,7 @@ def create_backup(app, *, kind: str = "auto") -> tuple[str, int]:
     return key, len(data)
 
 
-def prune_backups(keep: int = 14) -> int:
+def prune_backups(keep: int = 7) -> int:
     """Delete all but the newest `keep` archives."""
     from .models import StoredFile
     rows = (db.session.query(StoredFile)

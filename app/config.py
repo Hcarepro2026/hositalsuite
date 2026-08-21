@@ -68,7 +68,7 @@ class Config:
     UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
     REPORT_DIR = os.path.join(DATA_DIR, "reports")
     BACKUP_DIR = os.environ.get("BACKUP_DIR") or os.path.join(DATA_DIR, "backups")
-    BACKUP_KEEP = int(os.environ.get("BACKUP_KEEP", "14"))
+    BACKUP_KEEP = int(os.environ.get("BACKUP_KEEP", "7"))
     MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB evidence photos/files
 
     PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8077")

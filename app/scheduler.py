@@ -335,17 +335,55 @@ def _loop(app, interval: int):
     the sleep is outside the try and the whole body is defensive. If the process
     is out of memory or the DB is unreachable we back off and keep trying rather
     than dying silently and leaving SLAs un-escalated.
+
+    FIX 2026-08-21: last_backup_day lived in memory. Render restarts constantly,
+    so memory resets and backup ran 4x/day (twice 9 seconds apart), blowing the
+    Supabase quota. Now stored in Setting table so it survives restarts.
     """
-    last_backup_day = None
     consecutive_failures = 0
     while True:
         try:
             tick(app)
             today = now_naive().date()
-            if last_backup_day != today and now_naive().hour >= 2:
+            # Check if backup already done today (from DB, not memory)
+            need_backup = False
+            try:
+                with app.app_context():
+                    from .models import Organization, Setting
+                    from .rls import all_orgs
+
+                    all_orgs()
+                    # If no org yet (first boot), skip backup check
+                    orgs = db.session.query(Organization).all()
+                    if orgs:
+                        # Check first org's last backup date — backup is global
+                        last = Setting.get(orgs[0].id, "last_backup_day")
+                        if last != today.isoformat() and now_naive().hour >= 2:
+                            need_backup = True
+                    db.session.commit()
+            except Exception:
+                # If we can't read settings, err on side of not backing up
+                # repeatedly — next tick will try again
+                need_backup = False
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+            if need_backup:
                 with app.app_context():
                     job_nightly_backup(app)
-                last_backup_day = today
+                    # Mark as done in Setting table for ALL orgs (survives restarts)
+                    try:
+                        from .models import Organization, Setting
+                        from .rls import all_orgs
+
+                        all_orgs()
+                        for org in db.session.query(Organization).all():
+                            Setting.set(org.id, "last_backup_day", today.isoformat())
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
             consecutive_failures = 0
         except BaseException as exc:                  # noqa: BLE001 - stay alive
             consecutive_failures += 1
