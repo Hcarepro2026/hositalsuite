@@ -68,6 +68,10 @@ COLUMNS = [
     ("patient", "preferred_lang", "VARCHAR(4)"),
     ("patient", "assistance", "VARCHAR(200)"),
     ("patient", "care_note", "VARCHAR(200)"),
+    # --- Unified queue: link QR ticket to real patient journey (2026-08-21)
+    ("queue_ticket", "patient_id", "INTEGER"),
+    ("queue_ticket", "patient_visit_id", "INTEGER"),
+    ("queue_ticket", "intake_id", "INTEGER"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

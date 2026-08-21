@@ -30,6 +30,18 @@ from datetime import datetime
 from . import announce
 from .models import (ONWARD_CODES, ONWARD_LABELS, Patient, PatientVisit,
                      VisitOnward, db, now_naive)
+from .servicepoints import active_destinations, destinations_for_clinic, ensure_defaults as sp_ensure
+
+
+def _valid_dest_codes(org_id: int) -> set[str]:
+    """Destination codes from DB if present, else fallback to constants."""
+    try:
+        dests = active_destinations(org_id)
+        if dests:
+            return {d.code.upper() for d in dests}
+    except Exception:
+        pass
+    return set(ONWARD_CODES)
 
 
 # ------------------------------------------------------------------ the queue
@@ -172,7 +184,15 @@ def finish(visit: PatientVisit, doctor_id: int, destinations: list[str],
     if visit.status not in ("IN_CONSULTATION", "TRIAGED"):
         return "That consultation has already been finished.", []
 
-    picked = [d for d in dict.fromkeys(destinations or []) if d in ONWARD_CODES]
+    valid_codes = _valid_dest_codes(visit.org_id)
+    raw = [str(d).strip().upper() for d in (destinations or []) if str(d).strip()]
+    # dedupe preserve order, keep only valid codes
+    picked = []
+    seen = set()
+    for code in raw:
+        if code not in seen and code in valid_codes:
+            seen.add(code)
+            picked.append(code)
     now = now_naive()
     steps: list[VisitOnward] = []
     for dest in picked:

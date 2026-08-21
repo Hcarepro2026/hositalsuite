@@ -541,12 +541,38 @@ class QueueTicket(db.Model):
     status = db.Column(db.String(12), default="WAITING", nullable=False, index=True)
     source = db.Column(db.String(12), default="link")   # qr | link | booking | ussd
     appointment_id = db.Column(db.Integer, db.ForeignKey("appointment.id"))
+    # --- Unified flow: link to real patient journey (added 2026-08-21)
+    # A QR ticket may become a ReceptionIntake, then a Patient + PatientVisit.
+    # Keeping these links lets the patient see one journey, not two disconnected tickets.
+    # use_alter=True because PatientVisit already FKs to QueueTicket (queue_ticket_id)
+    # creating a cycle that SQLite cannot sort for DROP without it.
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), index=True)
+    patient_visit_id = db.Column(
+        db.Integer, db.ForeignKey("patient_visit.id", use_alter=True, name="fk_qt_visit"), index=True
+    )
+    intake_id = db.Column(
+        db.Integer, db.ForeignKey("reception_intake.id", use_alter=True, name="fk_qt_intake"), index=True
+    )
     anonymized_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=now_naive)
     called_at = db.Column(db.DateTime)
     served_at = db.Column(db.DateTime)
     department = db.relationship("Department")
     appointment = db.relationship("Appointment")
+    patient = db.relationship("Patient", foreign_keys=[patient_id])
+    patient_visit = db.relationship("PatientVisit", foreign_keys=[patient_visit_id])
+    intake = db.relationship("ReceptionIntake", foreign_keys=[intake_id])
+
+    @property
+    def linked_journey(self) -> str | None:
+        """Where this ticket sits in the hospital journey, if linked."""
+        if self.patient_visit_id:
+            return f"visit:{self.patient_visit_id}"
+        if self.intake_id:
+            return f"intake:{self.intake_id}"
+        if self.patient_id:
+            return f"patient:{self.patient_id}"
+        return None
 
 
 # ---------------------------------------------------------------- referrals (§14)
@@ -1120,7 +1146,9 @@ class PatientVisit(db.Model):
     payer_type = db.Column(db.String(16))         # how THIS visit is being paid for
     department_id = db.Column(db.Integer, db.ForeignKey("department.id"), index=True)
     appointment_id = db.Column(db.Integer, db.ForeignKey("appointment.id"))
-    queue_ticket_id = db.Column(db.Integer, db.ForeignKey("queue_ticket.id"))
+    queue_ticket_id = db.Column(
+        db.Integer, db.ForeignKey("queue_ticket.id", use_alter=True, name="fk_visit_ticket"), index=True
+    )
 
     # filled in by later stages — deliberately created now, used later
     clinic = db.Column(db.String(20))             # OPD | SOPD | MOPD | EMERGENCY
@@ -1299,6 +1327,134 @@ CLINIC_LABELS = dict(CLINICS)
 CLINIC_CODES = tuple(c for c, _ in CLINICS)
 
 CONSULTING_ROOMS = ("Room 1", "Room 2", "Room 3", "Room 4", "Emergency Room")
+
+
+class ServiceClinic(db.Model):
+    """A clinic where Triage can place a patient and where doctors consult.
+
+    WHY ROWS NOT TUPLES
+    -------------------
+    Clinics were hard-coded Python tuples. Adding \"Dental Clinic\" needed a
+    developer and a deploy — the same trap Role Management was built to escape.
+    They are now rows, seeded from the original tuples so nothing that worked
+    yesterday changes, but Admin can add/edit/suspend/delete more.
+
+    UPGRADE 2026-08-21: Dental, ANC, O&G, Ophthalmology/Eye, Pediatrics, etc.
+    """
+    __tablename__ = "service_clinic"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(20), nullable=False)  # OPD, DENTAL, ANC, O&G, EYE
+    name = db.Column(db.String(120), nullable=False)  # Dental Clinic
+    description = db.Column(db.String(300))
+    active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=now_naive)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+
+    # Shortlist: which destinations this clinic's doctors may send patients to.
+    # Empty shortlist = show everything (empty must never mean nothing, or doctors
+    # get empty dropdown and cannot move patients).
+    # FIX for reviewer edge: if shortlist non-empty but all items suspended,
+    # show warning not everything.
+    destinations = db.relationship(
+        "ClinicDestination",
+        backref="clinic",
+        cascade="all, delete-orphan",
+        order_by="ClinicDestination.destination_id",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "code", name="uq_clinic_org_code"),
+        db.Index("ix_clinic_org_active", "org_id", "active"),
+    )
+
+    @property
+    def label(self) -> str:
+        return f"{self.code} — {self.name}" if self.code != self.name else self.name
+
+
+class ConsultingRoom(db.Model):
+    """A physical consulting room where a doctor sits.
+
+    UPGRADE 2026-08-21: Up to 8 rooms, admin editable (add/edit/delete/suspend).
+    Previously hard-coded 5 rooms. Now rows, seeded so existing sessions still work.
+    """
+    __tablename__ = "consulting_room"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(20), nullable=False)  # ROOM1, ROOM8, ER
+    name = db.Column(db.String(120), nullable=False)  # Room 1, Room 8, Emergency Room
+    clinic_id = db.Column(db.Integer, db.ForeignKey("service_clinic.id"), index=True)
+    active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=now_naive)
+
+    clinic = db.relationship("ServiceClinic", backref="rooms")
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "code", name="uq_room_org_code"),
+        db.Index("ix_room_org_active", "org_id", "active"),
+    )
+
+    @property
+    def label(self) -> str:
+        return self.name
+
+
+class ServiceDestination(db.Model):
+    """Where a doctor can send a patient after consultation.
+
+    UPGRADE 2026-08-21: Previously 6 hard-coded destinations. Now admin editable,
+    with many more: HIMS, MOPD, SOPD, OPD, O&G, MSSD/Welfare, Pediatrics,
+    Physiotherapy, Radiology/Imaging, Dental, Nutrition & Dietetics,
+    Ophthalmology, Maternity, Casualty, Dressing Room, Theater, Male Ward,
+    Female Ward, etc.
+
+    Suspend ≠ delete. Used destinations cannot be deleted, only suspended.
+    """
+    __tablename__ = "service_destination"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(30), nullable=False)  # LAB, PHARMACY, DENTAL, MSSD, etc
+    name = db.Column(db.String(120), nullable=False)  # Laboratory, Dental Clinic
+    place = db.Column(db.String(120))  # where physically: the Laboratory
+    description = db.Column(db.String(300))
+    active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=now_naive)
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "code", name="uq_dest_org_code"),
+        db.Index("ix_dest_org_active", "org_id", "active"),
+    )
+
+    @property
+    def label(self) -> str:
+        return f"{self.name} — {self.description}" if self.description else self.name
+
+
+class ClinicDestination(db.Model):
+    """Shortlist: which destinations a clinic's doctors are offered.
+
+    Empty shortlist for a clinic = show everything (not configured yet).
+    Non-empty shortlist where all items suspended = show warning, not everything.
+    """
+    __tablename__ = "clinic_destination"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey("service_clinic.id"), nullable=False, index=True)
+    destination_id = db.Column(
+        db.Integer, db.ForeignKey("service_destination.id"), nullable=False, index=True
+    )
+    created_at = db.Column(db.DateTime, default=now_naive)
+
+    destination = db.relationship("ServiceDestination")
+
+    __table_args__ = (
+        db.UniqueConstraint("clinic_id", "destination_id", name="uq_clinic_dest"),
+        db.Index("ix_clinic_dest_org", "org_id", "clinic_id"),
+    )
 
 
 class DoctorSession(db.Model):

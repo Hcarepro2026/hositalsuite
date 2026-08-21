@@ -10,6 +10,33 @@ from ..audit import audit
 from ..models import (CATEGORY_LABELS, CLINIC_LABELS, CLINICS,
                       CONSULTING_ROOMS, DoctorSession, Patient, PatientVisit,
                       User, db, now_naive)
+from ..servicepoints import (
+    active_clinics as _sp_active_clinics,
+    active_rooms as _sp_active_rooms,
+    ensure_defaults as _sp_ensure,
+)
+
+
+def _clinics_for_template(org_id: int):
+    """DB clinics if seeded, else fallback to hard-coded tuple. Returns list of (code,label)."""
+    try:
+        _sp_ensure(org_id)
+        clinics = _sp_active_clinics(org_id)
+        if clinics:
+            return [(c.code, c.name) for c in clinics], {c.code: c.name for c in clinics}
+    except Exception:
+        pass
+    return list(CLINICS), dict(CLINIC_LABELS)
+
+
+def _rooms_for_template(org_id: int):
+    try:
+        rooms = _sp_active_rooms(org_id)
+        if rooms:
+            return [r.name for r in rooms], [r.code for r in rooms]
+    except Exception:
+        pass
+    return list(CONSULTING_ROOMS), list(CONSULTING_ROOMS)
 from ..security import require_role
 
 bp = Blueprint("triage", __name__, url_prefix="/triage")
@@ -32,6 +59,7 @@ def _visit(vid: int) -> PatientVisit:
 @require_role(*VIEWERS)
 def bench():
     org_id = current_user.org_id
+    clinics_tuple, clinic_labels = _clinics_for_template(org_id)
     queue = triage.waiting(org_id)
     patients = {p.id: p for p in db.session.query(Patient)
                 .filter(Patient.id.in_([v.patient_id for v in queue] or [0])).all()}
@@ -42,13 +70,6 @@ def bench():
         p = patients.get(v.patient_id)
         clinic = triage.suggest_clinic_with_cover(org_id, p) if p else "OPD"
         # PRE-SELECT the free doctor with the shortest queue.
-        #
-        # The dropdown used to default to "— wait for a doctor —" even when
-        # somebody was ready and idle. Busy triage staff took the default, so
-        # patients were placed with no doctor and (before the queue fix) landed
-        # in nobody's room. Defaulting to a real doctor makes the safe thing
-        # the easy thing; "wait for a doctor" is still there for when nobody
-        # is free, but it now has to be chosen deliberately.
         suggested = triage.suggest_doctor(org_id, clinic)
         rows.append({
             "visit": v,
@@ -59,7 +80,7 @@ def bench():
         })
     return render_template(
         "triage/bench.html", rows=rows, sessions=sessions, load=load,
-        clinics=CLINICS, clinic_labels=CLINIC_LABELS,
+        clinics=clinics_tuple, clinic_labels=clinic_labels,
         category_labels=CATEGORY_LABELS, stats=triage.stats(org_id),
         placed=triage.placed_today(org_id), long_wait=triage.LONG_WAIT_MINUTES)
 
@@ -128,6 +149,8 @@ def consulting_room():
 @require_role(*VIEWERS)
 def consulting_room_legacy():
     org_id = current_user.org_id
+    clinics_tuple, clinic_labels = _clinics_for_template(org_id)
+    rooms_list, _ = _rooms_for_template(org_id)
     mine = (db.session.query(DoctorSession)
             .filter_by(org_id=org_id, doctor_id=current_user.id,
                        duty_date=now_naive().date(), ended_at=None).first())
@@ -141,9 +164,9 @@ def consulting_room_legacy():
     patients = {p.id: p for p in db.session.query(Patient)
                 .filter(Patient.id.in_([v.patient_id for v in queue] or [0])).all()}
     return render_template("triage/consulting_room.html", session=mine,
-                           clinics=CLINICS, rooms=CONSULTING_ROOMS,
+                           clinics=clinics_tuple, rooms=rooms_list,
                            queue=queue, patients=patients,
-                           clinic_labels=CLINIC_LABELS,
+                           clinic_labels=clinic_labels,
                            available=triage.is_available(org_id, current_user.id))
 
 

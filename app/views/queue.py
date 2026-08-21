@@ -247,6 +247,72 @@ def finish(tid: int):
     return redirect(url_for("queue.staff_queue", dept=t.department_id))
 
 
+@bp.post("/queue/<int:tid>/to-reception")
+@require_login
+def to_reception(tid: int):
+    """Convert a QR queue ticket into a Reception intake — unifies the two queues.
+
+    WHY THIS EXISTS (founder question #3)
+    -------------------------------------
+    QueueTicket (patient self-joins via /queue/join QR) and PatientVisit
+    (Reception → HIMS → Triage → Doctor → Onward) were two separate worlds.
+    A patient could have a ticket AND a visit, staff had two lists, and the
+    patient screen showed only half the journey.
+
+    Best approach: keep both entry points (QR is valuable), but link them.
+    When staff tap \"Send to Reception\", we create a ReceptionIntake from the
+    ticket, link them, and voice-announce so Reception knows someone is coming.
+    The ticket is marked DONE, the journey continues as one.
+    """
+    from .. import announce, reception as reception_engine
+    from ..models import ReceptionIntake
+
+    t = db.session.get(QueueTicket, tid)
+    if not t or t.org_id != current_user.org_id:
+        abort(404)
+    if t.status != "WAITING" and t.status != "CALLED":
+        flash("That ticket is no longer waiting.", "error")
+        return redirect(url_for("queue.staff_queue", dept=t.department_id))
+
+    # Split name into surname/first for intake (best effort)
+    parts = (t.patient_name or "").strip().split()
+    surname = parts[-1] if parts else "—"
+    first = " ".join(parts[:-1]) if len(parts) > 1 else (parts[0] if parts else "Patient")
+
+    # Create intake
+    intake = ReceptionIntake(
+        org_id=t.org_id,
+        ref=reception_engine.next_ref(t.org_id),
+        surname=surname[:80],
+        first_name=first[:80],
+        phone=t.phone,
+        stage="RECEPTION",
+        created_by=current_user.id,
+    )
+    db.session.add(intake)
+    db.session.flush()
+
+    # Link ticket → intake → journey
+    t.intake_id = intake.id
+    t.status = "DONE"
+    t.served_at = now_naive()
+
+    # Tracking + voice
+    try:
+        from .. import tracking
+
+        tracking.safely(tracking.enter, t.org_id, "RECEPTION", intake_id=intake.id, staff_id=current_user.id)
+        spoken = announce.speech_name(t.patient_name or "patient")
+        announce.to_station(t.org_id, "reception_arrival", patient=spoken, detail=f"from queue {t.code}")
+    except Exception:
+        pass
+
+    audit("QUEUE_TO_RECEPTION", "queue_ticket", t.id, {"code": t.code, "intake_ref": intake.ref})
+    db.session.commit()
+    flash(f"{t.patient_name or 'Patient'} ({t.code}) sent to Reception as {intake.ref}.", "success")
+    return redirect(url_for("queue.staff_queue", dept=t.department_id))
+
+
 @bp.post("/bookings/<int:aid>/checkin-queue")
 @require_login
 def booking_checkin_queue(aid: int):

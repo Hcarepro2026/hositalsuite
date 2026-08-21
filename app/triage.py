@@ -34,8 +34,45 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from . import announce, rosterdata
-from .models import (CLINIC_CODES, CLINIC_LABELS, CONSULTING_ROOMS,
-                     DoctorSession, Patient, PatientVisit, User, db, now_naive)
+from .models import (
+    CLINIC_CODES,
+    CLINIC_LABELS,
+    CONSULTING_ROOMS,
+    DoctorSession,
+    Patient,
+    PatientVisit,
+    User,
+    db,
+    now_naive,
+)
+from .servicepoints import ensure_defaults as sp_ensure, active_clinics, active_rooms
+
+
+def _valid_clinic_codes(org_id: int) -> set[str]:
+    """Clinic codes from DB if present, else fallback to hard-coded constants."""
+    try:
+        clinics = active_clinics(org_id)
+        if clinics:
+            return {c.code.upper() for c in clinics}
+    except Exception:
+        pass
+    return set(CLINIC_CODES)
+
+
+def _valid_room_names(org_id: int) -> set[str]:
+    try:
+        rooms = active_rooms(org_id)
+        if rooms:
+            # Allow both code and name to match, case-insensitive
+            s = set()
+            for r in rooms:
+                s.add(r.code.upper())
+                s.add(r.name.upper())
+                s.add(r.name.strip().upper())
+            return s
+    except Exception:
+        pass
+    return {r.upper() for r in CONSULTING_ROOMS}
 
 # How long a patient may sit unplaced before the desk is told out loud.
 LONG_WAIT_MINUTES = 30
@@ -132,10 +169,27 @@ def open_session(org_id: int, doctor: User, clinic: str, room: str,
                  day: date | None = None) -> tuple[DoctorSession | None, str]:
     """A doctor clicks 'ready to consult'. Returns (session, error message)."""
     day = day or now_naive().date()
-    if clinic not in CLINIC_CODES:
+    # Ensure defaults seeded so new clinics/rooms exist
+    try:
+        sp_ensure(org_id)
+    except Exception:
+        pass
+
+    clinic_upper = (clinic or "").strip().upper()
+    room_upper = (room or "").strip().upper()
+
+    valid_clinics = _valid_clinic_codes(org_id)
+    if clinic_upper not in valid_clinics:
         return None, "Please choose a valid clinic."
-    if room not in CONSULTING_ROOMS:
-        return None, "Please choose a valid consulting room."
+
+    valid_rooms = _valid_room_names(org_id)
+    if room_upper not in valid_rooms and room_upper not in {r.upper() for r in CONSULTING_ROOMS}:
+        # Allow any room code that exists in DB, or fallback to old list
+        # If not in either, still check if room name matches DB case-insensitively
+        # To be safe, allow any non-empty room if DB has no rooms (first boot)
+        if valid_rooms and room_upper not in valid_rooms:
+            return None, "Please choose a valid consulting room."
+
     if doctor.id not in _rostered_user_ids(org_id, day):
         return None, (f"{doctor.name} is not on the roster for today, so Triage "
                       f"cannot send patients to them. Add them to today's roster first.")
@@ -241,7 +295,9 @@ def place(visit: PatientVisit, *, clinic: str, session: DoctorSession | None,
     clinic with no doctor yet — that is honest ("waiting for a doctor in MOPD")
     and better than refusing to move them out of the reception backlog.
     """
-    if clinic not in CLINIC_CODES:
+    clinic_upper = (clinic or "").strip().upper()
+    valid_clinics = _valid_clinic_codes(visit.org_id)
+    if clinic_upper not in valid_clinics:
         return "Please choose a valid clinic."
     if visit.status != "REGISTERED":
         return "That patient has already been placed."

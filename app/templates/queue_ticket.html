@@ -19,7 +19,9 @@
   {% elif t.status == 'CALLED' %}
     <div class="flash success" style="font-size:1.2rem">📢 It's your turn! Please proceed to {{ t.department.name }}.</div>
   {% elif t.status == 'DONE' %}
-    <div class="flash info">You have been served. Thank you!</div>
+    <div class="flash info">You have been served. Thank you!
+      {% if t.intake_id %}<br><span class="muted">Sent to Reception as {{ t.intake.ref if t.intake else '' }} — staff will call you.</span>{% endif %}
+    </div>
   {% else %}
     <div class="flash error">This ticket is {{ t.status }}.</div>
   {% endif %}

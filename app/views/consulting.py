@@ -11,6 +11,51 @@ from ..models import (CLINIC_LABELS, CLINICS, CONSULTING_ROOMS,
                       ONWARD_DESTINATIONS, ONWARD_LABELS, DoctorSession,
                       Patient, PatientVisit, VisitOnward, db, now_naive)
 from ..security import require_role
+from ..servicepoints import (
+    active_clinics as _sp_active_clinics,
+    active_rooms as _sp_active_rooms,
+    active_destinations as _sp_active_dests,
+    destinations_for_clinic as _sp_dests_for_clinic,
+    ensure_defaults as _sp_ensure,
+)
+
+
+def _clinics_for_template(org_id: int):
+    try:
+        _sp_ensure(org_id)
+        clinics = _sp_active_clinics(org_id)
+        if clinics:
+            return [(c.code, c.name) for c in clinics], {c.code: c.name for c in clinics}
+    except Exception:
+        pass
+    return list(CLINICS), dict(CLINIC_LABELS)
+
+
+def _rooms_for_template(org_id: int):
+    try:
+        rooms = _sp_active_rooms(org_id)
+        if rooms:
+            return [r.name for r in rooms]
+    except Exception:
+        pass
+    return list(CONSULTING_ROOMS)
+
+
+def _destinations_for_template(org_id: int, clinic_code: str | None = None):
+    """Clinic determines what will load — founder requirement."""
+    try:
+        if clinic_code:
+            dests, is_shortlisted, all_suspended = _sp_dests_for_clinic(org_id, clinic_code)
+            if all_suspended:
+                return [], True, True
+            if dests:
+                return [(d.code, d.name) for d in dests], is_shortlisted, False
+        all_d = _sp_active_dests(org_id)
+        if all_d:
+            return [(d.code, d.name) for d in all_d], False, False
+    except Exception:
+        pass
+    return list(ONWARD_DESTINATIONS), False, False
 
 bp = Blueprint("consulting", __name__)
 
@@ -48,19 +93,26 @@ def room():
     session = (db.session.query(DoctorSession)
                .filter_by(org_id=org_id, doctor_id=current_user.id,
                           duty_date=day, ended_at=None).first())
+    clinics_tuple, clinic_labels = _clinics_for_template(org_id)
+    rooms_list = _rooms_for_template(org_id)
+
+    # Clinic where doctor is consulting determines what destinations load
+    clinic_code = session.clinic if session else None
+    destinations, is_shortlisted, all_suspended = _destinations_for_template(org_id, clinic_code)
+
     queue = consulting.doctor_queue(org_id, current_user.id)
     patients = {p.id: p for p in db.session.query(Patient)
                 .filter(Patient.id.in_([v.patient_id for v in queue] or [0])).all()}
     rows = [{"visit": v, "patient": patients.get(v.patient_id),
              "waited": consulting.wait_minutes(v),
-             # Unassigned patients waiting in this doctor's clinic — anyone
-             # free may take them. Marked so the doctor knows the difference.
              "unclaimed": v.doctor_id is None} for v in queue]
     return render_template(
         "consulting/room.html", session=session, rows=rows,
         current=consulting.in_consultation(org_id, current_user.id),
-        patients=patients, clinics=CLINICS, rooms=CONSULTING_ROOMS,
-        clinic_labels=CLINIC_LABELS, destinations=ONWARD_DESTINATIONS,
+        patients=patients, clinics=clinics_tuple, rooms=rooms_list,
+        clinic_labels=clinic_labels, destinations=destinations,
+        is_shortlisted=is_shortlisted, all_suspended=all_suspended,
+        doctor_clinic=clinic_code,
         available=triage.is_available(org_id, current_user.id))
 
 
@@ -130,8 +182,19 @@ def onward_board():
     """Every desk in one board: who has been sent to you, and how long ago."""
     org_id = current_user.org_id
     counts = consulting.pending_counts(org_id)
+    # Use DB destinations if present
+    try:
+        _sp_ensure(org_id)
+        db_dests = _sp_active_dests(org_id)
+        if db_dests:
+            dest_list = [(d.code, d.name) for d in db_dests]
+        else:
+            dest_list = list(ONWARD_DESTINATIONS)
+    except Exception:
+        dest_list = list(ONWARD_DESTINATIONS)
+
     boards = []
-    for code, label in ONWARD_DESTINATIONS:
+    for code, label in dest_list:
         steps = consulting.pending_for(org_id, code)
         visits = {v.id: v for v in db.session.query(PatientVisit)
                   .filter(PatientVisit.id.in_([s.visit_id for s in steps] or [0])).all()}

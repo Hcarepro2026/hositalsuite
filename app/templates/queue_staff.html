@@ -39,10 +39,16 @@
       </div>
       <div>{{ t.patient_name }}{% if t.phone %} · {{ t.phone }}{% endif %}</div>
       <div class="muted">{{ t.department.name }}{% if t.source=='booking' %} · from booking{% endif %}</div>
-      <form method="post" action="/queue/{{ t.id }}/call-next" class="mt">
-        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <button class="btn small">📢 Call this patient</button>
-      </form>
+      <div class="row mt" style="gap:6px;flex-wrap:wrap">
+        <form method="post" action="/queue/{{ t.id }}/call-next" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small">📢 Call</button>
+        </form>
+        <form method="post" action="/queue/{{ t.id }}/to-reception" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small secondary" title="Convert this QR ticket into a Reception intake — one journey, not two">➡ To Reception</button>
+        </form>
+      </div>
     </div>
     {% else %}<p class="muted">Nobody waiting.</p>{% endfor %}
   </div>

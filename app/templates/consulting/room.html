@@ -55,16 +55,23 @@
   <form method="post" action="/consulting-room/{{ current.id }}/finish" class="mt">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <h3 style="margin-bottom:4px">Where does this patient go next?</h3>
-    <p class="hint" style="margin-top:0">Tick as many as apply — one, two or three.
-      Tick nothing if they are finished and can go home.</p>
-    <div class="grid cols2">
-      {% for code, label in destinations %}
-      <label style="font-weight:400;margin:3px 0">
-        <input type="checkbox" name="destination" value="{{ code }}" style="width:auto">
-        {{ label }}
-      </label>
-      {% endfor %}
-    </div>
+    {% if doctor_clinic %}<p class="hint" style="margin:0 0 4px">You are in <b>{{ clinic_labels.get(doctor_clinic, doctor_clinic) }}</b> — showing {{ 'only relevant' if is_shortlisted else 'all' }} destinations.</p>{% endif %}
+    {% if all_suspended %}
+      <div class="notice" style="border-left:4px solid #b91c1c;text-align:left">
+        <b>⚠ All destinations for this clinic are suspended.</b> Tell Admin to activate some in Clinics, Rooms &amp; Destinations. No patient can be sent onward until that is fixed.
+      </div>
+    {% else %}
+      <p class="hint" style="margin-top:0">Tick as many as apply — one, two or three.
+        Tick nothing if they are finished and can go home.</p>
+      <div class="grid cols2">
+        {% for code, label in destinations %}
+        <label style="font-weight:400;margin:3px 0">
+          <input type="checkbox" name="destination" value="{{ code }}" style="width:auto">
+          {{ label }}
+        </label>
+        {% endfor %}
+      </div>
+    {% endif %}
     <label class="mt">A word for the next desk (optional)</label>
     <input type="text" name="note" maxlength="200" id="onward_note"
            placeholder="e.g. bring the card back to me afterwards">
