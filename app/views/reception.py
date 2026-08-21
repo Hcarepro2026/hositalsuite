@@ -46,14 +46,44 @@ def _form_context(**extra):
 @require_role(*VIEWERS)
 @require_permission("reception")
 def desk():
-    """Who is waiting, and where they are in the walk."""
+    """Who is waiting, and where they are in the walk.
+
+    OVERHAUL 2026-08-21: Reception now shows ONLY RECEPTION stage as primary
+    actionable queue. Previously it showed all stages (RECEPTION,BILLING,PAYMENT,PAID)
+    in one long list, which hid the fact that Billing/Paypoint/HIMS are separate
+    desks with their own screens. Staff sent to billing and then thought patient
+    vanished because they looked at Reception only. Now:
+
+    * Reception desk: only RECEPTION stage (new arrivals) — clear ownership
+    * Billing desk: BILLING stage
+    * Paypoint: PAYMENT stage
+    * HIMS desk: PAID stage (most appropriate to open folder)
+
+    Counts still shown for awareness, with links to each desk.
+    """
     org_id = current_user.org_id
+    # Primary queue: only at Reception
+    at_reception = reception.waiting(org_id, stages=("RECEPTION",))
+    # For counts and awareness, get all
+    all_waiting = reception.waiting(org_id)
+    counts = reception.counts_by_stage(org_id)
+    # Also fetch queues for other desks for inline summary (optional)
+    billing_q = [i for i in all_waiting if i.stage == "BILLING"]
+    payment_q = [i for i in all_waiting if i.stage == "PAYMENT"]
+    paid_q = [i for i in all_waiting if i.stage == "PAID"]
+
     return render_template(
         "reception/desk.html",
-        waiting=reception.waiting(org_id),
-        counts=reception.counts_by_stage(org_id),
+        waiting=at_reception,
+        all_waiting=all_waiting,
+        billing_q=billing_q,
+        payment_q=payment_q,
+        paid_q=paid_q,
+        counts=counts,
         registered_today=reception.today_registered(org_id),
-        stages=INTAKE_STAGES, payer_labels=PAYER_LABELS)
+        stages=INTAKE_STAGES,
+        payer_labels=PAYER_LABELS,
+    )
 
 
 # ================================================================ new patient

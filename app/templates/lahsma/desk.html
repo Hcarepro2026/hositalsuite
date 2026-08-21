@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}LAHSMA Desk{% endblock %}
+{% block content %}
+<h1>🏥 LAHSMA Desk</h1>
+<p class="muted">Patients sent by doctors for insurance clearance. See patient + policy number, issue clearance. No serious claims work — LAHSMA has their own web app. This is just flow tracking, like Billing issuing a bill.</p>
+
+<div class="card pad-lg mb" style="text-align:center">
+  <div style="font-size:2rem;font-weight:800">{{ count }}</div>
+  <div class="muted" style="font-size:.85rem">waiting for clearance</div>
+</div>
+
+{% if not rows %}
+  <div class="card pad-lg"><p class="muted" style="margin:0">Nobody is waiting at LAHSMA. When a doctor sends a patient here from the consulting room, they will appear here.</p></div>
+{% else %}
+  {% for r in rows %}
+  <div class="card pad-lg mb">
+    <div class="spread">
+      <div>
+        <div style="font-size:1.1rem;font-weight:800">
+          {{ r.patient.full_name if r.patient else 'Patient #' ~ r.visit.patient_id }}
+        </div>
+        <div class="muted" style="font-size:.85rem">
+          {{ r.patient.hospital_number if r.patient else '' }}
+          {% if r.patient and r.patient.payer_type %} · {{ r.patient.payer_type }}{% endif %}
+          {% if r.patient and r.patient.payer_number %} · <b>{{ r.patient.payer_number }}</b>{% endif %}
+          {% if r.patient and r.patient.payer_name %} · {{ r.patient.payer_name }}{% endif %}
+        </div>
+        <div class="muted" style="font-size:.85rem">
+          Visit {{ r.visit.visit_no if r.visit else r.step.visit_id }} · sent {{ r.waited }}m ago
+          {% if r.step.note %} · {{ r.step.note }}{% endif %}
+        </div>
+      </div>
+      <span class="pill {{ 'red' if r.waited >= 20 else 'amber' }}">{{ r.waited }}m</span>
+    </div>
+
+    {% if r.patient and r.patient.care_flags %}
+    <div class="notice mt" style="text-align:left">
+      <b>⚠ Needs help:</b> {{ r.patient.care_flags | join(' · ') }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/lahsma/{{ r.step.id }}/clear" class="mt">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button class="btn">✅ Clearance issued — patient can go</button>
+    </form>
+  </div>
+  {% endfor %}
+{% endif %}
+
+<div class="card pad-lg mt">
+  <h3 style="margin-top:0">How this desk works</h3>
+  <p class="muted" style="margin-bottom:0">
+    1. Doctor finishes consultation and ticks <b>LAHSMA</b> as destination.<br>
+    2. Patient appears here with name + policy number.<br>
+    3. You check their card on LAHSMA web app (separate system), then press <b>Clearance issued</b>.<br>
+    4. If that was their last stop, visit closes and they can go home. If doctor also sent them to Lab/Pharmacy, those still show as pending elsewhere.
+  </p>
+</div>
+{% endblock %}

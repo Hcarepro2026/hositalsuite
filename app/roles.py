@@ -61,7 +61,7 @@ BUILTIN_ROLES: dict[str, dict] = {
         "scope": "HOSPITAL",
         "description": "Runs the hospital. Sees everything, administers nothing.",
         "permissions": {
-            "reception", "cashdesk", "hims", "triage", "consulting",
+            "reception", "cashdesk", "hims", "lahsma", "triage", "consulting",
             "bookings", "complaints", "escalate", "corrective", "inspections",
             "tracking", "reports", "referrals", "roster",
             "dept_desk", "dept_staff", "dept_manage",
@@ -72,7 +72,7 @@ BUILTIN_ROLES: dict[str, dict] = {
         "scope": "HOSPITAL",
         "description": "Deputises for the MD across the whole hospital.",
         "permissions": {
-            "reception", "cashdesk", "hims", "triage", "consulting",
+            "reception", "cashdesk", "hims", "lahsma", "triage", "consulting",
             "bookings", "complaints", "escalate", "corrective",
             "tracking", "reports", "referrals", "roster",
             "dept_desk", "dept_staff", "dept_manage",
@@ -83,7 +83,7 @@ BUILTIN_ROLES: dict[str, dict] = {
         "scope": "HOSPITAL",
         "description": "Clinical services and training, hospital-wide.",
         "permissions": {
-            "reception", "cashdesk", "hims", "triage", "consulting",
+            "reception", "cashdesk", "hims", "lahsma", "triage", "consulting",
             "bookings", "complaints", "escalate", "corrective",
             "tracking", "reports", "referrals", "roster",
             "dept_desk", "dept_staff", "dept_manage",
@@ -109,7 +109,7 @@ BUILTIN_ROLES: dict[str, dict] = {
         "scope": "HOSPITAL",
         "description": "Administration and human resources, hospital-wide.",
         "permissions": {
-            "reception", "cashdesk", "hims", "triage", "consulting",
+            "reception", "cashdesk", "hims", "lahsma", "triage", "consulting",
             "bookings", "complaints", "escalate", "corrective",
             "tracking", "reports", "referrals", "roster",
             "dept_desk", "dept_staff", "dept_manage",
@@ -120,7 +120,7 @@ BUILTIN_ROLES: dict[str, dict] = {
         "scope": "HOSPITAL",
         "description": "Walks the hospital, inspects, and keeps standards up.",
         "permissions": {
-            "reception", "cashdesk", "hims", "triage", "onward",
+            "reception", "cashdesk", "hims", "lahsma", "triage", "onward",
             "bookings", "complaints", "escalate", "corrective", "inspections",
             "tracking", "roster", "referrals",
             "dept_desk", "dept_claim", "dept_staff", "dept_manage",
@@ -130,13 +130,13 @@ BUILTIN_ROLES: dict[str, dict] = {
         "name": "HOD — Head of Department",
         "scope": "DEPARTMENT",
         "description": "Runs one department. Sees that department only.",
-        # reception/cashdesk/hims are ticked ON here and then narrowed by
+        # reception/cashdesk/hims/lahsma are ticked ON here and then narrowed by
         # DEPARTMENT in navigation.py. That reproduces the old rule exactly:
         # the HOD of HIMS runs the HIMS desk, the HOD of Theatre does not, and
         # an HOD whose department was never recorded still gets through rather
         # than being locked out of the desk they staff every day.
         "permissions": {
-            "reception", "cashdesk", "hims",
+            "reception", "cashdesk", "hims", "lahsma",
             "consulting", "onward", "complaints", "escalate", "corrective",
             "tracking", "roster", "dept_desk", "dept_claim", "dept_staff", "dept_manage",
         },

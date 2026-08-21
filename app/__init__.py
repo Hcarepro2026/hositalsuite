@@ -75,6 +75,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.consulting import bp as consulting_bp
     from .views.tracking import bp as tracking_bp
     from .views.cashdesk import bp as cashdesk_bp
+    from .views.lahsma import bp as lahsma_bp
     from .views.admincp import bp as admin_bp
     from .views.rolesadmin import bp as rolesadmin_bp
     from .views.deptdesk import bp as deptdesk_bp
@@ -83,6 +84,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
 
     for blueprint in (auth_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
                       chat_bp, ref_bp, roster_bp, hims_bp, reception_bp, triage_bp, consulting_bp, tracking_bp, cashdesk_bp,
+                      lahsma_bp,
                       admin_bp, rolesadmin_bp, deptdesk_bp,
                       reports_bp, api_bp):
         app.register_blueprint(blueprint)

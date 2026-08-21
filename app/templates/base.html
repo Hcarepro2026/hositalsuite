@@ -86,6 +86,9 @@
   {% if can.hims %}
   <a href="/hims/" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>
   {% endif %}
+  {% if can.lahsma %}
+  <a href="/lahsma" class="{{ 'active' if request.path.startswith('/lahsma') }}">LAHSMA</a>
+  {% endif %}
   {% if can.triage %}
   <a href="/triage/" class="{{ 'active' if request.path.startswith('/triage') }}">Triage</a>
   {% endif %}

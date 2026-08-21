@@ -1515,6 +1515,7 @@ PERMISSION_GROUPS = (
         ("reception",   "Work the Reception desk"),
         ("cashdesk",    "Work Billing and the Paying Point"),
         ("hims",        "Open and search patient folders (HIMS)"),
+        ("lahsma",      "Work the LAHSMA desk — issue insurance clearance"),
     )),
     ("Patient flow", (
         ("triage",      "Run the Triage bench and assign doctors"),

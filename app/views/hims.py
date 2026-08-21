@@ -91,14 +91,169 @@ def _announce_reception_depth(org_id: int) -> None:
 @require_role(*VIEWERS)
 @require_permission("hims")
 def desk():
-    """The HIMS desk: search first, register second."""
+    """The HIMS desk: search first, register second.
+
+    FIX 2026-08-21: HIMS is the most appropriate to open the folder after
+    payment. Previously only Reception showed PAID patients waiting for folder,
+    so if Reception and HIMS were different people, HIMS never saw them and
+    patients got stuck. Now HIMS desk shows PAID intakes directly.
+    """
     term = (request.args.get("q") or "").strip()
     results = hims.search(current_user.org_id, term) if term else []
+
+    # PAID intakes waiting for folder — this is the main queue for HIMS
+    # after the Reception -> Billing -> Paypoint walk.
+    from .. import reception
+    from ..models import ReceptionIntake
+
+    paid_waiting = (
+        db.session.query(ReceptionIntake)
+        .filter(
+            ReceptionIntake.org_id == current_user.org_id,
+            ReceptionIntake.stage == "PAID",
+        )
+        .order_by(ReceptionIntake.paid_at.asc().nullsfirst(), ReceptionIntake.created_at.asc())
+        .limit(100)
+        .all()
+    )
+
     return render_template(
-        "hims/desk.html", term=term, results=results,
-        searched=bool(term), stats=hims.stats(current_user.org_id),
+        "hims/desk.html",
+        term=term,
+        results=results,
+        searched=bool(term),
+        stats=hims.stats(current_user.org_id),
         visits=hims.today_visits(current_user.org_id)[:15],
-        payer_labels=PAYER_LABELS, category_labels=CATEGORY_LABELS)
+        paid_waiting=paid_waiting,
+        payer_labels=PAYER_LABELS,
+        category_labels=CATEGORY_LABELS,
+    )
+
+
+# ================================================================ open folder FROM reception flow (PAID -> REGISTERED)
+# Who is most appropriate to push to HIMS? HIMS desk itself, after Paypoint.
+# Previously only Reception had the button, so HIMS never saw PAID patients.
+@bp.post("/intake/<int:intake_id>/open-folder")
+@require_role(*DESK)
+@require_permission("hims")
+def open_folder_from_intake(intake_id: int):
+    """HIMS turns a PAID intake into a real patient folder.
+
+    This is the correct handover: Paypoint marks PAID, HIMS opens folder.
+    Reception's copy is kept for small hospitals where one clerk does everything,
+    but this is the primary path.
+    """
+    from .. import reception as reception_engine
+    from ..models import ReceptionIntake
+    from ..services import current_org
+    from .. import tracking as tracking_engine
+
+    row = db.session.get(ReceptionIntake, intake_id)
+    if row is None or row.org_id != current_user.org_id:
+        abort(404)
+    if row.stage != "PAID":
+        flash("That patient has not paid yet. Payment is recorded before the folder is opened.", "error")
+        return redirect(url_for("hims.desk"))
+    if row.patient_id:
+        flash("A folder has already been opened for that patient.", "error")
+        return redirect(url_for("hims.folder", pid=row.patient_id))
+
+    org = current_org()
+    if org is None:
+        abort(503)
+
+    values, errors = hims.validate(reception_engine.folder_values(row), org_id=current_user.org_id)
+    if errors:
+        flash("The folder could not be opened: " + " ".join(errors), "error")
+        return redirect(url_for("hims.desk"))
+
+    # Returning patient? Reuse folder
+    existing = hims.possible_duplicates(
+        current_user.org_id, values["surname"], values["first_name"], values.get("phone")
+    )
+    patient = existing[0] if existing else None
+
+    if patient is not None:
+        for field in (
+            "phone",
+            "address",
+            "occupation",
+            "payer_type",
+            "payer_number",
+            "payer_name",
+            "preferred_lang",
+            "assistance",
+            "care_note",
+            "nok_name",
+            "nok_phone",
+            "nok_relationship",
+        ):
+            new_value = values.get(field)
+            if new_value:
+                setattr(patient, field, new_value)
+        db.session.flush()
+    else:
+        patient = Patient(
+            org_id=current_user.org_id,
+            hospital_number=hims.next_hospital_number(org),
+            created_by=current_user.id,
+            consent_at=now_naive(),
+            **values,
+        )
+        db.session.add(patient)
+        try:
+            db.session.flush()
+        except Exception:
+            db.session.rollback()
+            patient = Patient(
+                org_id=current_user.org_id,
+                hospital_number=hims.next_hospital_number(org),
+                created_by=current_user.id,
+                consent_at=now_naive(),
+                **values,
+            )
+            db.session.add(patient)
+            db.session.flush()
+
+    visit = hims.open_visit(patient, user_id=current_user.id, reason="", visit_type="NEW")
+    row.patient_id = patient.id
+    row.visit_id = visit.id
+    row.stage = "REGISTERED"
+    row.registered_at = now_naive()
+
+    tracking_engine.safely(
+        tracking_engine.enter,
+        current_user.org_id,
+        "HIMS",
+        intake_id=row.id,
+        visit_id=visit.id,
+        patient_id=patient.id,
+        staff_id=current_user.id,
+    )
+    tracking_engine.safely(
+        tracking_engine.enter,
+        current_user.org_id,
+        "TRIAGE",
+        visit_id=visit.id,
+        patient_id=patient.id,
+        staff_id=current_user.id,
+    )
+
+    _announce_arrival(patient, visit)
+    _announce_reception_depth(current_user.org_id)
+    audit(
+        "HIMS_FOLDER_OPENED_FROM_INTAKE",
+        "reception_intake",
+        row.id,
+        {"ref": row.ref, "patient": patient.hospital_number},
+    )
+    db.session.commit()
+
+    flash(
+        f"Folder opened for {patient.full_name} — {patient.hospital_number}. Sent to Triage.",
+        "success",
+    )
+    return redirect(url_for("hims.folder", pid=patient.id))
 
 
 # ================================================================ open a folder

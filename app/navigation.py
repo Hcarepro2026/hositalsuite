@@ -18,10 +18,15 @@ A clinical HOD gets the things they actually do — see their patients, run
 their room, work their department's roster. They do not get the money desks,
 the hospital-wide inspection tool, or the administrator's settings.
 
-Front-desk work (Reception, Billing, Pay Point, HIMS) is granted by
+Front-desk work (Reception, Billing, Pay Point, HIMS, LAHSMA) is granted by
 DEPARTMENT, not by seniority: the HOD of HIMS runs the HIMS desk; the HOD of
 Theatre does not. That is closer to how the hospital really works than any
 rule based on rank.
+
+FIX 2026-08-21: In Ijede one clerk often does Reception + Billing + Paypoint +
+HIMS + LAHSMA. Splitting FRONT vs MONEY caused \"patient sent to billing is
+not showing\" — a Reception HOD could not see the Billing desk. Any front match
+now grants ALL front desks.
 """
 from __future__ import annotations
 
@@ -34,6 +39,7 @@ FRONT_DESK_DEPARTMENTS = (
 )
 MONEY_DEPARTMENTS = (
     "billing", "finance", "account", "revenue", "cash", "megalex",
+    "lahsma", "insurance", "nhis", "hmo",
 )
 TRIAGE_DEPARTMENTS = (
     "triage", "accident", "emergency", "a&e", "nursing", "opd",
@@ -69,7 +75,7 @@ def legacy_permissions_for(user) -> dict:
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return {k: False for k in (
-            "inspections", "reception", "cashdesk", "hims", "triage",
+            "inspections", "reception", "cashdesk", "hims", "lahsma", "triage",
             "consulting", "onward", "tracking", "bookings", "complaints",
             "referrals", "corrective", "roster", "reports", "admin")}
 
@@ -81,8 +87,10 @@ def legacy_permissions_for(user) -> dict:
     is_hod = role == "HOD"
 
     # A clinical HOD sees patients; a front-desk HOD works the desks.
+    # Any front match grants ALL front desks (reception, cashdesk, hims, lahsma)
     front_desk = is_hod and _dept_matches(user, FRONT_DESK_DEPARTMENTS)
     money_desk = is_hod and _dept_matches(user, MONEY_DEPARTMENTS)
+    any_front = front_desk or money_desk
     triage_desk = is_hod and _dept_matches(user, TRIAGE_DEPARTMENTS)
 
     return {
@@ -99,12 +107,17 @@ def legacy_permissions_for(user) -> dict:
         # the record is often incomplete, and locking a real clerk out of the
         # desk they staff every day is a worse failure than letting a surgeon
         # see a reception list. Set the department to tighten it.
+        #
+        # FIX: any_front grants ALL front desks, because one clerk often does
+        # Reception + Billing + Pay Point + HIMS + LAHSMA.
         "reception":   (is_super or is_am or is_mgmt
-                        or (is_hod and (front_desk or not _has_department(user)))),
+                        or (is_hod and (any_front or not _has_department(user)))),
         "cashdesk":    (is_super or is_am or is_mgmt
-                        or (is_hod and (money_desk or not _has_department(user)))),
+                        or (is_hod and (any_front or not _has_department(user)))),
         "hims":        (is_super or is_am or is_mgmt
-                        or (is_hod and (front_desk or not _has_department(user)))),
+                        or (is_hod and (any_front or not _has_department(user)))),
+        "lahsma":      (is_super or is_am or is_mgmt
+                        or (is_hod and (any_front or not _has_department(user)))),
 
         # Clinical flow. Any HOD may run their own consulting room — that is
         # the point of the room — but only triage/nursing areas run the bench.
@@ -131,7 +144,7 @@ def legacy_permissions_for(user) -> dict:
 # Keys the MENU asks about. Role Management owns most of them; a few are
 # derived, because the menu asks slightly different questions from the
 # permission list ("show the Complaints link" vs "may escalate").
-MENU_KEYS = ("inspections", "reception", "cashdesk", "hims", "triage",
+MENU_KEYS = ("inspections", "reception", "cashdesk", "hims", "lahsma", "triage",
              "consulting", "onward", "tracking", "bookings", "complaints",
              "referrals", "corrective", "roster", "reports", "admin",
              "dept_desk", "dept_claim", "dept_staff", "dept_manage", "escalate",
@@ -168,12 +181,13 @@ def permissions_for(user) -> dict:
 
     # Department nuance for the desks (see the docstring above). Applies only
     # to the HOD role: for everybody else the tick-list is the whole answer.
+    # FIX 2026-08-21: any front match grants ALL front desks.
     if (getattr(user, "role", "") or "") == "HOD":
         if _has_department(user):
-            if not _dept_matches(user, FRONT_DESK_DEPARTMENTS):
-                can["reception"] = can["hims"] = False
-            if not _dept_matches(user, MONEY_DEPARTMENTS):
-                can["cashdesk"] = False
+            is_front = (_dept_matches(user, FRONT_DESK_DEPARTMENTS)
+                        or _dept_matches(user, MONEY_DEPARTMENTS))
+            if not is_front:
+                can["reception"] = can["hims"] = can["cashdesk"] = can["lahsma"] = False
         # Triage is the opposite way round: an HOD does not get the bench from
         # the tick-list at all, only from working a triage/nursing area.
         can["triage"] = can["triage"] or _dept_matches(user, TRIAGE_DEPARTMENTS)
@@ -187,9 +201,9 @@ def require_permission(key: str):
     """Route guard using the SAME permission map as the menu.
 
     Hiding a link is not security. An HOD of Theatre could still type
-    /reception/new and reach the desk, because the routes only asked "are you
-    an HOD?". This decorator asks the one question that matters — "may THIS
-    person use THIS desk?" — and it is the same answer the menu gives, so the
+    /reception/new and reach the desk, because the routes only asked \"are you
+    an HOD?\". This decorator asks the one question that matters — \"may THIS
+    person use THIS desk?\" — and it is the same answer the menu gives, so the
     two can never disagree.
     """
     from functools import wraps
