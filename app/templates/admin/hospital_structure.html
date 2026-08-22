@@ -220,7 +220,7 @@
   <td><b>{{ s.name }}</b><br><span class="muted" style="font-size:.8rem">{{ s.location }}</span></td>
   <td>{{ s.screen_type }}</td>
   <td class="muted" style="font-size:.8rem">{{ s.clinic_code or '' }} {% if s.department %}· {{ s.department.name }}{% endif %}</td>
-  <td class="muted" style="font-size:.8rem">{{ 'ON' if s.voice_enabled else 'OFF' }} · {{ s.voice_languages }} · {{ s.voice_volume }}%</td>
+  <td class="muted" style="font-size:.8rem">{{ 'ON' if s.voice_enabled else 'OFF' }} · {{ s.voice_languages }} · {{ s.voice_volume or 100 }}%</td>
   <td>{% if s.active %}<span class="pill green">active</span>{% else %}<span class="pill red">suspended</span>{% endif %}</td>
   <td><a class="btn small ghost" href="/tv/{{ s.code }}" target="_blank">Open /tv/{{ s.code }}</a><br><a class="btn small ghost" href="/admin/tv/{{ s.code }}/poster" target="_blank">🖨️ Poster</a></td>
   <td><form method="post" action="/admin/hospital-structure/tv/{{ s.id }}/toggle" style="display:inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="tab" value="tv"><button class="btn small secondary">{{ 'Suspend' if s.active else 'Activate' }}</button></form></td>
@@ -235,7 +235,7 @@
   <div><label>Clinic filter</label><select name="clinic_code"><option value="">— all —</option>{% for c in clinics %}<option value="{{ c.code }}" {% if s.clinic_code==c.code %}selected{% endif %}>{{ c.name }} ({{ c.code }})</option>{% endfor %}</select></div>
   <div><label>Department filter</label><select name="department_id"><option value="">— all —</option>{% for d in depts %}<option value="{{ d.id }}" {% if s.department_id==d.id %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
   <div><label>Voice langs</label><input name="voice_languages" value="{{ s.voice_languages }}" placeholder="en,yo"></div>
-  <div><label>Volume 0-100%</label><div style="display:flex;gap:8px;align-items:center"><input type="range" name="voice_volume" min="0" max="100" value="{{ s.voice_volume }}" style="flex:1" oninput="this.nextElementSibling.textContent=this.value+'%'"><span>{{ s.voice_volume }}%</span></div></div>
+  <div><label>Volume 0-100%</label><div style="display:flex;gap:8px;align-items:center"><input type="range" name="voice_volume" min="0" max="100" value="{{ s.voice_volume or 100 }}" style="flex:1" oninput="this.nextElementSibling.textContent=this.value+'%'"><span>{{ s.voice_volume or 100 }}%</span></div></div>
   <div><label><input type="checkbox" name="show_full_name" {% if s.show_full_name %}checked{% endif %}> Show full name</label></div>
   <div><label><input type="checkbox" name="show_queue_stats" {% if s.show_queue_stats %}checked{% endif %}> Show queue stats</label></div>
   <div><label><input type="checkbox" name="voice_enabled" {% if s.voice_enabled %}checked{% endif %}> Voice enabled</label></div>

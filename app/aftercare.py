@@ -59,8 +59,6 @@ def thank_you_sms(org_id: int, visit: PatientVisit, patient: Patient | None = No
         else:
             duration_txt = ""
 
-        # English + Yoruba in one SMS (160 chars each? We have 480 limit, so 2 sentences ok)
-        # Keep under 2 SMS parts (320 chars) for cost
         org_name = "the hospital"
         try:
             from .models import Organization
@@ -71,9 +69,18 @@ def thank_you_sms(org_id: int, visit: PatientVisit, patient: Patient | None = No
         except Exception:
             pass
 
-        body_en = f"Thank you for visiting {org_name} today.{duration_txt} We appreciate you. Please rate your experience: /feedback"
-        # Yoruba: short thank you
-        body_yo = f"E seun fun bibẹ wa si {org_name} loni. E jọwọ ẹ fun wa ni imọran: /feedback"
+        feedback_url = "/feedback"
+        try:
+            from flask import current_app
+
+            base = (current_app.config.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+            if base:
+                feedback_url = f"{base}/feedback"
+        except Exception:
+            pass
+
+        body_en = f"Thank you for visiting {org_name} today.{duration_txt} We appreciate you. Please rate your experience: {feedback_url}"
+        body_yo = f"E seun fun bibẹ wa si {org_name} loni. E jọwọ ẹ fun wa ni imọran: {feedback_url}"
         body = f"{body_en}\n{body_yo}"
 
         sms_engine.queue_sms(
@@ -86,9 +93,14 @@ def thank_you_sms(org_id: int, visit: PatientVisit, patient: Patient | None = No
         )
         return True
     except Exception:
-        # Never break closing a visit because SMS failed
+        # Never break closing a visit because SMS failed.
+        # Do NOT rollback the outer visit-close transaction — that would undo
+        # the CLOSED status. Just return False; the outer commit will still
+        # close the visit. If a half-added SmsMessage is in the session, expunge.
         try:
-            db.session.rollback()
+            for obj in list(db.session.new):
+                if obj.__class__.__name__ == "SmsMessage":
+                    db.session.expunge(obj)
         except Exception:
             pass
         return False

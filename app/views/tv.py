@@ -241,6 +241,16 @@ def admin_delete(sid: int):
 
 # ------------------------------------------------------------------ QR poster
 def _tv_base_url() -> str:
+    # Prefer configured public base URL (Render, custom domain) — avoids Host
+    # header spoofing and gives correct QR when behind proxy.
+    try:
+        from flask import current_app
+
+        base = (current_app.config.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+        if base:
+            return base
+    except Exception:
+        pass
     try:
         return request.url_root.rstrip("/")
     except Exception:

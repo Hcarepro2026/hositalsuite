@@ -1276,7 +1276,11 @@ class ReceptionIntake(db.Model):
     needs_blood_sugar = db.Column(db.Boolean, default=True, nullable=False)
 
     patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), index=True)
-    visit_id = db.Column(db.Integer, db.ForeignKey("patient_visit.id"))
+    visit_id = db.Column(
+        db.Integer,
+        db.ForeignKey("patient_visit.id", use_alter=True, name="fk_intake_visit"),
+        index=True,
+    )
 
     created_at = db.Column(db.DateTime, default=now_naive, nullable=False, index=True)
     billed_at = db.Column(db.DateTime)

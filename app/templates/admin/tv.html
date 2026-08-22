@@ -67,8 +67,8 @@
         <div><label>Voice languages</label><input name="voice_languages" value="{{ s.voice_languages }}" placeholder="en,yo"></div>
         <div><label>Volume (0-100%) per TV</label>
           <div style="display:flex;gap:8px;align-items:center">
-            <input type="range" name="voice_volume" min="0" max="100" value="{{ s.voice_volume }}" style="flex:1" oninput="this.nextElementSibling.textContent=this.value+'%'">
-            <span>{{ s.voice_volume }}%</span>
+            <input type="range" name="voice_volume" min="0" max="100" value="{{ s.voice_volume or 100 }}" style="flex:1" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span>{{ s.voice_volume or 100 }}%</span>
           </div>
         </div>
         <div><label><input type="checkbox" name="show_full_name" {% if s.show_full_name %}checked{% endif %}> Show full name</label></div>
