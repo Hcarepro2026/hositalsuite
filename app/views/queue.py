@@ -153,8 +153,72 @@ def ticket_page():
                    .filter_by(org_id=t.org_id, department_id=t.department_id,
                               queue_date=t.queue_date, status="CALLED")
                    .order_by(QueueTicket.called_at.desc()).first())
+
+    # --- Link to reception intake + visit journey (TV ↔ patient page) ---
+    intake = None
+    visit = None
+    segments = []
+    onward = []
+    total_m = 0
+    journey_total = None
+    try:
+        from ..models import ReceptionIntake, PatientVisit, JourneySegment, VisitOnward
+        from .. import tracking as tracking_engine
+        # intake linked from ticket or by phone/name today
+        if getattr(t, 'intake_id', None):
+            intake = db.session.get(ReceptionIntake, t.intake_id)
+        if not intake and t.phone:
+            # try find today's intake by phone
+            from ..models import now_naive as _now
+            start = _now().replace(hour=0, minute=0, second=0, microsecond=0)
+            intake = (db.session.query(ReceptionIntake)
+                      .filter(ReceptionIntake.org_id == t.org_id,
+                              ReceptionIntake.phone == t.phone,
+                              ReceptionIntake.created_at >= start)
+                      .order_by(ReceptionIntake.created_at.desc()).first())
+        if intake and intake.visit_id:
+            visit = db.session.get(PatientVisit, intake.visit_id)
+        if intake and not visit and intake.patient_id:
+            # latest visit for this patient today
+            from ..models import now_naive as _now
+            start = _now().replace(hour=0, minute=0, second=0, microsecond=0)
+            visit = (db.session.query(PatientVisit)
+                     .filter(PatientVisit.org_id == t.org_id,
+                             PatientVisit.patient_id == intake.patient_id,
+                             PatientVisit.started_at >= start)
+                     .order_by(PatientVisit.started_at.desc()).first())
+        if visit:
+            segments = (db.session.query(JourneySegment)
+                        .filter(JourneySegment.visit_id == visit.id)
+                        .order_by(JourneySegment.entered_at.asc()).all())
+            onward = (db.session.query(VisitOnward)
+                      .filter(VisitOnward.visit_id == visit.id)
+                      .order_by(VisitOnward.sent_at.asc()).all())
+            # door to door
+            if segments:
+                from datetime import datetime as _dt
+                first = segments[0].entered_at
+                last = segments[-1].ended_at or _dt.utcnow()
+                try:
+                    total_m = max(0, int((last - first).total_seconds() // 60))
+                except Exception:
+                    total_m = 0
+            try:
+                est_j = tracking_engine.estimate_remaining_journey(t.org_id, visit)
+                journey_total = est_j.get('total')
+            except Exception:
+                journey_total = None
+    except Exception:
+        # never crash patient page
+        intake = intake
+        segments = []
+        onward = []
+        total_m = 0
+
     return render_template("queue_ticket.html", t=t, ahead=waiting, est=est,
-                           now_serving=now_serving)
+                           now_serving=now_serving, intake=intake, visit=visit,
+                           segments=segments, onward=onward, total_m=total_m,
+                           journey_total=journey_total)
 
 
 @bp.get("/queue/screen")

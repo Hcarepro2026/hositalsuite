@@ -355,6 +355,27 @@ def admin_poster_one(code: str):
     return render_template("admin/tv_poster_single.html", screen=s, url=url, qr=qr, rotation=rotation, base_url=base)
 
 
+@bp.get("/api/tv/qr-url")
+def api_qr_url():
+    """Public QR for TV ↔ patient page linking — returns data URI, no auth, per-tenant safe."""
+    code = (request.args.get("code") or "MAIN").strip().upper()[:20]
+    text = (request.args.get("text") or "").strip()[:500]
+    if not text:
+        base = _tv_base_url()
+        if code and code.startswith("Q-"):
+            # ticket code — keep base /welcome if no explicit text
+            text = f"{base}/welcome" if base else "/welcome"
+        else:
+            # TV screen QR → patient portal
+            text = f"{base}/welcome" if base else "/welcome"
+            if base and code:
+                # For TV itself, QR should point to /welcome (patient tracking entry)
+                # not to TV screen (TV already shows itself). Patient page link.
+                text = f"{base}/welcome"
+    qr = _qr_data_uri(text, box_size=6)
+    return jsonify({"ok": True, "qr": qr, "text": text, "code": code})
+
+
 @bp.get("/admin/tv/qr/<code>.png")
 @require_role(*SUPER)
 def admin_qr_png(code: str):

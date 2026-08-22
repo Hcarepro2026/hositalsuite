@@ -180,6 +180,7 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     if clinic_filter:
         v_q = v_q.filter(db.func.upper(db.func.trim(PatientVisit.clinic)) == clinic_filter)
     visits = v_q.order_by(PatientVisit.started_at.desc()).limit(100).all()
+    visits_by_id = {v.id: v for v in visits}
     patient_ids = {v.patient_id for v in visits}
     patients = {p.id: p for p in db.session.query(Patient).filter(Patient.id.in_(patient_ids or [0])).all()}
 
@@ -201,18 +202,44 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     if clinic_filter:
         sessions = [s for s in sessions if (s.clinic or "").strip().upper() == clinic_filter]
 
-    # --- Onward steps pending
-    o_q = db.session.query(VisitOnward).filter(
-        VisitOnward.org_id == org_id, VisitOnward.status == "PENDING"
+    # --- Onward steps pending — only today's visits, fast-track first, deduped
+    # Previously queried ALL pending across all time, so abandoned rows from days ago
+    # showed as 5249m ago and made TV look broken. Now filter to today's visits.
+    o_q = db.session.query(VisitOnward).join(PatientVisit, VisitOnward.visit_id == PatientVisit.id).filter(
+        VisitOnward.org_id == org_id, VisitOnward.status == "PENDING",
+        PatientVisit.started_at >= start,
     )
-    pending_onward = o_q.order_by(VisitOnward.sent_at.asc()).limit(100).all()
-    # Filter onward by clinic if screen is clinic-specific? Onward destination code may match clinic code?
-    # For clinic TV, show onward steps where visit clinic matches
+    pending_onward_raw = o_q.order_by(PatientVisit.is_fast_track.desc(), VisitOnward.sent_at.asc()).limit(100).all()
+    # Deduplicate by (visit_id, destination) — unique constraint should prevent dupes,
+    # but guard against race / old data
+    seen_onward = set()
+    pending_onward = []
+    for step in pending_onward_raw:
+        key = (step.visit_id, step.destination)
+        if key in seen_onward:
+            continue
+        seen_onward.add(key)
+        pending_onward.append(step)
+    # Filter onward by clinic if screen is clinic-specific
     if clinic_filter:
-        visit_map = {v.id: v for v in visits}
         pending_onward = [
-            step for step in pending_onward if visit_map.get(step.visit_id) and (visit_map[step.visit_id].clinic or "").upper() == clinic_filter
+            step for step in pending_onward if visits_by_id.get(step.visit_id) and (visits_by_id[step.visit_id].clinic or "").upper() == clinic_filter
         ]
+
+    # Enrich onward with visit + patient for template (fixes bug where patients dict keyed by patient_id not visit_id)
+    onward_enriched = []
+    for step in pending_onward[:20]:
+        visit = visits_by_id.get(step.visit_id)
+        patient = patients.get(visit.patient_id) if visit else None
+        waited = max(0, int((now - step.sent_at).total_seconds() // 60))
+        onward_enriched.append({
+            "step": step,
+            "visit": visit,
+            "patient": patient,
+            "waited": waited,
+            "is_fast_track": bool(visit.is_fast_track) if visit else False,
+            "fast_track_reason": getattr(visit, 'fast_track_reason', None) if visit else None,
+        })
 
     # --- Journey segments open (where patient is now)
     open_segments = (
@@ -379,6 +406,8 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         "triaged": triaged,
         "in_consultation": in_consult,
         "onward_pending": pending_onward,
+        "onward_enriched": onward_enriched,
+        "visits_by_id": visits_by_id,
         "sessions": sessions,
         "stats": stats,
         "clinic_counts": clinic_counts,
