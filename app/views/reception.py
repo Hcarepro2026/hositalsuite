@@ -277,7 +277,14 @@ def open_folder(intake_id: int):
     if visit is None:
         visit = hims.open_visit(
             patient, user_id=current_user.id,
-            visit_type="NEW" if not patient.last_visit_at else "FOLLOW_UP")
+            visit_type="NEW" if not patient.last_visit_at else "FOLLOW_UP",
+            is_fast_track=bool(intake.is_fast_track),
+            fast_track_reason=intake.fast_track_reason)
+    else:
+        # If intake is fast-track but existing visit wasn't, upgrade it
+        if intake.is_fast_track and not visit.is_fast_track:
+            visit.is_fast_track = True
+            visit.fast_track_reason = intake.fast_track_reason
     # Flush so the visit HAS an id. Without this, tracking linked the Reception
     # half of the journey to visit_id=None, the HIMS segment was never closed,
     # and the patient showed as waiting at HIMS forever on the live board.

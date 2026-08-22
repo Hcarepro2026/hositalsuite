@@ -53,6 +53,7 @@ from .models import (
     db,
     now_naive,
 )
+from . import tracking as tracking_engine
 
 
 # ------------------------------------------------------------------ helpers
@@ -221,6 +222,11 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         p = patients.get(v.patient_id)
         if not p:
             continue
+        # Journey estimate for this visit
+        try:
+            journey_est = tracking_engine.estimate_remaining_journey(org_id, v)
+        except Exception:
+            journey_est = {"total": 0, "stages": [], "fast_track": bool(v.is_fast_track)}
         now_serving.append(
             {
                 "type": "consultation",
@@ -232,6 +238,9 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
                 "doctor": v.doctor.name if v.doctor else "",
                 "since": v.seen_at or v.triaged_at,
                 "waited": max(0, int((now - (v.seen_at or v.triaged_at or v.started_at)).total_seconds() // 60)),
+                "is_fast_track": bool(v.is_fast_track),
+                "fast_track_reason": v.fast_track_reason,
+                "journey_estimate": journey_est,
             }
         )
     # 2. Recently called queue tickets
@@ -247,15 +256,25 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
                 "doctor": "",
                 "since": t.called_at,
                 "waited": 0,
+                "is_fast_track": bool(getattr(t, "is_fast_track", False)),
+                "fast_track_reason": getattr(t, "fast_track_reason", None),
             }
         )
 
-    # --- NEXT: triaged waiting + queue waiting
+    # --- NEXT: triaged waiting + queue waiting (fast-track first, then oldest) — premium patient care
     next_up = []
-    for v in sorted(triaged, key=lambda x: x.triaged_at or x.started_at)[:5]:
+    # Triaged: fast-track first
+    sorted_triaged = sorted(triaged, key=lambda x: (not bool(x.is_fast_track), x.triaged_at or x.started_at))
+    for idx, v in enumerate(sorted_triaged[:5]):
         p = patients.get(v.patient_id)
         if not p:
             continue
+        try:
+            journey_est = tracking_engine.estimate_remaining_journey(org_id, v)
+            wait_est = tracking_engine.estimate_wait_minutes(org_id, stage="WAIT_DOCTOR", position=idx, is_fast_track=bool(v.is_fast_track))
+        except Exception:
+            journey_est = {"total": 0, "stages": [], "fast_track": bool(v.is_fast_track)}
+            wait_est = 0
         next_up.append(
             {
                 "type": "triaged",
@@ -265,11 +284,22 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
                 "clinic": v.clinic,
                 "room": v.consulting_room or v.clinic,
                 "doctor": v.doctor.name if v.doctor else "",
+                "is_fast_track": bool(v.is_fast_track),
+                "fast_track_reason": v.fast_track_reason,
+                "position": idx + 1,
+                "estimated_wait": wait_est,
+                "journey_estimate": journey_est,
             }
         )
-    for t in sorted(queue_waiting, key=lambda x: x.created_at)[:5]:
+    # Queue waiting: fast-track first
+    sorted_q_wait = sorted(queue_waiting, key=lambda x: (not bool(getattr(x, "is_fast_track", False)), x.created_at))
+    for idx, t in enumerate(sorted_q_wait[:5]):
         if len(next_up) >= 8:
             break
+        try:
+            wait_est = tracking_engine.estimate_wait_minutes(org_id, stage="RECEPTION", position=idx, is_fast_track=bool(getattr(t, "is_fast_track", False)))
+        except Exception:
+            wait_est = 0
         next_up.append(
             {
                 "type": "queue_waiting",
@@ -279,10 +309,35 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
                 "clinic": t.department.name if t.department else "",
                 "room": "",
                 "doctor": "",
+                "is_fast_track": bool(getattr(t, "is_fast_track", False)),
+                "fast_track_reason": getattr(t, "fast_track_reason", None),
+                "position": idx + 1,
+                "estimated_wait": wait_est,
             }
         )
 
-    # --- Stats for waiting area main TV
+    # --- Reception rows with fast-track + journey estimate
+    reception_enriched = []
+    for idx, r in enumerate(reception_rows):
+        try:
+            journey_est = tracking_engine.estimate_intake_journey(org_id, r)
+            wait_est = tracking_engine.estimate_wait_minutes(org_id, stage="RECEPTION", position=idx, is_fast_track=bool(r.is_fast_track))
+        except Exception:
+            journey_est = {"total": 0, "stages": [], "fast_track": bool(r.is_fast_track)}
+            wait_est = 0
+        reception_enriched.append(
+            {
+                "row": r,
+                "is_fast_track": bool(r.is_fast_track),
+                "fast_track_reason": r.fast_track_reason,
+                "position": idx + 1,
+                "estimated_wait": wait_est,
+                "journey_estimate": journey_est,
+            }
+        )
+
+    # --- Stats for waiting area main TV (include fast-track counts)
+    fast_track_waiting = len([v for v in visits if v.is_fast_track and v.status in ("REGISTERED", "TRIAGED")]) + len([r for r in reception_rows if r.is_fast_track])
     stats = {
         "queue_waiting": len(queue_waiting),
         "queue_called": len(queue_called),
@@ -293,6 +348,7 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         "onward_pending": len(pending_onward),
         "doctors_ready": len(sessions),
         "total_today": len(visits) + len(queue_all),
+        "fast_track_waiting": fast_track_waiting,
     }
 
     # --- Per clinic breakdown for main TV
@@ -309,6 +365,7 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         "queue_waiting": queue_waiting,
         "queue_called": queue_called,
         "reception": reception_rows,
+        "reception_enriched": reception_enriched,
         "triaged": triaged,
         "in_consultation": in_consult,
         "onward_pending": pending_onward,

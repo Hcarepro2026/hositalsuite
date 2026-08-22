@@ -103,9 +103,18 @@ def room():
     queue = consulting.doctor_queue(org_id, current_user.id)
     patients = {p.id: p for p in db.session.query(Patient)
                 .filter(Patient.id.in_([v.patient_id for v in queue] or [0])).all()}
-    rows = [{"visit": v, "patient": patients.get(v.patient_id),
-             "waited": consulting.wait_minutes(v),
-             "unclaimed": v.doctor_id is None} for v in queue]
+    rows = []
+    for v in queue:
+        try:
+            journey_est = tracking.estimate_remaining_journey(org_id, v)
+        except Exception:
+            journey_est = {"total": 0, "stages": [], "fast_track": bool(v.is_fast_track)}
+        rows.append({
+            "visit": v, "patient": patients.get(v.patient_id),
+            "waited": consulting.wait_minutes(v),
+            "unclaimed": v.doctor_id is None,
+            "journey_estimate": journey_est,
+        })
     return render_template(
         "consulting/room.html", session=session, rows=rows,
         current=consulting.in_consultation(org_id, current_user.id),

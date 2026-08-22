@@ -156,6 +156,39 @@ def clean_form(form) -> tuple[dict, list[str]]:
     v["care_note"] = (form.get("care_note") or "").strip()[:200]
 
     v["needs_blood_sugar"] = bool(form.get("needs_blood_sugar"))
+
+    # --- Fast-track: elderly / pregnant / child / wheelchair — premium patient care
+    # Auto-detect from age + assistance + care_note, plus manual override tick
+    is_fast = bool(form.get("is_fast_track"))
+    fast_reason = (form.get("fast_track_reason") or "").strip().upper()[:40]
+
+    # Auto-detect if not manually ticked
+    if not is_fast:
+        age_val = v.get("age_years")
+        assistance_str = v.get("assistance") or ""
+        care_lower = (v.get("care_note") or "").lower()
+        if age_val is not None:
+            if age_val >= 60:
+                is_fast = True
+                fast_reason = fast_reason or "ELDERLY"
+            elif age_val <= 5:
+                is_fast = True
+                fast_reason = fast_reason or "CHILD"
+        if "WHEELCHAIR" in assistance_str:
+            is_fast = True
+            fast_reason = fast_reason or "WHEELCHAIR"
+        if "PREGNANT" in assistance_str or "pregnant" in care_lower or "antenatal" in care_lower:
+            is_fast = True
+            fast_reason = fast_reason or "PREGNANT"
+        if "ELDERLY" in assistance_str and not fast_reason:
+            fast_reason = "ELDERLY"
+
+    # If manual tick but no reason, default to GENERAL priority
+    if is_fast and not fast_reason:
+        fast_reason = "PRIORITY"
+
+    v["is_fast_track"] = bool(is_fast)
+    v["fast_track_reason"] = fast_reason if is_fast else None
     return v, errors
 
 
@@ -186,12 +219,13 @@ def create_intake(org_id: int, values: dict, user_id: int | None = None) -> Rece
 
 
 def waiting(org_id: int, stages: tuple[str, ...] | None = None) -> list[ReceptionIntake]:
-    """Everyone currently mid-walk, oldest first — longest wait shown first."""
+    """Everyone currently mid-walk, fast-track first, then oldest first."""
     stages = stages or ("RECEPTION", "BILLING", "PAYMENT", "PAID")
     return (db.session.query(ReceptionIntake)
             .filter(ReceptionIntake.org_id == org_id,
                     ReceptionIntake.stage.in_(stages))
-            .order_by(ReceptionIntake.created_at.asc())
+            .order_by(ReceptionIntake.is_fast_track.desc(),
+                      ReceptionIntake.created_at.asc())
             .limit(200).all())
 
 

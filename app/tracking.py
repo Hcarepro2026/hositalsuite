@@ -612,6 +612,139 @@ def suggest_allocation(org_id) -> list[str]:
     return tips
 
 
+# ------------------------------------------------------------------ journey time estimation (Feature #2)
+# Premium++: tell a patient how long their whole visit will take.
+# Uses real averages when available, otherwise targets.
+# Fast-track patients get half the estimate (priority lane).
+# Per-tenant, no EMR, safe fallback.
+
+# Average minutes per destination for onward journey
+ONWARD_TARGET_MINUTES = {
+    "LABORATORY": 30, "PHARMACY": 20, "BILLING": 10, "MEGALEX": 10,
+    "LAHSMA": 15, "EMERGENCY": 5,
+}
+
+
+def _avg_for_stage(org_id, stage_code: str, days: int = 14) -> int:
+    """Real average for this stage if reliable, else target."""
+    try:
+        perf = stage_performance(org_id, days)
+        for s in perf:
+            if s["stage"] == stage_code and s.get("reliable") and s.get("median"):
+                return int(s["median"])
+    except Exception:
+        pass
+    return STAGE_TARGET_MINUTES.get(stage_code, 15)
+
+
+def estimate_wait_minutes(org_id, *, stage: str, position: int = 0, is_fast_track: bool = False) -> int:
+    """How many minutes before this patient is seen at this stage.
+
+    position = number of patients ahead in same queue.
+    Fast-track halves the wait (priority lane).
+    """
+    base = _avg_for_stage(org_id, stage)
+    # Queue ahead * average per patient (conservative: 70% of stage time is per patient)
+    per_patient = max(5, int(base * 0.7))
+    estimated = position * per_patient + int(base * 0.3)
+    if is_fast_track:
+        estimated = max(1, estimated // 2)
+    return estimated
+
+
+def estimate_remaining_journey(org_id, visit) -> dict:
+    """Total remaining minutes for this visit to finish.
+
+    Walks through remaining stages based on visit.status.
+    Returns {total, stages: [{stage, minutes, label}], fast_track}
+    """
+    stages = []
+    total = 0
+    status = getattr(visit, "status", "") or ""
+    is_fast = bool(getattr(visit, "is_fast_track", False))
+
+    # Map visit status to remaining stages
+    if status in ("REGISTERED",):
+        seq = ["TRIAGE", "WAIT_DOCTOR", "CONSULTATION"]
+    elif status in ("TRIAGED",):
+        seq = ["WAIT_DOCTOR", "CONSULTATION"]
+    elif status in ("IN_CONSULTATION",):
+        seq = ["CONSULTATION"]
+    elif status in ("ONWARD",):
+        # Onward steps still pending
+        try:
+            pending = [s.destination for s in getattr(visit, "onward_steps", []) if getattr(s, "status", "") != "DONE"]
+            for dest in pending:
+                key = dest
+                # Map onward destination to tracking stage
+                stage_map = {"LABORATORY": "LABORATORY", "PHARMACY": "PHARMACY",
+                             "BILLING": "BILLING_OUT", "MEGALEX": "MEGALEX",
+                             "LAHSMA": "LAHSMA", "EMERGENCY": "EMERGENCY"}
+                sc = stage_map.get(key, "PHARMACY")
+                mins = ONWARD_TARGET_MINUTES.get(key, 15)
+                if is_fast:
+                    mins = max(1, mins // 2)
+                stages.append({"stage": sc, "label": JOURNEY_STAGE_LABELS.get(sc, key), "minutes": mins})
+                total += mins
+            return {"total": total, "stages": stages, "fast_track": is_fast, "reason": getattr(visit, "fast_track_reason", None)}
+        except Exception:
+            seq = ["PHARMACY"]
+    else:
+        seq = []
+
+    for sc in seq:
+        mins = _avg_for_stage(org_id, sc)
+        # For wait stages, add queue position estimate
+        if sc == "WAIT_DOCTOR":
+            try:
+                from .triage import waiting as triage_waiting
+                q = triage_waiting(org_id)
+                pos = next((i for i, v in enumerate(q) if v.id == visit.id), 0)
+                mins = estimate_wait_minutes(org_id, stage=sc, position=pos, is_fast_track=is_fast)
+            except Exception:
+                pass
+        if is_fast:
+            mins = max(1, mins // 2)
+        stages.append({"stage": sc, "label": JOURNEY_STAGE_LABELS.get(sc, sc), "minutes": mins})
+        total += mins
+
+    # Add typical onward if not yet known (patient will likely need at least pharmacy)
+    # Only for early stages, show full journey estimate including typical onward
+    if status in ("REGISTERED", "TRIAGED"):
+        # Assume lab + pharmacy typical
+        for extra in ["LABORATORY", "PHARMACY"]:
+            mins = _avg_for_stage(org_id, extra)
+            if is_fast:
+                mins = max(1, mins // 2)
+            stages.append({"stage": extra, "label": JOURNEY_STAGE_LABELS.get(extra, extra), "minutes": mins, "typical": True})
+            total += mins
+
+    return {"total": total, "stages": stages, "fast_track": is_fast, "reason": getattr(visit, "fast_track_reason", None)}
+
+
+def estimate_intake_journey(org_id, intake) -> dict:
+    """Estimate for a ReceptionIntake still at front desks."""
+    is_fast = bool(getattr(intake, "is_fast_track", False))
+    reason = getattr(intake, "fast_track_reason", None)
+    stage = getattr(intake, "stage", "RECEPTION")
+    seq_map = {
+        "RECEPTION": ["RECEPTION", "BILLING", "PAYMENT", "HIMS", "TRIAGE", "WAIT_DOCTOR", "CONSULTATION", "LABORATORY", "PHARMACY"],
+        "BILLING": ["BILLING", "PAYMENT", "HIMS", "TRIAGE", "WAIT_DOCTOR", "CONSULTATION", "LABORATORY", "PHARMACY"],
+        "PAYMENT": ["PAYMENT", "HIMS", "TRIAGE", "WAIT_DOCTOR", "CONSULTATION", "LABORATORY", "PHARMACY"],
+        "PAID": ["HIMS", "TRIAGE", "WAIT_DOCTOR", "CONSULTATION", "LABORATORY", "PHARMACY"],
+    }
+    seq = seq_map.get(stage, ["RECEPTION", "BILLING", "PAYMENT", "HIMS", "TRIAGE", "WAIT_DOCTOR", "CONSULTATION"])
+    stages = []
+    total = 0
+    for sc in seq:
+        mins = _avg_for_stage(org_id, sc)
+        if is_fast:
+            mins = max(1, mins // 2)
+        stages.append({"stage": sc, "label": JOURNEY_STAGE_LABELS.get(sc, sc), "minutes": mins})
+        total += mins
+    return {"total": total, "stages": stages, "fast_track": is_fast, "reason": reason}
+
+
 # ------------------------------------------------------------------ voice
 # Voice is a standing requirement of every feature, and a dashboard nobody
 # opens is a dashboard nobody acts on. But an alert that fires constantly gets

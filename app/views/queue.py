@@ -103,6 +103,8 @@ def join_submit():
         flash("Please enter a valid phone number or leave it empty.", "error")
         return redirect(url_for("queue.join_page"))
 
+    is_fast = bool(request.form.get("is_fast_track"))
+    fast_reason = (request.form.get("fast_track_reason") or "").strip().upper()[:40] or None
     n = next_ticket(org.id, dept, now.date())
     t = QueueTicket(
         org_id=org.id,
@@ -114,6 +116,8 @@ def join_submit():
         phone=phone or None,
         status="WAITING",
         source="qr" if request.form.get("loc") else "link",
+        is_fast_track=is_fast,
+        fast_track_reason=fast_reason if is_fast else None,
     )
     db.session.add(t)
     db.session.flush()
@@ -185,7 +189,8 @@ def staff_queue():
     q = db.session.query(QueueTicket).filter_by(org_id=current_user.org_id, queue_date=today)
     if dept_id:
         q = q.filter(QueueTicket.department_id == dept_id)
-    waiting = q.filter(QueueTicket.status == "WAITING").order_by(QueueTicket.id).all()
+    # Priority lane first — fast-track patients seen first at every desk
+    waiting = q.filter(QueueTicket.status == "WAITING").order_by(QueueTicket.is_fast_track.desc(), QueueTicket.id).all()
     called = q.filter(QueueTicket.status == "CALLED").order_by(QueueTicket.called_at.desc()).all()
     done_count = q.filter(QueueTicket.status.in_(("DONE", "NO_SHOW"))).count()
     depts = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True).all()
@@ -279,7 +284,7 @@ def to_reception(tid: int):
     surname = parts[-1] if parts else "—"
     first = " ".join(parts[:-1]) if len(parts) > 1 else (parts[0] if parts else "Patient")
 
-    # Create intake
+    # Create intake — preserve fast-track
     intake = ReceptionIntake(
         org_id=t.org_id,
         ref=reception_engine.next_ref(t.org_id),
@@ -288,6 +293,8 @@ def to_reception(tid: int):
         phone=t.phone,
         stage="RECEPTION",
         created_by=current_user.id,
+        is_fast_track=bool(getattr(t, "is_fast_track", False)),
+        fast_track_reason=getattr(t, "fast_track_reason", None),
     )
     db.session.add(intake)
     db.session.flush()

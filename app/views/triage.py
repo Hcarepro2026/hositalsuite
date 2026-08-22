@@ -71,12 +71,17 @@ def bench():
         clinic = triage.suggest_clinic_with_cover(org_id, p) if p else "OPD"
         # PRE-SELECT the free doctor with the shortest queue.
         suggested = triage.suggest_doctor(org_id, clinic)
+        try:
+            journey_est = tracking.estimate_remaining_journey(org_id, v)
+        except Exception:
+            journey_est = {"total": 0, "stages": [], "fast_track": bool(v.is_fast_track)}
         rows.append({
             "visit": v,
             "patient": p,
             "waited": triage.wait_minutes(v),
             "suggest_clinic": clinic,
             "suggest_session_id": suggested.id if suggested else None,
+            "journey_estimate": journey_est,
         })
     return render_template(
         "triage/bench.html", rows=rows, sessions=sessions, load=load,

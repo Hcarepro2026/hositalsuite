@@ -91,7 +91,8 @@ def doctor_queue(org_id: int, doctor_id: int) -> list[PatientVisit]:
             .filter(PatientVisit.org_id == org_id,
                     PatientVisit.status.in_(("TRIAGED", "IN_CONSULTATION")),
                     or_(*conditions))
-            .order_by(PatientVisit.triaged_at.asc().nullsfirst())
+            .order_by(PatientVisit.is_fast_track.desc(),
+                      PatientVisit.triaged_at.asc().nullsfirst())
             .all())
 
 
@@ -216,12 +217,15 @@ def finish(visit: PatientVisit, doctor_id: int, destinations: list[str],
 
 # ------------------------------------------------------------------ Stage D
 def pending_for(org_id: int, destination: str) -> list[VisitOnward]:
-    """Everyone the doctors have sent to one desk and who has not been done."""
+    """Everyone the doctors have sent to one desk — fast-track first, then oldest."""
+    # Join to visit to prioritize fast-track patients at Lab/Pharmacy etc.
     return (db.session.query(VisitOnward)
+            .join(PatientVisit, VisitOnward.visit_id == PatientVisit.id)
             .filter(VisitOnward.org_id == org_id,
                     VisitOnward.destination == destination,
                     VisitOnward.status == "PENDING")
-            .order_by(VisitOnward.sent_at.asc())
+            .order_by(PatientVisit.is_fast_track.desc(),
+                      VisitOnward.sent_at.asc())
             .limit(200).all())
 
 

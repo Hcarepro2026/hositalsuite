@@ -90,13 +90,14 @@ CATEGORY_CLINIC = {
 
 # ------------------------------------------------------------------ the queue
 def waiting(org_id: int) -> list[PatientVisit]:
-    """Patients registered today and not yet placed — longest wait first."""
+    """Patients registered today and not yet placed — fast-track first, then longest wait."""
     start = datetime.combine(now_naive().date(), datetime.min.time())
     return (db.session.query(PatientVisit)
             .filter(PatientVisit.org_id == org_id,
                     PatientVisit.status == "REGISTERED",
                     PatientVisit.started_at >= start)
-            .order_by(PatientVisit.started_at.asc())
+            .order_by(PatientVisit.is_fast_track.desc(),
+                      PatientVisit.started_at.asc())
             .limit(200).all())
 
 

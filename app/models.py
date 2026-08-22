@@ -553,6 +553,8 @@ class QueueTicket(db.Model):
     intake_id = db.Column(
         db.Integer, db.ForeignKey("reception_intake.id", use_alter=True, name="fk_qt_intake"), index=True
     )
+    is_fast_track = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    fast_track_reason = db.Column(db.String(40))
     anonymized_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=now_naive)
     called_at = db.Column(db.DateTime)
@@ -1155,6 +1157,10 @@ class PatientVisit(db.Model):
     consulting_room = db.Column(db.String(20))
     doctor_id = db.Column(db.Integer, db.ForeignKey("user.id"))
 
+    # Fast-track: elderly / pregnant / child / wheelchair — premium patient care
+    is_fast_track = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    fast_track_reason = db.Column(db.String(40))  # ELDERLY | PREGNANT | CHILD | WHEELCHAIR | ANTENATAL
+
     started_at = db.Column(db.DateTime, default=now_naive, nullable=False, index=True)
     triaged_at = db.Column(db.DateTime)
     seen_at = db.Column(db.DateTime)
@@ -1274,6 +1280,10 @@ class ReceptionIntake(db.Model):
     bill_ref = db.Column(db.String(40))           # written by Billing
     payment_ref = db.Column(db.String(40))        # receipt from Megalex/Pay-Point
     needs_blood_sugar = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Fast-track: identified at reception (elderly/pregnant/child/wheelchair)
+    is_fast_track = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    fast_track_reason = db.Column(db.String(40))
 
     patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), index=True)
     visit_id = db.Column(

@@ -301,16 +301,37 @@ def validate(form: dict, *, org_id: int, patient_id: int | None = None) -> tuple
 
 # ------------------------------------------------------------------ visits
 def open_visit(patient: Patient, *, user_id: int, reason: str = "",
-               visit_type: str | None = None, department_id: int | None = None) -> PatientVisit:
+               visit_type: str | None = None, department_id: int | None = None,
+               is_fast_track: bool = False, fast_track_reason: str | None = None) -> PatientVisit:
     """Start an attendance for a folder and stamp the folder as seen today."""
     if not visit_type:
         visit_type = "NEW" if not patient.last_visit_at else "FOLLOW_UP"
+    # Auto-detect fast-track from patient age / assistance if not passed explicitly
+    if not is_fast_track:
+        try:
+            age = patient.age
+            if age is not None and age >= 60:
+                is_fast_track = True
+                fast_track_reason = fast_track_reason or "ELDERLY"
+            elif age is not None and age <= 5:
+                is_fast_track = True
+                fast_track_reason = fast_track_reason or "CHILD"
+            elif patient.assistance and "WHEELCHAIR" in patient.assistance:
+                is_fast_track = True
+                fast_track_reason = fast_track_reason or "WHEELCHAIR"
+            elif patient.assistance and "PREGNANT" in patient.assistance:
+                is_fast_track = True
+                fast_track_reason = fast_track_reason or "PREGNANT"
+        except Exception:
+            pass
     visit = PatientVisit(
         org_id=patient.org_id, patient_id=patient.id,
         visit_no=next_visit_no(patient.org_id), visit_type=visit_type,
         status="REGISTERED", reason=(reason or "").strip()[:300],
         payer_type=patient.payer_type, department_id=department_id,
-        registered_by=user_id)
+        registered_by=user_id,
+        is_fast_track=bool(is_fast_track),
+        fast_track_reason=(fast_track_reason or None))
     db.session.add(visit)
     patient.last_visit_at = now_naive()
     return visit
