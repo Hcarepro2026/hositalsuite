@@ -1,4 +1,6 @@
-{# TV Main - Waiting Area - shows MORE, friendly attractive, Nigeria voices 2M2F recycled daily #}
+{# TV Main - Waiting Area - shows MORE, friendly attractive, Nigeria voices 2M2F recycled daily
+   Premium++: fast-track elderly/pregnant/child, journey time estimate
+#}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,11 +17,14 @@
   .pill.green{background: #10b981;color:#fff}
   .pill.amber{background: #f59e0b;color:#000}
   .pill.blue{background: #0ea5e9;color:#fff}
+  .pill.purple{background: #8b5cf6;color:#fff}
+  .pill.red{background: #ef4444;color:#fff}
   .voice-bar{background: linear-gradient(90deg,#f59e0b,#ef4444);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer}
   .voice-bar button{background:#fff;color:#000;border:none;padding:10px 22px;border-radius:999px;font-weight:800;font-size:1rem;cursor:pointer}
   .main{display:grid;grid-template-columns: 1.3fr 1fr;gap:20px;padding:20px 28px}
   @media(max-width:900px){.main{grid-template-columns:1fr}}
   .now-card{background: linear-gradient(135deg,#10b981 0%,#059669 100%);border-radius:20px;padding:28px;box-shadow: 0 20px 40px rgba(16,185,129,0.3);position:relative;overflow:hidden;animation: pulse 2s infinite}
+  .now-card.fast{background: linear-gradient(135deg,#8b5cf6 0%,#ec4899 100%);box-shadow: 0 20px 40px rgba(139,92,246,0.4)}
   .now-card::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background: radial-gradient(circle,rgba(255,255,255,0.15) 0%,transparent 60%);animation: shimmer 3s infinite}
   @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.01)}}
   @keyframes shimmer{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
@@ -28,6 +33,10 @@
   @media(max-width:600px){.now-card .name{font-size:2rem}}
   .now-card .room{font-size:1.6rem;font-weight:700;opacity:0.95}
   .now-card .code{margin-top:12px;font-size:1.1rem;background: rgba(0,0,0,0.2);display:inline-block;padding:6px 14px;border-radius:999px}
+  .journey{margin-top:14px;background: rgba(0,0,0,0.2);border-radius:12px;padding:12px 14px}
+  .journey .jt{font-size:.8rem;letter-spacing:0.06em;text-transform:uppercase;opacity:0.9;margin-bottom:6px}
+  .journey .total{font-size:1.4rem;font-weight:900}
+  .journey .steps{font-size:.85rem;opacity:0.9;margin-top:4px;line-height:1.4}
   .section{background: rgba(255,255,255,0.08);backdrop-filter: blur(10px);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.1)}
   .section h2{font-size:1.1rem;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px}
   .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08)}
@@ -40,11 +49,14 @@
   .stat .v{font-size:1.8rem;font-weight:900}
   .stat .l{font-size:.75rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.8;margin-top:2px}
   .next-list .item{background: rgba(255,255,255,0.06);border-radius:12px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;animation: slideIn 0.4s ease}
+  .next-list .item.fast{border-left:4px solid #8b5cf6;background: rgba(139,92,246,0.15)}
   @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
   .footer{padding:12px 28px;text-align:center;opacity:0.6;font-size:.8rem}
   .clock{font-variant-numeric: tabular-nums;font-weight:700;font-size:1.2rem}
   .yoruba{font-style:italic;opacity:0.85;font-size:1.1rem;margin-top:6px}
   .badge{background:#fff;color:#059669;padding:4px 10px;border-radius:999px;font-size:.75rem;font-weight:800}
+  .badge.fast{background:#8b5cf6;color:#fff}
+  .wait-badge{background: rgba(0,0,0,0.25);padding:4px 10px;border-radius:999px;font-size:.8rem;font-weight:700}
 </style>
 </head>
 <body>
@@ -55,19 +67,20 @@
     <span class="pill">{{ rotation.slot_name }}</span>
     <span class="pill">EN + YO</span>
     <span class="pill green">{{ feed.stats.total_today }} today</span>
+    {% if feed.stats.fast_track_waiting %}<span class="pill purple">⭐ {{ feed.stats.fast_track_waiting }} priority</span>{% endif %}
   </div>
 </div>
 
 <div class="voice-bar" id="voiceBar">
   <div style="flex:1" onclick="hmsTv.enableVoice()">
-    <b>🔊 Nigeria Voices: 2 Male + 2 Female, recycled daily</b> — Today: <b>{{ rotation.slot_name }}</b> · English + Yorùbá
-    <div style="font-size:.85rem;opacity:0.9;margin-top:2px">Tap to enable voice. TV will shout every call in English then Yorùbá. Volume per TV saved.</div>
+    <b>🔊 Nigeria Voices: 2 Male + 2 Female, recycled daily</b> — Today: <b>{{ rotation.slot_name }}</b> · English + Yorùbá · Priority lane for elderly/pregnant/child
+    <div style="font-size:.85rem;opacity:0.9;margin-top:2px">Tap to enable voice. TV will shout every call in English then Yorùbá. Volume per TV saved. Journey time shown for every patient.</div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 12px;border-radius:999px">
       <span style="font-size:.9rem">🔉</span>
-      <input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen else 100 }}" style="width:110px" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)">
-      <span id="volLabel" style="font-size:.9rem;font-weight:800;min-width:32px">{{ screen.voice_volume if screen else 100 }}%</span>
+      <input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}" style="width:110px" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)">
+      <span id="volLabel" style="font-size:.9rem;font-weight:800;min-width:32px">{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}%</span>
       <span style="font-size:.9rem">🔊</span>
     </div>
     <button id="voiceBtn" onclick="hmsTv.enableVoice()">🔊 Enable Voice</button>
@@ -80,12 +93,23 @@
     {# NOW SERVING - most important #}
     {% if feed.now_serving %}
       {% set first = feed.now_serving[0] %}
-      <div class="now-card">
-        <div class="label">📣 Now Serving — Ní báyìí</div>
+      <div class="now-card {% if first.is_fast_track %}fast{% endif %}">
+        <div class="label">📣 Now Serving — Ní báyìí {% if first.is_fast_track %}⭐ Priority — {{ first.fast_track_reason or 'Priority' }}{% endif %}</div>
         <div class="name">{{ first.name }}</div>
         <div class="yoruba">{{ first.spoken }} — ẹ jọwọ lọ sí {{ first.room }}</div>
         <div class="room">{{ first.room }} {% if first.doctor %}· {{ first.doctor }}{% endif %} {% if first.clinic %}· {{ first.clinic }}{% endif %}</div>
-        <div class="code">{{ first.code }} · {{ first.type|replace('_',' ')|title }}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <span class="code">{{ first.code }} · {{ first.type|replace('_',' ')|title }}</span>
+          {% if first.is_fast_track %}<span class="badge fast">⭐ Priority Lane — {{ first.fast_track_reason }}</span>{% endif %}
+          {% if first.waited %}<span class="wait-badge">Waited {{ first.waited }}m</span>{% endif %}
+        </div>
+        {% if first.journey_estimate and first.journey_estimate.total %}
+        <div class="journey">
+          <div class="jt">⏱ Estimated journey left</div>
+          <div class="total">{{ first.journey_estimate.total }} minutes {% if first.journey_estimate.fast_track %}· Priority lane (half time){% endif %}</div>
+          <div class="steps">{% for st in first.journey_estimate.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %}</div>
+        </div>
+        {% endif %}
         <div style="margin-top:10px"><span class="badge">🔊 Speaking in {{ rotation.slot_name }}</span></div>
       </div>
     {% else %}
@@ -101,18 +125,41 @@
       <h2>⏭ Next — Tó kàn <span class="pill" style="margin-left:auto">{{ feed.next_up|length }} waiting</span></h2>
       <div class="next-list" id="nextList">
         {% for item in feed.next_up[:8] %}
-        <div class="item">
-          <div>
-            <div style="font-weight:800;font-size:1.05rem">{{ item.name }}</div>
-            <div style="font-size:.85rem;opacity:0.8">{{ item.code }} · {{ item.clinic }} {% if item.room %}→ {{ item.room }}{% endif %}</div>
+        <div class="item {% if item.is_fast_track %}fast{% endif %}">
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:1.05rem;display:flex;gap:8px;align-items:center">
+              {{ item.name }}
+              {% if item.is_fast_track %}<span class="pill purple" style="font-size:.7rem">⭐ {{ item.fast_track_reason or 'Priority' }}</span>{% endif %}
+            </div>
+            <div style="font-size:.85rem;opacity:0.8">{{ item.code }} · {{ item.clinic }} {% if item.room %}→ {{ item.room }}{% endif %} {% if item.doctor %}· {{ item.doctor }}{% endif %}</div>
+            {% if item.estimated_wait is defined %}
+            <div style="font-size:.8rem;margin-top:4px">
+              <span class="wait-badge">⏱ ~{{ item.estimated_wait }} min wait</span>
+              {% if item.journey_estimate and item.journey_estimate.total %}<span class="wait-badge" style="margin-left:6px">🛣 {{ item.journey_estimate.total }} min total journey</span>{% endif %}
+            </div>
+            {% endif %}
           </div>
-          <span class="pill amber">{{ item.type|replace('_',' ')|title }}</span>
+          <span class="pill amber">{{ item.type|replace('_',' ')|title }} {% if item.position %}#{{ item.position }}{% endif %}</span>
         </div>
         {% else %}
         <div class="row"><span class="left">No one in queue — well done!</span><span class="right">Kò sí ẹnikẹ́ni</span></div>
         {% endfor %}
       </div>
     </div>
+
+    {# Reception waiting with journey time #}
+    {% if feed.reception_enriched %}
+    <div class="section" style="margin-top:20px">
+      <h2>🚪 Reception / Billing / Pay-Point <span class="pill blue">{{ feed.reception_enriched|length }}</span></h2>
+      {% for enriched in feed.reception_enriched[:6] %}
+      {% set r = enriched.row %}
+      <div class="row {% if enriched.is_fast_track %}fast{% endif %}" style="{% if enriched.is_fast_track %}border-left:4px solid #8b5cf6;padding-left:10px{% endif %}">
+        <span class="left">{{ r.full_name }} {% if enriched.is_fast_track %}<span class="pill purple" style="font-size:.65rem">⭐ {{ enriched.fast_track_reason }}</span>{% endif %}<br><small style="opacity:0.7">{{ r.ref }} · {{ r.stage }}</small></span>
+        <span class="right"><span class="wait-badge">~{{ enriched.estimated_wait }}m</span> <span class="wait-badge">🛣 {{ enriched.journey_estimate.total }}m total</span></span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 
   <div>
@@ -126,7 +173,7 @@
         <div class="stat"><div class="v">{{ feed.stats.onward_pending }}</div><div class="l">Lab/Pharm/Wards</div></div>
         <div class="stat"><div class="v">{{ feed.stats.reception_waiting }}</div><div class="l">Reception</div></div>
         <div class="stat"><div class="v">{{ feed.stats.doctors_ready }}</div><div class="l">Doctors Ready</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.queue_done }}</div><div class="l">Done Today</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.fast_track_waiting or 0 }}</div><div class="l">⭐ Priority</div></div>
         <div class="stat"><div class="v">{{ feed.stats.total_today }}</div><div class="l">Total Today</div></div>
       </div>
 
@@ -154,13 +201,25 @@
       <h2>🧪 Lab / Pharmacy / Wards Waiting</h2>
       {% for step in feed.onward_pending[:6] %}
       {% set visit = feed.patients.get(step.visit_id) if feed.patients else None %}
-      <div class="row">
-        <span class="left">{{ visit.full_name if visit else 'Patient' }} → {{ step.destination }}</span>
+      {% set is_ft = visit.is_fast_track if visit else False %}
+      <div class="row" style="{% if is_ft %}border-left:3px solid #8b5cf6;padding-left:10px{% endif %}">
+        <span class="left">{% if is_ft %}⭐ {% endif %}{{ visit.full_name if visit else 'Patient' }} → {{ step.destination }}</span>
         <span class="right">{{ ((feed.now - step.sent_at).total_seconds()//60)|int }}m ago</span>
       </div>
       {% endfor %}
     </div>
     {% endif %}
+
+    {# Journey time legend #}
+    <div class="section" style="margin-top:20px;background: rgba(139,92,246,0.12)">
+      <h2>💜 Premium Patient Care</h2>
+      <div style="font-size:.9rem;line-height:1.5">
+        ⭐ <b>Priority Lane:</b> Elderly (60+), Pregnant, Child under 5, Wheelchair — seen first, half wait time.<br>
+        ⏱ <b>Journey Time:</b> Every patient sees estimated total time from now to going home, based on real hospital speed.<br>
+        🛣 <b>Transparent:</b> Reception → Billing → Pay → HIMS → Triage → Doctor → Lab/Pharmacy → Home.<br>
+        🔊 <b>Voice:</b> Nigeria native voices, 2 male 2 female recycled daily, English + Yorùbá.
+      </div>
+    </div>
   </div>
 </div>
 
@@ -168,7 +227,7 @@
   <span id="lastUpdate">Last update: just now</span> · Auto-refresh every 5 seconds · 
   <a href="/tv" style="color:#fff">Main TV</a> · 
   {% if screen %}<a href="/api/tv/feed?code={{ screen.code }}" style="color:#fff" target="_blank">JSON feed</a>{% endif %} · 
-  Friendly, attractive, premium++ · No medical record on screen
+  Friendly, attractive, premium++ · No medical record on screen · Priority lane active
 </div>
 
 <script>
@@ -186,7 +245,7 @@ window.hmsTv = {
   slot: {{ rotation.slot }},
   slotName: "{{ rotation.slot_name }}",
   lastSpokenKey: "",
-  volume: ({{ screen.voice_volume if screen else 100 }} / 100), // 0.0 - 1.0
+  volume: ({{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }} / 100),
   screenCode: "{{ screen.code if screen else 'MAIN' }}",
 
   init(){
@@ -199,7 +258,6 @@ window.hmsTv = {
       setTimeout(load, 800);
     }
     document.addEventListener('click', ()=>{ this.unlock(); }, {once:true});
-    // Restore volume from localStorage if exists (per TV)
     try{
       const saved = localStorage.getItem('tv_vol_'+this.screenCode);
       if(saved !== null){
@@ -225,14 +283,12 @@ window.hmsTv = {
     this.volume = Math.max(0,Math.min(1, parseInt(v)/100));
     const lb = document.getElementById('volLabel');
     if(lb) lb.textContent = v + '%';
-    // Live feedback: if enabled, speak volume level softly
   },
 
   saveVolume(v){
     this.setVolume(v);
     try{
       localStorage.setItem('tv_vol_'+this.screenCode, v);
-      // Also save to server if admin logged in (optional, best effort)
       fetch('/api/tv/volume?code='+encodeURIComponent(this.screenCode)+'&volume='+encodeURIComponent(v), {method:'POST'}).catch(()=>{});
     }catch(e){}
     if(this.enabled){
@@ -242,7 +298,7 @@ window.hmsTv = {
 
   testVoice(){
     if(!this.enabled){ this.enableVoice(); setTimeout(()=> this.testVoice(), 800); return; }
-    const en = "Test. "+this.slotName+" speaking at "+Math.round(this.volume*100)+" percent. Folake Abatan, please go to Room 3, Dental Clinic";
+    const en = "Test. "+this.slotName+" speaking at "+Math.round(this.volume*100)+" percent. Priority lane active for elderly, pregnant and children. Folake Abatan, please go to Room 3, Dental Clinic";
     const yo = "Idanwo. "+this.slotName+" n sọrọ ni "+Math.round(this.volume*100)+" percent. Folake Abatan, ẹ jọwọ lọ sí Room 3";
     this.speakBilingual(en, yo);
   },
@@ -252,43 +308,32 @@ window.hmsTv = {
     this.unlock();
     const bar = document.getElementById('voiceBar');
     bar.style.background = "linear-gradient(90deg,#10b981,#059669)";
-    // Keep slider, only change left text
     const left = bar.querySelector('div');
     if(left){
-      left.innerHTML = '<b>✅ Voice ON — '+this.slotName+' speaking English + Yorùbá — Vol '+Math.round(this.volume*100)+'%</b><div style="font-size:.85rem">TV will shout every call. 2 Male + 2 Female recycled daily. Drag slider to change loudness.</div>';
+      left.innerHTML = '<b>✅ Voice ON — '+this.slotName+' speaking English + Yorùbá — Vol '+Math.round(this.volume*100)+'% — Priority lane active</b><div style=\"font-size:.85rem\">TV will shout every call. 2 Male + 2 Female recycled daily. Journey time announced. Drag slider to change loudness.</div>';
       left.onclick = ()=>{};
     }
     const btn = document.getElementById('voiceBtn');
     if(btn) btn.textContent = "🔊 Voice ON";
-    this.speak("Voice is on. "+this.slotName+" will call patients in English and Yoruba at "+Math.round(this.volume*100)+" percent. Welcome.", "en-NG");
+    this.speak("Voice is on. "+this.slotName+" will call patients in English and Yoruba at "+Math.round(this.volume*100)+" percent. Priority lane is active for elderly, pregnant and children. Welcome.", "en-NG");
     setTimeout(()=>{ this.speak("Ohun ti wa lori. A o pe awon alaisan ni ede Geesi ati Yoruba. E kaabo.", "yo-NG"); }, 2500);
   },
 
   pickVoice(lang){
-    // Prefer Nigerian voices, then any matching lang, then fallback
-    // lang can be en-NG, yo-NG, en
     if(!this.voices || !this.voices.length) return null;
-    // Filter by lang
     let candidates = this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes(lang.toLowerCase().split('-')[0]));
     if(!candidates.length) candidates = this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes('en'));
     if(!candidates.length) candidates = this.voices;
-
-    // Try to detect gender from name
-    // Slot mapping: 0=F1,1=M1,2=F2,3=M2
     const isFemaleSlot = (this.slot % 2 === 0);
     const wantFemale = isFemaleSlot;
-    // Heuristics for gender
     const femaleHints = ["female","woman","zira","ada","folake","samantha","google uk english female","google us english"];
     const maleHints = ["male","man","emeka","chinedu","google uk english male","google us english male","david","mark"];
-
     let genderFiltered = candidates.filter(v=>{
       const n = (v.name||"").toLowerCase();
       if(wantFemale) return femaleHints.some(h=> n.includes(h));
       return maleHints.some(h=> n.includes(h));
     });
     if(genderFiltered.length) candidates = genderFiltered;
-
-    // Daily rotation within candidates: pick by slot + day
     const idx = this.slot % candidates.length;
     return candidates[idx] || candidates[0] || null;
   },
@@ -299,7 +344,7 @@ window.hmsTv = {
     try{
       const u = new SpeechSynthesisUtterance(text);
       u.lang = lang || "en-NG";
-      u.volume = this.volume; // per-TV slider 0-100%
+      u.volume = this.volume;
       u.rate = 0.92;
       u.pitch = 1.0;
       const v = this.pickVoice(lang);
@@ -326,33 +371,24 @@ function refreshFeed(){
     .then(r=> r.json())
     .then(data=>{
       document.getElementById('lastUpdate').textContent = "Last update: "+ new Date().toLocaleTimeString();
-      // If now_serving changed, speak bilingual
       if(data.now_serving && data.now_serving.length){
         const first = data.now_serving[0];
         const key = first.code + "|" + first.room + "|" + first.type;
         if(key !== lastNowServingKey){
           lastNowServingKey = key;
-          // Update big card if changed (simple reload for now - friendly)
           if(key !== "{{ (feed.now_serving[0].code ~ '|' ~ feed.now_serving[0].room) if feed.now_serving else '' }}"){
-            // Speak
-            const en = first.name + ", please go to " + first.room + (first.clinic ? ", " + first.clinic : "");
+            let en = first.name + ", please go to " + first.room + (first.clinic ? ", " + first.clinic : "");
+            if(first.is_fast_track){ en = "Priority patient, " + en + ". Elderly pregnant and children priority lane."; }
             const yo = first.spoken + ", ẹ jọwọ lọ sí " + first.room + (first.clinic ? ", " + first.clinic : "");
             hmsTv.speakBilingual(en, yo);
-            // Reload page to show new data attractively
             setTimeout(()=>{ window.location.reload(); }, 1000);
           }
         }
-      }
-      // Update stats numbers live without reload
-      if(data.stats){
-        // Could update DOM here for premium smoothness, but reload keeps design simple and attractive
       }
     })
     .catch(e=>{ console.log("feed failed", e); });
 }
 setInterval(refreshFeed, 5000);
-
-// Keep TV awake: ping every 30s
 setInterval(()=>{ fetch("/api/tv/feed?code=MAIN",{cache:"no-store"}).catch(()=>{}); }, 30000);
 </script>
 </body>

@@ -19,7 +19,7 @@
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
   <div class="privacy-note">🔒 You get a queue number to track your position.
-    Only your number — never your name — is shown on public screens.</div>
+    Only your number — never your name — is shown on public screens. Priority lane for elderly 60+, pregnant, child under 5, wheelchair.</div>
   <form class="card pad-lg" method="post" action="/queue/join">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="loc" value="{{ loc or '' }}">
@@ -34,11 +34,26 @@
     <input type="text" name="patient_name" required>
     <label>3 · {{ _('f_phone') }} (SMS)</label>
     <input type="tel" name="phone" inputmode="tel" placeholder="e.g. 08012345678">
+
+    <div style="margin-top:14px;padding:12px;background:#f3e8ff;border:2px solid #8b5cf6;border-radius:10px">
+      <label style="font-weight:800;color:#6b21a8;margin:0">
+        <input type="checkbox" name="is_fast_track" value="1" style="width:auto"> ⭐ Priority Lane — Elderly 60+ / Pregnant / Child under 5 / Wheelchair
+      </label>
+      <p style="font-size:.8rem;margin:6px 0 0;opacity:0.8">Tick if you are elderly, pregnant, a small child, or need wheelchair. You will be seen first at every desk. Journey time shown on TV.</p>
+      <select name="fast_track_reason" style="margin-top:8px">
+        <option value="">— Reason —</option>
+        <option value="ELDERLY">Elderly 60+</option>
+        <option value="PREGNANT">Pregnant / Antenatal</option>
+        <option value="CHILD">Child under 5</option>
+        <option value="WHEELCHAIR">Wheelchair / Mobility</option>
+      </select>
+    </div>
+
     <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_queue') }}</button>
   </form>
   {% include "_help_desk.html" %}
 </main>
-<div class="footer">Your queue number works all day · Check it anytime with your private link · <a href="/privacy">Privacy</a></div>
+<div class="footer">Your queue number works all day · Priority lane active · Check it anytime with your private link · <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

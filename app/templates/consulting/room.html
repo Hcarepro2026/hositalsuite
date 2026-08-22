@@ -39,17 +39,27 @@
   </div>
 {% endif %}
 
+<div class="card pad-lg mb" style="background:#f3e8ff;border-left:4px solid #8b5cf6">
+  <b>💜 Priority Lane + Journey Time Active</b><br>
+  <span style="font-size:.9rem">⭐ Priority patients first (elderly 60+, pregnant, child under 5, wheelchair) — half wait time. Each patient shows estimated total journey time to going home. TV shows same. Voice announces priority.</span>
+</div>
+
 {# ---------------- the patient in the room right now ---------------- #}
 {% if current %}
 {% set p = patients.get(current.patient_id) %}
-<div class="card pad-lg mb" style="border-left:6px solid #0e5a8a">
+<div class="card pad-lg mb" style="border-left:6px solid #0e5a8a; {% if current.is_fast_track %}background:#f3e8ff;border-left-color:#8b5cf6{% endif %}">
   <div class="muted" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.06em">
-    In the room with you now</div>
-  <div style="font-size:1.25rem;font-weight:800">{{ p.full_name if p else '—' }}</div>
-  <div class="muted" style="font-size:.85rem">{{ p.hospital_number if p }}</div>
+    In the room with you now {% if current.is_fast_track %}⭐ Priority — {{ current.fast_track_reason }}{% endif %}</div>
+  <div style="font-size:1.25rem;font-weight:800">{% if current.is_fast_track %}⭐ {% endif %}{{ p.full_name if p else '—' }}</div>
+  <div class="muted" style="font-size:.85rem">{{ p.hospital_number if p }} {% if current.is_fast_track %}· ⭐ Priority Lane{% endif %}</div>
   {% if p and p.care_flags %}
   <div class="notice mt" style="text-align:left">
     <b>⚠ Needs help:</b> {{ p.care_flags | join(' · ') }}</div>
+  {% endif %}
+  {% if current.is_fast_track %}
+  <div class="notice mt" style="text-align:left;background:#f3e8ff;border-left:4px solid #8b5cf6">
+    <b>⭐ Priority Lane:</b> {{ current.fast_track_reason }} — patient prioritized, seen first at every desk.
+  </div>
   {% endif %}
 
   <form method="post" action="/consulting-room/{{ current.id }}/finish" class="mt">
@@ -84,7 +94,7 @@
 </div>
 {% endif %}
 
-<h2>My call room queue</h2>
+<h2>My call room queue — Priority first, with journey time</h2>
 {% if not rows %}
   <div class="card pad-lg"><p class="muted" style="margin:0">
     No patients waiting. Triage will send them to you — either by name, or
@@ -92,13 +102,15 @@
 {% else %}
   {% for r in rows %}
   {% if not current or r.visit.id != current.id %}
-  <div class="card pad-lg mb">
+  <div class="card pad-lg mb" style="border-left:4px solid {% if r.visit.is_fast_track %}#8b5cf6{% else %}#f59e0b{% endif %}; {% if r.visit.is_fast_track %}background:#f3e8ff{% endif %}">
     <div class="spread">
       <div>
-        <div style="font-size:1.05rem;font-weight:800">{{ r.patient.full_name if r.patient else '—' }}</div>
+        <div style="font-size:1.05rem;font-weight:800">{% if r.visit.is_fast_track %}⭐ {% endif %}{{ r.patient.full_name if r.patient else '—' }} {% if r.visit.is_fast_track %}<span class="pill" style="background:#8b5cf6;color:#fff;font-size:.7rem">⭐ {{ r.visit.fast_track_reason }}</span>{% endif %}</div>
         <div class="muted" style="font-size:.85rem">
           {{ r.patient.hospital_number if r.patient }} ·
-          {{ clinic_labels.get(r.visit.clinic, r.visit.clinic) }}</div>
+          {{ clinic_labels.get(r.visit.clinic, r.visit.clinic) }}
+          {% if r.visit.is_fast_track %}· ⭐ Priority{% endif %}
+        </div>
       </div>
       <span>
         {% if r.unclaimed %}
@@ -106,16 +118,21 @@
               title="Placed in your clinic but not assigned to anyone — call them in to take them">
           for the clinic</span>
         {% endif %}
-        <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }}">waiting {{ r.waited }}m</span>
+        <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }} {% if r.visit.is_fast_track %}purple{% endif %}">waiting {{ r.waited }}m {% if r.visit.is_fast_track %}⭐{% endif %}</span>
       </span>
     </div>
     {% if r.patient and r.patient.care_flags %}
     <div class="notice mt" style="text-align:left">
       <b>⚠ Needs help:</b> {{ r.patient.care_flags | join(' · ') }}</div>
     {% endif %}
+    {% if r.journey_estimate %}
+    <div class="notice mt" style="text-align:left;background:#f0f9ff;border-left:3px solid #0e5a8a">
+      <b>⏱ Estimated journey:</b> {{ r.journey_estimate.total }} min total — {% for st in r.journey_estimate.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %} {% if r.journey_estimate.fast_track %}<span style="color:#8b5cf6;font-weight:800">· Priority (half time)</span>{% endif %}
+    </div>
+    {% endif %}
     <form method="post" action="/consulting-room/{{ r.visit.id }}/call-in" class="mt">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-      <button class="btn">📣 Call this patient in</button>
+      <button class="btn" style="{% if r.visit.is_fast_track %}background:#8b5cf6{% endif %}">📣 Call this patient in {% if r.visit.is_fast_track %}⭐ Priority{% endif %}</button>
     </form>
   </div>
   {% endif %}

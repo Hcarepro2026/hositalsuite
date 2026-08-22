@@ -106,9 +106,9 @@
   </div>
 
   <div class="card mb">
-    <h2>4 · Special needs</h2>
+    <h2>4 · Special needs & Priority Lane</h2>
     <p class="hint">You are the first person to meet them — you can see what they need.
-      This is read out loud to the team so somebody comes to help.</p>
+      This is read out loud to the team. Elderly 60+, pregnant, child under 5, wheelchair go to priority lane automatically — but you can tick it manually too.</p>
     <label>Preferred language</label>
     <select name="preferred_lang">
       {% for code, label in langs %}
@@ -130,6 +130,23 @@
     <textarea name="care_note" id="care_note" rows="2" maxlength="200">{{ form.get('care_note','') }}</textarea>
     <button type="button" class="mic-btn" data-lang="en-NG"
             onclick="hmsVoice.start(this,'care_note')">🎤 Speak</button>
+
+    <div style="margin-top:16px;padding:14px;background:#f3e8ff;border:2px solid #8b5cf6;border-radius:12px">
+      <label style="font-weight:800;font-size:1.05rem;color:#6b21a8">
+        <input type="checkbox" name="is_fast_track" value="1" style="width:auto" {{ 'checked' if form.get('is_fast_track') }}>
+        ⭐ Priority Lane — Elderly / Pregnant / Child / Wheelchair — seen first
+      </label>
+      <p class="hint" style="margin:6px 0 8px">Auto-detected from age 60+, child under 5, wheelchair, pregnant — but tick here to force priority if you can see they need it. Voice will announce as priority patient.</p>
+      <label>Priority reason</label>
+      <select name="fast_track_reason">
+        <option value="">— Auto-detect —</option>
+        <option value="ELDERLY" {{ 'selected' if form.get('fast_track_reason')=='ELDERLY' }}>Elderly (60+)</option>
+        <option value="PREGNANT" {{ 'selected' if form.get('fast_track_reason')=='PREGNANT' }}>Pregnant / Antenatal</option>
+        <option value="CHILD" {{ 'selected' if form.get('fast_track_reason')=='CHILD' }}>Child under 5</option>
+        <option value="WHEELCHAIR" {{ 'selected' if form.get('fast_track_reason')=='WHEELCHAIR' }}>Wheelchair / Mobility</option>
+        <option value="PRIORITY" {{ 'selected' if form.get('fast_track_reason')=='PRIORITY' }}>Other priority</option>
+      </select>
+    </div>
   </div>
 
   <div class="card mb">

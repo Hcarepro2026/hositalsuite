@@ -1,14 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Onward desks{% endblock %}
 {% block content %}
-<h1>➡️ Onward desks</h1>
+<h1>➡️ Onward desks — Priority first</h1>
 <p class="muted">Everyone the doctors have sent on, and who is still waiting.
+  Priority lane patients (elderly 60+, pregnant, child under 5, wheelchair) show first with ⭐.
   Tick a patient off when you have finished with them. When the last desk is
-  done, the visit closes itself and the patient is told they can go home.</p>
+  done, the visit closes itself and the patient gets thank-you SMS.</p>
 
 <div class="card pad-lg mb" style="text-align:center">
   <div style="font-size:2rem;font-weight:800">{{ total }}</div>
   <div class="muted" style="font-size:.8rem">patients waiting across all desks</div>
+</div>
+
+<div class="card pad-lg mb" style="background:#f3e8ff;border-left:4px solid #8b5cf6">
+  <b>💜 Priority Lane Active</b> — ⭐ Elderly 60+, Pregnant, Child &lt;5, Wheelchair — seen first at Lab, Pharmacy, Billing, etc. TV shows same. Journey time: patient sees estimated time to going home.
 </div>
 
 {% for b in boards %}
@@ -29,13 +34,14 @@
       <p class="muted" style="margin:0">Nobody waiting.</p>
     {% else %}
       {% for r in b.rows %}
-      <div style="padding:10px 0;border-top:1px solid var(--line, #e5e7eb)">
+      <div style="padding:10px 0;border-top:1px solid var(--line, #e5e7eb); {% if r.visit and r.visit.is_fast_track %}background:#f3e8ff;border-left:4px solid #8b5cf6;padding-left:10px;border-radius:6px{% endif %}">
         <div class="spread">
           <div>
-            <div style="font-weight:700">{{ r.patient.full_name if r.patient else '—' }}</div>
+            <div style="font-weight:700">{% if r.visit and r.visit.is_fast_track %}⭐ {% endif %}{{ r.patient.full_name if r.patient else '—' }} {% if r.visit and r.visit.is_fast_track %}<span style="background:#8b5cf6;color:#fff;padding:2px 8px;border-radius:999px;font-size:.7rem">⭐ {{ r.visit.fast_track_reason }}</span>{% endif %}</div>
             <div class="muted" style="font-size:.82rem">
               {{ r.patient.hospital_number if r.patient }}
               {%- if r.step.doctor %} · sent by {{ r.step.doctor.name }}{% endif %}
+              {% if r.visit and r.visit.is_fast_track %} · ⭐ Priority{% endif %}
             </div>
             {% if r.step.note %}
             <div class="hint" style="margin-top:2px">“{{ r.step.note }}”</div>
@@ -43,12 +49,15 @@
             {% if r.patient and r.patient.care_flags %}
             <div class="hint" style="margin-top:2px">⚠ {{ r.patient.care_flags | join(' · ') }}</div>
             {% endif %}
+            {% if r.visit and r.visit.is_fast_track %}
+            <div class="hint" style="margin-top:2px;color:#6b21a8;font-weight:700">⭐ Priority Lane: {{ r.visit.fast_track_reason }} — seen first</div>
+            {% endif %}
           </div>
-          <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }}">{{ r.waited }}m</span>
+          <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }} {% if r.visit and r.visit.is_fast_track %}purple{% endif %}">{{ r.waited }}m {% if r.visit and r.visit.is_fast_track %}⭐{% endif %}</span>
         </div>
         <form method="post" action="/onward/{{ r.step.id }}/done" class="mt">
           <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-          <button class="btn small">✅ Done with this patient</button>
+          <button class="btn small" style="{% if r.visit and r.visit.is_fast_track %}background:#8b5cf6{% endif %}">✅ Done with this patient {% if r.visit and r.visit.is_fast_track %}⭐ Priority{% endif %}</button>
         </form>
       </div>
       {% endfor %}
