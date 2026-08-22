@@ -58,6 +58,12 @@
           </select>
         </div>
         <div><label>Voice languages</label><input name="voice_languages" value="{{ s.voice_languages }}" placeholder="en,yo"></div>
+        <div><label>Volume (0-100%) per TV</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="range" name="voice_volume" min="0" max="100" value="{{ s.voice_volume }}" style="flex:1" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span>{{ s.voice_volume }}%</span>
+          </div>
+        </div>
         <div><label><input type="checkbox" name="show_full_name" {% if s.show_full_name %}checked{% endif %}> Show full name</label></div>
         <div><label><input type="checkbox" name="show_queue_stats" {% if s.show_queue_stats %}checked{% endif %}> Show queue stats</label></div>
         <div><label><input type="checkbox" name="voice_enabled" {% if s.voice_enabled %}checked{% endif %}> Voice enabled</label></div>

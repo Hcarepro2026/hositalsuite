@@ -35,9 +35,13 @@
   <h1>🩺 {{ screen.name }} · {{ screen.location }}</h1>
   <div><span class="pill" id="clock">--:--</span> <span class="pill">{{ rotation.slot_name }}</span> <span class="pill">{{ screen.clinic_code or screen.screen_type }}</span></div>
 </div>
-<div class="voice-bar" id="voiceBar" onclick="hmsTv.enableVoice()">
-  <div><b>🔊 {{ rotation.slot_name }}</b> — English + Yorùbá — Tap to enable voice</div>
-  <button>Enable Voice</button>
+<div class="voice-bar" id="voiceBar">
+  <div style="flex:1" onclick="hmsTv.enableVoice()"><b>🔊 {{ rotation.slot_name }}</b> — English + Yorùbá — Tap to enable voice — Vol per TV</div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span>🔉</span><input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen else 90 }}" style="width:100px" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)"><span id="volLabel">{{ screen.voice_volume if screen else 90 }}%</span><span>🔊</span>
+    <button onclick="hmsTv.enableVoice()">Enable</button>
+    <button onclick="hmsTv.testVoice()" style="background:#000;color:#fff;border:none;padding:6px 12px;border-radius:999px;font-weight:700">Test</button>
+  </div>
 </div>
 <div class="main">
   <div>
@@ -88,16 +92,25 @@ function tick(){ document.getElementById('clock').textContent = new Date().toLoc
 setInterval(tick,1000); tick();
 window.hmsTv = {
   voices:[], enabled:false, slot: {{ rotation.slot }}, slotName:"{{ rotation.slot_name }}",
+  volume: ({{ screen.voice_volume if screen else 90 }} / 100),
+  screenCode: "{{ screen.code }}",
   init(){
     const load=()=>{ this.voices = speechSynthesis ? speechSynthesis.getVoices() : []; };
     load(); if(speechSynthesis){ speechSynthesis.onvoiceschanged=load; setTimeout(load,800); }
     document.addEventListener('click',()=>{ if(speechSynthesis){ const u=new SpeechSynthesisUtterance(" "); u.volume=0.01; speechSynthesis.speak(u);} },{once:true});
+    try{
+      const saved = localStorage.getItem('tv_vol_'+this.screenCode);
+      if(saved!==null){ this.volume = Math.max(0,Math.min(1, parseInt(saved)/100)); const sl=document.getElementById('volSlider'); const lb=document.getElementById('volLabel'); if(sl) sl.value=Math.round(this.volume*100); if(lb) lb.textContent=Math.round(this.volume*100)+'%'; }
+    }catch(e){}
   },
+  setVolume(v){ this.volume=Math.max(0,Math.min(1, parseInt(v)/100)); const lb=document.getElementById('volLabel'); if(lb) lb.textContent=v+'%'; },
+  saveVolume(v){ this.setVolume(v); try{ localStorage.setItem('tv_vol_'+this.screenCode, v); fetch('/api/tv/volume?code='+encodeURIComponent(this.screenCode)+'&volume='+encodeURIComponent(v), {method:'POST'}).catch(()=>{}); }catch(e){} if(this.enabled){ this.speak("Volume "+v+" percent", "en-NG"); } },
+  testVoice(){ if(!this.enabled){ this.enableVoice(); setTimeout(()=>this.testVoice(),800); return; } this.speakBilingual(this.slotName+" test at "+Math.round(this.volume*100)+" percent. Folake Abatan, please go to Room 3", this.slotName+" idanwo ni "+Math.round(this.volume*100)+" percent. Folake, ẹ jọwọ lọ sí Room 3"); },
   enableVoice(){
     this.enabled=true;
     document.getElementById('voiceBar').style.background="#10b981";
-    document.getElementById('voiceBar').innerHTML='<div><b>✅ Voice ON — '+this.slotName+' — EN + YO</b></div><button>ON</button>';
-    const u=new SpeechSynthesisUtterance("Voice is on. "+this.slotName+" will call patients."); u.lang="en-NG"; speechSynthesis.speak(u);
+    const left=document.getElementById('voiceBar').querySelector('div'); if(left) left.innerHTML='<b>✅ Voice ON — '+this.slotName+' — EN+YO — Vol '+Math.round(this.volume*100)+'%</b>';
+    const u=new SpeechSynthesisUtterance("Voice is on. "+this.slotName+" at "+Math.round(this.volume*100)+" percent."); u.lang="en-NG"; u.volume=this.volume; speechSynthesis.speak(u);
   },
   pickVoice(lang){
     if(!this.voices.length) return null;
@@ -112,7 +125,7 @@ window.hmsTv = {
   },
   speak(t,l){
     if(!this.enabled||!speechSynthesis) return;
-    const u=new SpeechSynthesisUtterance(t); u.lang=l||"en-NG"; u.volume=1; u.rate=0.92;
+    const u=new SpeechSynthesisUtterance(t); u.lang=l||"en-NG"; u.volume=this.volume; u.rate=0.92;
     const v=this.pickVoice(l); if(v) u.voice=v; speechSynthesis.speak(u);
   },
   speakBilingual(en,yo){

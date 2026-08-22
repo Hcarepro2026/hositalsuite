@@ -1492,6 +1492,7 @@ class TvScreen(db.Model):
     voice_enabled = db.Column(db.Boolean, default=True, nullable=False)
     voice_rotate_daily = db.Column(db.Boolean, default=True, nullable=False)  # True = 2M2F recycled daily
     voice_languages = db.Column(db.String(20), default="en,yo")  # en,yo = English + Yoruba
+    voice_volume = db.Column(db.Integer, default=100, nullable=False)  # 0-100 slider per TV
     active = db.Column(db.Boolean, default=True, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=now_naive)
 

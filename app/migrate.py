@@ -80,6 +80,7 @@ COLUMNS = [
     ("tv_screen", "show_queue_stats", "INTEGER DEFAULT 1"),
     ("tv_screen", "voice_rotate_daily", "INTEGER DEFAULT 1"),
     ("tv_screen", "voice_languages", "VARCHAR(20)"),
+    ("tv_screen", "voice_volume", "INTEGER DEFAULT 100"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

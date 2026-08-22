@@ -58,12 +58,21 @@
   </div>
 </div>
 
-<div class="voice-bar" id="voiceBar" onclick="hmsTv.enableVoice()">
-  <div>
+<div class="voice-bar" id="voiceBar">
+  <div style="flex:1" onclick="hmsTv.enableVoice()">
     <b>🔊 Nigeria Voices: 2 Male + 2 Female, recycled daily</b> — Today: <b>{{ rotation.slot_name }}</b> · English + Yorùbá
-    <div style="font-size:.85rem;opacity:0.9;margin-top:2px">Tap anywhere to enable voice. TV will shout every call in English then Yorùbá.</div>
+    <div style="font-size:.85rem;opacity:0.9;margin-top:2px">Tap to enable voice. TV will shout every call in English then Yorùbá. Volume per TV saved.</div>
   </div>
-  <button id="voiceBtn">🔊 Enable Voice</button>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 12px;border-radius:999px">
+      <span style="font-size:.9rem">🔉</span>
+      <input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen else 100 }}" style="width:110px" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)">
+      <span id="volLabel" style="font-size:.9rem;font-weight:800;min-width:32px">{{ screen.voice_volume if screen else 100 }}%</span>
+      <span style="font-size:.9rem">🔊</span>
+    </div>
+    <button id="voiceBtn" onclick="hmsTv.enableVoice()">🔊 Enable Voice</button>
+    <button onclick="hmsTv.testVoice()" style="background:rgba(0,0,0,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:8px 14px;border-radius:999px;font-weight:700;cursor:pointer">🎤 Test</button>
+  </div>
 </div>
 
 <div class="main">
@@ -170,26 +179,37 @@ function tickClock(){
 }
 setInterval(tickClock,1000); tickClock();
 
-// --- Nigeria Voices 2M2F recycled daily
+// --- Nigeria Voices 2M2F recycled daily + Volume slider per TV
 window.hmsTv = {
   voices: [],
   enabled: false,
   slot: {{ rotation.slot }},
   slotName: "{{ rotation.slot_name }}",
   lastSpokenKey: "",
+  volume: ({{ screen.voice_volume if screen else 100 }} / 100), // 0.0 - 1.0
+  screenCode: "{{ screen.code if screen else 'MAIN' }}",
 
   init(){
-    // Load voices
     const load = ()=>{
       this.voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
     };
     load();
     if(window.speechSynthesis){
       window.speechSynthesis.onvoiceschanged = load;
-      setTimeout(load, 800); // Android needs grace period
+      setTimeout(load, 800);
     }
-    // Try auto-enable if already interacted
     document.addEventListener('click', ()=>{ this.unlock(); }, {once:true});
+    // Restore volume from localStorage if exists (per TV)
+    try{
+      const saved = localStorage.getItem('tv_vol_'+this.screenCode);
+      if(saved !== null){
+        this.volume = Math.max(0,Math.min(1, parseInt(saved)/100));
+        const sl = document.getElementById('volSlider');
+        const lb = document.getElementById('volLabel');
+        if(sl){ sl.value = Math.round(this.volume*100); }
+        if(lb){ lb.textContent = Math.round(this.volume*100)+'%'; }
+      }
+    }catch(e){}
   },
 
   unlock(){
@@ -201,13 +221,46 @@ window.hmsTv = {
     }catch(e){}
   },
 
+  setVolume(v){
+    this.volume = Math.max(0,Math.min(1, parseInt(v)/100));
+    const lb = document.getElementById('volLabel');
+    if(lb) lb.textContent = v + '%';
+    // Live feedback: if enabled, speak volume level softly
+  },
+
+  saveVolume(v){
+    this.setVolume(v);
+    try{
+      localStorage.setItem('tv_vol_'+this.screenCode, v);
+      // Also save to server if admin logged in (optional, best effort)
+      fetch('/api/tv/volume?code='+encodeURIComponent(this.screenCode)+'&volume='+encodeURIComponent(v), {method:'POST'}).catch(()=>{});
+    }catch(e){}
+    if(this.enabled){
+      this.speak("Volume "+v+" percent. "+this.slotName+" at "+v+" percent.", "en-NG");
+    }
+  },
+
+  testVoice(){
+    if(!this.enabled){ this.enableVoice(); setTimeout(()=> this.testVoice(), 800); return; }
+    const en = "Test. "+this.slotName+" speaking at "+Math.round(this.volume*100)+" percent. Folake Abatan, please go to Room 3, Dental Clinic";
+    const yo = "Idanwo. "+this.slotName+" n sọrọ ni "+Math.round(this.volume*100)+" percent. Folake Abatan, ẹ jọwọ lọ sí Room 3";
+    this.speakBilingual(en, yo);
+  },
+
   enableVoice(){
     this.enabled = true;
     this.unlock();
     const bar = document.getElementById('voiceBar');
     bar.style.background = "linear-gradient(90deg,#10b981,#059669)";
-    bar.innerHTML = '<div><b>✅ Voice ON — '+this.slotName+' speaking English + Yorùbá</b><div style="font-size:.85rem">TV will shout every call. 2 Male + 2 Female recycled daily.</div></div><button>🔊 Voice ON</button>';
-    this.speak("Voice is on. "+this.slotName+" will call patients in English and Yoruba. Welcome to the hospital.", "en-NG");
+    // Keep slider, only change left text
+    const left = bar.querySelector('div');
+    if(left){
+      left.innerHTML = '<b>✅ Voice ON — '+this.slotName+' speaking English + Yorùbá — Vol '+Math.round(this.volume*100)+'%</b><div style="font-size:.85rem">TV will shout every call. 2 Male + 2 Female recycled daily. Drag slider to change loudness.</div>';
+      left.onclick = ()=>{};
+    }
+    const btn = document.getElementById('voiceBtn');
+    if(btn) btn.textContent = "🔊 Voice ON";
+    this.speak("Voice is on. "+this.slotName+" will call patients in English and Yoruba at "+Math.round(this.volume*100)+" percent. Welcome.", "en-NG");
     setTimeout(()=>{ this.speak("Ohun ti wa lori. A o pe awon alaisan ni ede Geesi ati Yoruba. E kaabo.", "yo-NG"); }, 2500);
   },
 
@@ -246,8 +299,8 @@ window.hmsTv = {
     try{
       const u = new SpeechSynthesisUtterance(text);
       u.lang = lang || "en-NG";
-      u.volume = 1.0;
-      u.rate = 0.92; // slightly slower for clarity in waiting hall
+      u.volume = this.volume; // per-TV slider 0-100%
+      u.rate = 0.92;
       u.pitch = 1.0;
       const v = this.pickVoice(lang);
       if(v) u.voice = v;

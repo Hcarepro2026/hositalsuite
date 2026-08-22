@@ -77,6 +77,7 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             voice_enabled=True,
             voice_rotate_daily=True,
             voice_languages="en,yo",
+            voice_volume=100,
             active=True,
         ),
         TvScreen(
@@ -91,6 +92,7 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             voice_enabled=True,
             voice_rotate_daily=True,
             voice_languages="en,yo",
+            voice_volume=90,
             active=True,
         ),
         TvScreen(
@@ -105,6 +107,7 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             voice_enabled=True,
             voice_rotate_daily=True,
             voice_languages="en,yo",
+            voice_volume=90,
             active=True,
         ),
         TvScreen(
@@ -118,6 +121,7 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             voice_enabled=True,
             voice_rotate_daily=True,
             voice_languages="en,yo",
+            voice_volume=80,
             active=True,
         ),
     ]

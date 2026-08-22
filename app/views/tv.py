@@ -71,6 +71,27 @@ def screen_by_code(code: str):
     return render_template(template, feed=feed, screen=screen, rotation=rotation, is_main=is_main)
 
 
+@bp.post("/api/tv/volume")
+def api_volume():
+    """Save volume per TV — public, per-tenant, best effort. No auth needed for TV remote, but scoped to org."""
+    org_id = _resolve_org()
+    if not org_id:
+        return jsonify({"error": "no org"}), 503
+    code = (request.args.get("code") or request.form.get("code") or "").strip().upper()[:20]
+    vol = request.args.get("volume", type=int)
+    if vol is None:
+        vol = request.form.get("volume", type=int)
+    if not code or vol is None:
+        return jsonify({"ok": False}), 400
+    vol = max(0, min(100, vol))
+    screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
+    if not screen:
+        return jsonify({"ok": False}), 404
+    screen.voice_volume = vol
+    db.session.commit()
+    return jsonify({"ok": True, "code": code, "volume": vol})
+
+
 @bp.get("/api/tv/feed")
 def api_feed():
     """JSON feed for TV auto-refresh — public, per-tenant."""
@@ -149,6 +170,7 @@ def admin_create():
         voice_enabled=True,
         voice_rotate_daily=True,
         voice_languages="en,yo",
+        voice_volume=100,
         active=True,
     )
     db.session.add(s)
@@ -175,6 +197,11 @@ def admin_edit(sid: int):
     s.voice_enabled = bool(request.form.get("voice_enabled"))
     s.voice_rotate_daily = bool(request.form.get("voice_rotate_daily"))
     s.voice_languages = (request.form.get("voice_languages") or "en,yo").strip()[:20]
+    try:
+        vol = int(request.form.get("voice_volume") or s.voice_volume or 100)
+        s.voice_volume = max(0, min(100, vol))
+    except ValueError:
+        pass
     s.active = bool(request.form.get("active"))
     db.session.commit()
     flash(f"TV {s.name} updated.", "success")
