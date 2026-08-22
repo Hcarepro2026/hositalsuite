@@ -79,8 +79,17 @@ COLUMNS = [
     ("tv_screen", "show_full_name", "INTEGER DEFAULT 1"),
     ("tv_screen", "show_queue_stats", "INTEGER DEFAULT 1"),
     ("tv_screen", "voice_rotate_daily", "INTEGER DEFAULT 1"),
-    ("tv_screen", "voice_languages", "VARCHAR(20)"),
+    ("tv_screen", "voice_languages", "VARCHAR(30)"),
     ("tv_screen", "voice_volume", "INTEGER DEFAULT 100"),
+    ("tv_screen", "brightness", "INTEGER DEFAULT 100"),
+    ("tv_screen", "night_mode", _bool_sql),
+    # --- Fast-track priority lane + journey (2026-08-22) k25
+    ("patient_visit", "is_fast_track", _bool_sql),
+    ("patient_visit", "fast_track_reason", "VARCHAR(40)"),
+    ("reception_intake", "is_fast_track", _bool_sql),
+    ("reception_intake", "fast_track_reason", "VARCHAR(40)"),
+    ("queue_ticket", "is_fast_track", _bool_sql),
+    ("queue_ticket", "fast_track_reason", "VARCHAR(40)"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)
