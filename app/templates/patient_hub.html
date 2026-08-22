@@ -56,6 +56,14 @@
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
 
+  <div style="background: linear-gradient(135deg,#0e5a8a 0%,#0f8a6a 100%);color:#fff;border-radius:14px;padding:14px 16px;margin:8px 0 12px;display:flex;gap:12px;align-items:center">
+    <div style="font-size:2rem">📺</div>
+    <div style="flex:1">
+      <div style="font-weight:900;font-size:.95rem">Live TV + Your Journey — linked</div>
+      <div style="font-size:.82rem;opacity:0.92;line-height:1.4;margin-top:2px">Watch the TV in waiting hall for your name. Your private tracker shows position, estimated wait, and what to do next — no medical details, only your journey. Priority lane ⭐ for elderly 60+, pregnant, child &lt;5, wheelchair.</div>
+    </div>
+  </div>
+
   <h1 style="font-size:1.3rem;margin:8px 0 2px;color:#0f2f47">{{ _('hub_welcome') }}</h1>
   <p class="muted" style="margin:0 0 4px">{{ _('hub_sub') }}</p>
 
