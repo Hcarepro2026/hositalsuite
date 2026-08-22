@@ -1,36 +1,315 @@
-{% extends "base.html" %}
-{% block title %}Queue ticket {{ t.code }}{% endblock %}
-{% block content %}
-{% with back_to="/welcome" %}{% include "_patient_nav.html" %}{% endwith %}
-<div class="card pad-lg center" style="max-width:520px;margin:30px auto">
-  <div class="muted" style="text-transform:uppercase;letter-spacing:.06em">Your queue number</div>
-  <div style="font-size:4rem;font-weight:800;color:var(--primary)">{{ t.code }}</div>
-  <div class="muted">{{ t.department.name }} · {{ t.queue_date.strftime('%d %b %Y') }}</div>
-
-  {% if t.status == 'WAITING' %}
-    <div class="notice mt">
-      {% if ahead == 0 %}<b>You are next!</b> Please stay close.
-      {% else %}<b>{{ ahead }}</b> {{ 'person' if ahead == 1 else 'people' }} ahead of you.
-        {% if est %}Estimated wait: about <b>{{ est }} min</b>.{% endif %}{% endif %}
-    </div>
-    {% if now_serving %}<p class="hint">Now serving: <b>{{ now_serving.code }}</b></p>{% endif %}
-    <p class="hint">This page updates when you refresh. Keep it open or note your number.</p>
-    <meta http-equiv="refresh" content="20">
-  {% elif t.status == 'CALLED' %}
-    <div class="flash success" style="font-size:1.2rem">📢 It's your turn! Please proceed to {{ t.department.name }}.</div>
-  {% elif t.status == 'DONE' %}
-    <div class="flash info">You have been served. Thank you!
-      {% if t.intake_id %}<br><span class="muted">Sent to Reception as {{ t.intake.ref if t.intake else '' }} — staff will call you.</span>{% endif %}
-    </div>
-  {% else %}
-    <div class="flash error">This ticket is {{ t.status }}.</div>
-  {% endif %}
-
-  <div class="mt">
-    <a class="btn secondary" href="/queue/ticket?key={{ t.access_key }}">🔄 Refresh status</a>
-  </div>
-  <p class="hint mt">Bookmark this page to check your position anytime. Do not share the link —
-     it is your private status key.</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e5a8a">
+<title>Ticket {{ t.code }} — Your Journey</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<style>
+  *{box-sizing:border-box}
+  body{background:#f6f9fc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#0f2f47;margin:0}
+  .top{background: linear-gradient(135deg,#0e5a8a 0%,#0f8a6a 100%);color:#fff;padding:18px 20px 22px}
+  .top h1{margin:0;font-size:1.1rem;font-weight:800;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  .top .sub{opacity:0.9;font-size:.85rem;margin-top:4px;line-height:1.4}
+  .wrap{max-width:640px;margin:0 auto;padding:14px 16px 24px}
+  .card{background:#fff;border-radius:16px;box-shadow:0 4px 18px rgba(16,42,67,0.08);border:1px solid #dbe4ec;overflow:hidden}
+  .card.pad{padding:18px}
+  .ticket-hero{text-align:center;padding:22px 18px 16px}
+  .code{font-size:3.6rem;font-weight:900;letter-spacing:-0.03em;color:#0e5a8a;line-height:1}
+  .dept{margin-top:6px;font-size:.95rem;color:#5a6b7b;font-weight:600}
+  .status-pill{display:inline-block;margin-top:10px;padding:6px 14px;border-radius:999px;font-weight:800;font-size:.82rem}
+  .s-wait{background:#e7f0f8;color:#0e5a8a}
+  .s-call{background:#10b981;color:#fff;animation:pulse 1.6s infinite}
+  .s-done{background:#e6f6f1;color:#0f8a6a}
+  .s-other{background:#fdecec;color:#c62828}
+  @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  @media(max-width:480px){.grid2{grid-template-columns:1fr}}
+  .kpi{background:#f6f9fc;border-radius:12px;padding:12px 14px;border:1px solid #e6edf3}
+  .kpi .v{font-size:1.5rem;font-weight:900;color:#0f2f47}
+  .kpi .l{font-size:.72rem;text-transform:uppercase;letter-spacing:0.05em;color:#6b7d90;margin-top:2px;font-weight:700}
+  .timeline{margin-top:16px;position:relative}
+  .step{display:flex;gap:12px;padding:12px 0;border-left:2px solid #e6edf3;margin-left:10px;padding-left:22px;position:relative}
+  .step:last-child{border-left-color:transparent}
+  .step.active{border-left-color:#0e5a8a}
+  .step.done{border-left-color:#10b981}
+  .dot{width:22px;height:22px;border-radius:50%;background:#fff;border:2px solid #dbe4ec;display:flex;align-items:center;justify-content:center;position:absolute;left:-12px;top:14px;font-size:.8rem}
+  .step.active .dot{border-color:#0e5a8a;background:#0e5a8a;color:#fff}
+  .step.done .dot{border-color:#10b981;background:#10b981;color:#fff}
+  .step .title{font-weight:800;font-size:.92rem}
+  .step .desc{font-size:.82rem;color:#5a6b7b;margin-top:2px;line-height:1.35}
+  .step .time{font-size:.72rem;color:#8aa0b5;margin-top:4px;font-weight:700}
+  .next-box{background: linear-gradient(135deg,#e7f0f8,#e6f6f1);border-radius:12px;padding:14px 16px;margin-top:14px;border-left:5px solid #0e5a8a}
+  .next-box .h{font-weight:900;font-size:.9rem;color:#0f2f47}
+  .next-box .p{font-size:.85rem;color:#425466;margin-top:4px;line-height:1.45}
+  .fast-banner{background: linear-gradient(135deg,#8b5cf6,#ec4899);color:#fff;border-radius:12px;padding:12px 14px;margin-top:12px;display:flex;gap:10px;align-items:center}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border-radius:999px;font-weight:800;font-size:.9rem;text-decoration:none;border:none;cursor:pointer}
+  .btn.primary{background:#0e5a8a;color:#fff}
+  .btn.secondary{background:#eef4f9;color:#0e5a8a}
+  .btn.full{width:100%}
+  .hint{font-size:.8rem;color:#6b7d90;margin-top:10px;line-height:1.4}
+  .tv-live{background:#0f172a;color:#fff;border-radius:14px;padding:14px 16px;margin-top:16px}
+  .tv-live .h{font-size:.8rem;letter-spacing:0.08em;text-transform:uppercase;opacity:0.8;font-weight:800}
+  .tv-now{margin-top:8px;font-weight:900;font-size:1.05rem}
+  .qr-box{background:#fff;border-radius:12px;padding:10px;display:inline-flex;flex-direction:column;align-items:center;gap:6px;color:#000;border:1px solid #dbe4ec}
+  .voice-bar{background:#fffbe6;border:1px solid #fde68a;border-radius:12px;padding:10px 14px;margin-top:14px;display:flex;gap:10px;align-items:center}
+  .voice-bar button{background:#0e5a8a;color:#fff;border:none;padding:7px 14px;border-radius:999px;font-weight:800;font-size:.82rem}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>🏥 Your hospital journey</h1>
+  <div class="sub">This page is your private tracker — bookmark it. It updates when staff call you. No medical details shown, only where you are and what is next.</div>
 </div>
-{% include "_help_desk.html" %}
-{% endblock %}
+
+<div class="wrap">
+  <div class="card">
+    <div class="ticket-hero">
+      <div style="font-size:.7rem;letter-spacing:0.12em;text-transform:uppercase;font-weight:800;color:#6b7d90">Your queue number</div>
+      <div class="code">{{ t.code }}</div>
+      <div class="dept">{{ t.department.name }} · {{ t.queue_date.strftime('%d %b %Y') }}</div>
+      {% if t.is_fast_track %}<div style="margin-top:8px"><span class="status-pill" style="background:#8b5cf6;color:#fff">⭐ Priority — {{ t.fast_track_reason or 'Seen first' }}</span></div>{% endif %}
+      {% if t.status == 'WAITING' %}
+        <div class="status-pill s-wait">● Waiting — please stay close</div>
+      {% elif t.status == 'CALLED' %}
+        <div class="status-pill s-call">📢 It's your turn!</div>
+      {% elif t.status == 'DONE' %}
+        <div class="status-pill s-done">✅ You have been served</div>
+      {% else %}
+        <div class="status-pill s-other">{{ t.status }}</div>
+      {% endif %}
+    </div>
+
+    {% if t.status == 'WAITING' %}
+    <div class="pad" style="padding-top:0">
+      <div class="grid2">
+        <div class="kpi">
+          <div class="v">{{ ahead }}</div>
+          <div class="l">{{ 'person' if ahead==1 else 'people' }} ahead of you</div>
+        </div>
+        <div class="kpi">
+          <div class="v">{% if est %}{{ est }}m{% else %}~{% endif %}</div>
+          <div class="l">Estimated wait</div>
+        </div>
+        {% if intake and intake.ref %}
+        <div class="kpi">
+          <div class="v">{{ intake.ref }}</div>
+          <div class="l">Reception ref</div>
+        </div>
+        {% endif %}
+        {% if journey_total %}
+        <div class="kpi">
+          <div class="v">{{ journey_total }}m</div>
+          <div class="l">Total journey est.</div>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if now_serving %}
+      <div class="tv-live">
+        <div class="h">🔴 Live — Now serving in {{ t.department.name }}</div>
+        <div class="tv-now">{{ now_serving.code }} — {{ now_serving.patient_name or 'Patient' }} is being called</div>
+        <div style="font-size:.78rem;opacity:0.75;margin-top:4px">Watch the TV in the waiting hall — when your number shows, please go to {{ t.department.name }}.</div>
+      </div>
+      {% endif %}
+
+      <div class="next-box">
+        <div class="h">What to do now</div>
+        <div class="p">
+          1. Stay near <b>{{ t.department.name }}</b> waiting area and watch the TV screen.<br>
+          2. When <b>{{ t.code }}</b> appears on TV and you hear your name, go to the desk.<br>
+          3. Have your phone with this page open — staff will call you by name in English + Yorùbá + Hausa + Igbo.<br>
+          {% if ahead == 0 %}<b>You are next!</b> Please stand close to the door.{% endif %}
+        </div>
+      </div>
+
+      {% if intake %}
+      <div class="timeline">
+        <div class="step {% if intake.stage in ('RECEPTION','BILLING','PAYMENT','PAID','REGISTERED','TRIAGED','IN_CONSULTATION','ONWARD','DONE') %}done{% endif %}">
+          <div class="dot">1</div>
+          <div><div class="title">Reception — you are here or next</div><div class="desc">{{ intake.stage_label }} · {{ intake.full_name }}</div><div class="time">{{ intake.created_at.strftime('%H:%M') }} today</div></div>
+        </div>
+        <div class="step {% if intake.stage in ('BILLING','PAYMENT','PAID','REGISTERED','TRIAGED','IN_CONSULTATION','ONWARD','DONE') %}done{% elif intake.stage=='RECEPTION' %}active{% endif %}">
+          <div class="dot">2</div>
+          <div><div class="title">Billing → Pay Point</div><div class="desc">Confirm payment, collect receipt. Takes ~5-8 min.</div></div>
+        </div>
+        <div class="step {% if intake.stage in ('REGISTERED','TRIAGED','IN_CONSULTATION','ONWARD','DONE') %}done{% elif intake.stage in ('BILLING','PAYMENT','PAID') %}active{% endif %}">
+          <div class="dot">3</div>
+          <div><div class="title">HIMS Registration</div><div class="desc">Your folder is created. ~3 min.</div></div>
+        </div>
+        <div class="step {% if intake.stage in ('TRIAGED','IN_CONSULTATION','ONWARD','DONE') %}done{% elif intake.stage=='REGISTERED' %}active{% endif %}">
+          <div class="dot">4</div>
+          <div><div class="title">Triage</div><div class="desc">Nurse checks you and sends you to doctor. ~5 min.</div></div>
+        </div>
+        <div class="step {% if intake.stage in ('IN_CONSULTATION','ONWARD','DONE') %}done{% elif intake.stage=='TRIAGED' %}active{% endif %}">
+          <div class="dot">5</div>
+          <div><div class="title">Doctor Consultation</div><div class="desc">Doctor sees you. You may be sent to Lab, Pharmacy, Billing, MEGALEX or LAHSMA.</div></div>
+        </div>
+        <div class="step">
+          <div class="dot">6</div>
+          <div><div class="title">Lab / Pharmacy / Wards / Home</div><div class="desc">Finish your tests, collect drugs, or go home. Staff will guide you.</div></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="timeline">
+        <div class="step active"><div class="dot">1</div><div><div class="title">Queue — you joined via QR</div><div class="desc">Staff will move you to Reception. Keep this page open.</div></div></div>
+        <div class="step"><div class="dot">2</div><div><div class="title">Reception → Billing → HIMS → Triage → Doctor</div><div class="desc">Full journey after Reception takes you to the doctor and then to Lab/Pharmacy if needed.</div></div></div>
+        <div class="step"><div class="dot">3</div><div><div class="title">Done</div><div class="desc">Go home with your drugs or next appointment.</div></div></div>
+      </div>
+      {% endif %}
+
+      {% if onward %}
+      <div style="margin-top:16px">
+        <div style="font-weight:800;font-size:.9rem;margin-bottom:8px">Where you may go next after doctor</div>
+        {% for ow in onward %}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eef4f9"><span style="font-weight:600;font-size:.85rem">{{ ow.destination }}</span><span style="font-size:.75rem;color:#6b7d90">{{ ow.status }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="voice-bar" id="voiceBar">
+        <div style="flex:1"><b style="font-size:.85rem">🔊 Voice update</b><div style="font-size:.78rem;color:#6b7d90;margin-top:2px">Hear your position in English, Yorùbá, Hausa, Igbo — tap to enable</div></div>
+        <button onclick="patientVoice.enable()">Enable</button>
+      </div>
+
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <a class="btn primary full" href="/queue/ticket?key={{ t.access_key }}">🔄 Refresh now</a>
+      </div>
+      <div class="hint">This page auto-refreshes every 20 seconds. Keep it open. Do not share — it is your private key.<br>Watch the TV: when <b>{{ t.code }}</b> is called, you will also hear your name in 4 languages.</div>
+      <meta http-equiv="refresh" content="20">
+    </div>
+
+    {% elif t.status == 'CALLED' %}
+    <div class="pad" style="padding-top:0;text-align:center">
+      <div style="font-size:4rem;margin:10px 0">📢</div>
+      <div style="font-size:1.4rem;font-weight:900">It's your turn!</div>
+      <div style="font-size:1rem;color:#425466;margin-top:6px">Please go to <b>{{ t.department.name }}</b> now. Show this ticket: <b>{{ t.code }}</b></div>
+      {% if intake %}<div style="margin-top:10px"><span class="status-pill s-wait">Reception ref: {{ intake.ref }}</span></div>{% endif %}
+      <div style="margin-top:16px"><a class="btn primary full" href="/queue/ticket?key={{ t.access_key }}">I am on my way — refresh</a></div>
+    </div>
+
+    {% elif t.status == 'DONE' %}
+    <div class="pad" style="padding-top:0">
+      <div style="text-align:center;padding:12px 0">
+        <div style="font-size:2.6rem">✅</div>
+        <div style="font-weight:900;font-size:1.15rem;margin-top:6px">You have been served — thank you!</div>
+        {% if intake %}<div style="margin-top:8px;color:#5a6b7b;font-size:.9rem">Reception: <b>{{ intake.ref }}</b> — {{ intake.full_name }}<br>Staff will call you for next step. Watch the TV for your name.</div>{% endif %}
+      </div>
+
+      {% if segments %}
+      <div style="margin-top:10px">
+        <div style="font-weight:800;font-size:.9rem;margin-bottom:8px">Your journey so far — {{ total_m }}m total</div>
+        {% for s in segments %}
+        <div class="step {% if s.ended_at %}done{% else %}active{% endif %}" style="margin-left:0">
+          <div class="dot">{{ loop.index }}</div>
+          <div><div class="title">{{ s.label }}</div><div class="desc">{{ s.entered_at.strftime('%H:%M') }} → {{ s.ended_at.strftime('%H:%M') if s.ended_at else 'now' }} · {% if s.ended_at %}{{ s.minutes }}m{% else %}in progress{% endif %}</div></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if onward %}
+      <div style="margin-top:14px" class="next-box">
+        <div class="h">What is next after doctor?</div>
+        <div class="p">
+          {% for ow in onward %}
+          • {{ ow.destination }} — {{ ow.status }}{% if ow.status=='PENDING' %} (please wait to be called){% endif %}<br>
+          {% endfor %}
+          Watch the main TV in the waiting hall — your name will appear when next desk is ready.
+        </div>
+      </div>
+      {% endif %}
+
+      <div style="margin-top:14px"><a class="btn secondary full" href="/welcome">🏠 Back to home</a></div>
+    </div>
+
+    {% else %}
+    <div class="pad"><div class="status-pill s-other">This ticket is {{ t.status }}.</div></div>
+    {% endif %}
+
+    <div class="pad" style="border-top:1px solid #eef4f9;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="qr-box"><div id="qrTicket" style="width:86px;height:86px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.6rem">QR</div><div style="font-size:.65rem;font-weight:700">{{ t.code }}</div></div>
+        <div style="font-size:.8rem;line-height:1.4;color:#425466"><b>Linked to TV</b><br>Main TV shows live queue.<br>Scan this at desk if asked.<br><span style="color:#8aa0b5">Private — don't share</span></div>
+      </div>
+      <div style="text-align:right">
+        <a class="btn secondary" href="/welcome">Home</a>
+        <div class="hint" style="margin-top:6px">Need help? Ask at Help Desk</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin:14px 0 8px;font-size:.8rem;color:#6b7d90">
+    <a href="/privacy" style="color:#0e5a8a;text-decoration:none">Privacy</a> · Your data stays in hospital only
+  </div>
+</div>
+
+<script>
+window.patientVoice = {
+  enabled:false, voices:[],
+  init(){
+    const load=()=>{ this.voices = speechSynthesis ? speechSynthesis.getVoices() : []; };
+    load(); if(window.speechSynthesis){ speechSynthesis.onvoiceschanged=load; setTimeout(load,600); }
+    try{
+      const key = localStorage.getItem('patient_voice_enabled');
+      if(key==='1'){ this.enabled=true; this.hideBar(); }
+    }catch(e){}
+  },
+  hideBar(){ const b=document.getElementById('voiceBar'); if(b) b.style.display='none'; },
+  enable(){
+    this.enabled=true;
+    try{ localStorage.setItem('patient_voice_enabled','1'); }catch(e){}
+    this.hideBar();
+    try{
+      const u=new SpeechSynthesisUtterance(" "); u.volume=0.01; speechSynthesis.speak(u);
+    }catch(e){}
+    this.speakStatus();
+  },
+  speak(text, lang){
+    if(!this.enabled || !window.speechSynthesis) return;
+    try{
+      const u=new SpeechSynthesisUtterance(text); u.lang=lang||'en-NG'; u.rate=0.92; u.volume=0.9;
+      // pick Nigerian voice if available
+      if(this.voices && this.voices.length){
+        let c=this.voices.filter(v=> (v.lang||'').toLowerCase().includes((lang||'en').split('-')[0].toLowerCase()));
+        if(c.length){ u.voice=c[0]; }
+      }
+      speechSynthesis.speak(u);
+    }catch(e){}
+  },
+  speakStatus(){
+    const code="{{ t.code }}";
+    const ahead={{ ahead if t.status=='WAITING' else 0 }};
+    const status="{{ t.status }}";
+    const dept="{{ t.department.name }}";
+    let en="", yo="", ha="", ig="";
+    if(status==='WAITING'){
+      if(ahead===0){ en="You are next. Please stay close to "+dept; yo="Iwọ ni ẹni to kan. Jọwọ duro nitosi "+dept; ha="Kai ne na gaba. Don Allah ka zauna kusa da "+dept; ig="Ị bụ onye na-esote. Biko nọrọ nso "+dept; }
+      else { en="There are "+ahead+" people ahead of you in "+dept+". Please wait."; yo=ahead+" eniyan lo wa niwaju rẹ ni "+dept+". Jọwọ duro."; ha="Akwai mutane "+ahead+" a gabanka a "+dept+". Don Allah jira."; ig="Enwere mmadụ "+ahead+" n'ihu gị na "+dept+". Biko chere."; }
+    } else if(status==='CALLED'){
+      en="It is your turn. Ticket "+code+". Please go to "+dept+" now."; yo="Akan rẹ de. Tikẹti "+code+". Jọwọ lọ si "+dept+" nisisiyi."; ha="Lokacinka yayi. Tikiti "+code+". Don Allah je zuwa "+dept+" yanzu."; ig="Oge gị eruola. Tiketi "+code+". Biko gaa na "+dept+" ugbu a.";
+    }
+    if(!en) return;
+    let d=0;
+    const seq=[[en,'en-NG'],[yo,'yo-NG'],[ha,'ha-NG'],[ig,'ig-NG']];
+    for(const [txt, lang] of seq){ if(!txt) continue; setTimeout(()=>this.speak(txt, lang), d); d+=3500; }
+  }
+};
+patientVoice.init();
+// Auto speak when CALLED
+{% if t.status == 'CALLED' %}
+setTimeout(()=>{ if(patientVoice.enabled) patientVoice.speakStatus(); }, 1200);
+{% endif %}
+
+// QR for ticket
+try{
+  fetch("/api/tv/qr-url?code={{ t.code }}&text="+encodeURIComponent(window.location.href))
+  .then(r=>r.json()).then(d=>{
+    const el=document.getElementById('qrTicket');
+    if(el && d.qr){ const img=document.createElement('img'); img.src=d.qr; img.style.width='86px'; img.style.height='86px'; img.style.borderRadius='8px'; el.innerHTML=''; el.appendChild(img); }
+  }).catch(()=>{});
+}catch(e){}
+</script>
+</body>
+</html>

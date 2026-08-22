@@ -1,227 +1,238 @@
-{# Clinic TV - filtered, friendly, 4 languages EN+YO+HA+IG + brightness + night mode + priority + journey #}
+{# TV Clinic - Premium clean, no voice details, no footer debug #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ screen.name }} - TV</title>
+<title>{{ screen.name if screen else 'Clinic TV' }} - Live</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background: linear-gradient(135deg,#1e3a8a 0%,#3730a3 50%,#7c3aed 100%);color:#fff;min-height:100vh;transition: filter 0.6s ease}
+  body{font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background: linear-gradient(135deg,#0f172a 0%,#1e293b 45%,#134e6f 100%);color:#fff;min-height:100vh;transition: filter 0.6s ease}
   body.night{filter: brightness(0.55) contrast(0.95)}
-  .header{background: rgba(0,0,0,0.2);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-  .header h1{font-size:1.4rem;font-weight:900}
-  .pill{background: rgba(255,255,255,0.2);padding:5px 12px;border-radius:999px;font-size:.8rem}
-  .pill.purple{background:#8b5cf6;color:#fff}
+  .header{background: rgba(255,255,255,0.07);backdrop-filter: blur(12px);padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08)}
+  .header h1{font-size:1.35rem;font-weight:900;letter-spacing:-0.02em}
+  .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .pill{background: rgba(255,255,255,0.12);padding:5px 12px;border-radius:999px;font-size:.8rem;font-weight:700}
   .pill.green{background:#10b981;color:#fff}
-  .voice-bar{background:#f59e0b;color:#000;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;flex-wrap:wrap;gap:10px}
-  .voice-bar button{background:#000;color:#fff;border:none;padding:8px 16px;border-radius:999px;font-weight:800}
-  .main{padding:20px 24px;display:grid;grid-template-columns: 1.2fr 0.8fr;gap:18px}
-  @media(max-width:800px){.main{grid-template-columns:1fr}}
-  .now{background: linear-gradient(135deg,#f59e0b,#ef4444);border-radius:18px;padding:24px;box-shadow:0 12px 30px rgba(0,0,0,0.3)}
-  .now.fast{background: linear-gradient(135deg,#8b5cf6,#ec4899)}
-  .now .label{font-size:.8rem;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9}
-  .now .name{font-size:2.6rem;font-weight:900;margin:6px 0}
-  .now .room{font-size:1.3rem;font-weight:700}
-  .now .yo{font-style:italic;margin-top:6px;font-size:.95rem}
-  .journey{margin-top:10px;background:rgba(0,0,0,0.2);border-radius:10px;padding:10px 12px}
-  .section{background: rgba(255,255,255,0.12);border-radius:14px;padding:16px;margin-bottom:16px}
-  .section h2{font-size:1rem;font-weight:800;margin-bottom:10px}
-  .item{background: rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between}
-  .item.fast{border-left:4px solid #8b5cf6;background: rgba(139,92,246,0.18)}
-  .stat-grid{display:grid;grid-template-columns: repeat(3,1fr);gap:10px}
-  .stat{background: rgba(255,255,255,0.15);border-radius:10px;padding:12px;text-align:center}
-  .stat .v{font-size:1.5rem;font-weight:900}
-  .stat .l{font-size:.7rem;text-transform:uppercase;opacity:0.8}
-  .footer{padding:10px;text-align:center;opacity:0.6;font-size:.75rem}
-  .wait-badge{background:rgba(0,0,0,0.25);padding:3px 8px;border-radius:999px;font-size:.75rem;font-weight:700}
-  .ctrl{background:rgba(0,0,0,0.2);padding:5px 10px;border-radius:999px;display:flex;align-items:center;gap:6px}
+  .pill.purple{background:#8b5cf6;color:#fff}
+  .main{padding:18px 22px;max-width:1100px;margin:0 auto}
+  .now-card{background: linear-gradient(135deg,#10b981 0%,#059669 100%);border-radius:22px;padding:28px 30px;box-shadow:0 16px 32px rgba(16,185,129,0.25);margin-bottom:18px}
+  .now-card.fast{background: linear-gradient(135deg,#8b5cf6 0%,#ec4899 100%);box-shadow:0 16px 32px rgba(139,92,246,0.32)}
+  .now-card.empty{background: linear-gradient(135deg,#334155,#1e293b);box-shadow:none}
+  .label{font-size:.7rem;letter-spacing:0.1em;text-transform:uppercase;opacity:0.9;font-weight:800;margin-bottom:6px}
+  .name{font-size:3rem;font-weight:900;line-height:1.02;letter-spacing:-0.03em;text-shadow:0 2px 12px rgba(0,0,0,0.18)}
+  @media(max-width:600px){.name{font-size:2rem}}
+  .room{font-size:1.5rem;font-weight:700;margin-top:8px;opacity:0.95}
+  .code-pill{background: rgba(0,0,0,0.22);padding:5px 12px;border-radius:999px;font-size:.85rem;font-weight:800;display:inline-block;margin-top:10px}
+  .grid{display:grid;grid-template-columns: 1.2fr 0.8fr;gap:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .section{background: rgba(255,255,255,0.07);backdrop-filter: blur(10px);border-radius:14px;padding:16px 18px;border:1px solid rgba(255,255,255,0.08);margin-bottom:14px}
+  .section h2{font-size:.9rem;font-weight:800;margin-bottom:10px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06)}
+  .row:last-child{border:none}
+  .left{font-weight:600;font-size:.9rem}
+  .right{font-size:.8rem;opacity:0.7}
+  .next-item{background: rgba(255,255,255,0.05);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+  .next-item.fast{border-left:3px solid #8b5cf6;background: rgba(139,92,246,0.12)}
+  .wait-mini{background: rgba(0,0,0,0.22);padding:3px 8px;border-radius:999px;font-size:.72rem;font-weight:700}
+  .footer{padding:10px 22px;text-align:center;opacity:0.32;font-size:.7rem}
+  .admin-bar{background: rgba(0,0,0,0.35);padding:10px 18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-top:1px solid rgba(255,255,255,0.08)}
+  .admin-bar button{background:#fff;color:#000;border:none;padding:6px 14px;border-radius:999px;font-weight:700;font-size:.85rem;cursor:pointer}
+  .tap-hint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background: rgba(0,0,0,0.75);color:#fff;padding:10px 18px;border-radius:999px;font-size:.85rem;font-weight:700;backdrop-filter: blur(10px);z-index:100}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>🩺 {{ screen.name }} · {{ screen.location }}</h1>
-  <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill" id="clock">--:--</span> <span class="pill">{{ rotation.slot_name }}</span> <span class="pill">{{ screen.clinic_code or screen.screen_type }}</span> <span class="pill">EN+YO+HA+IG</span> {% if feed.stats.fast_track_waiting %}<span class="pill purple">⭐ {{ feed.stats.fast_track_waiting }} priority</span>{% endif %} <span class="pill" id="brightnessBadge">🔆 {{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span></div>
-</div>
-<div class="voice-bar" id="voiceBar">
-  <div style="flex:1" onclick="hmsTv.enableVoice()"><b>🔊 {{ rotation.slot_name }}</b> — EN+YO+HA+IG — Priority + Journey + Brightness — Tap to enable — Vol+Bright per TV + Night auto</div>
-  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <div class="ctrl"><span>🔉</span><input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen and screen.voice_volume is not none else 90 }}" style="width:80px" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)"><span id="volLabel">{{ screen.voice_volume if screen and screen.voice_volume is not none else 90 }}%</span><span>🔊</span></div>
-    <div class="ctrl"><span>🔅</span><input type="range" id="brightSlider" min="10" max="100" value="{{ screen.brightness if screen and screen.brightness is not none else 100 }}" style="width:80px" oninput="hmsTv.setBrightness(this.value)" onchange="hmsTv.saveBrightness(this.value)"><span id="brightLabel">{{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span><span>🔆</span></div>
-    <div class="ctrl" style="cursor:pointer" onclick="hmsTv.toggleNight()"><span id="nightIcon">{{ '🌙' if screen and screen.night_mode else '☀️' }}</span><span id="nightLabel" style="font-size:.75rem;font-weight:700">{{ 'Night ON' if screen and screen.night_mode else 'Night OFF' }}</span></div>
-    <button onclick="hmsTv.enableVoice()">Enable</button>
-    <button onclick="hmsTv.testVoice()" style="background:#000;color:#fff;border:none;padding:6px 12px;border-radius:999px;font-weight:700">Test</button>
+  <h1>🏥 {{ screen.name if screen else 'Clinic' }}</h1>
+  <div class="meta">
+    <span class="pill" id="clock">--:--</span>
+    <span class="pill green">{{ feed.stats.total_today }} today</span>
+    {% if feed.stats.fast_track_waiting %}<span class="pill purple">⭐ {{ feed.stats.fast_track_waiting }} priority</span>{% endif %}
   </div>
 </div>
-<div class="main">
-  <div>
-    {% if feed.now_serving %}
-      {% set f = feed.now_serving[0] %}
-      <div class="now {% if f.is_fast_track %}fast{% endif %}">
-        <div class="label">📣 Now Serving {% if f.is_fast_track %}⭐ Priority — {{ f.fast_track_reason }}{% endif %}</div>
-        <div class="name">{{ f.name }}</div>
-        <div class="yo">{{ f.spoken }} — ẹ jọwọ lọ sí {{ f.room }} | don Allah je zuwa {{ f.room }} | biko gaa na {{ f.room }}</div>
-        <div class="room">{{ f.room }} {% if f.clinic %}· {{ f.clinic }}{% endif %}</div>
-        <div style="margin-top:8px;font-size:.9rem;background:rgba(0,0,0,0.2);display:inline-block;padding:5px 12px;border-radius:999px">{{ f.code }} {% if f.is_fast_track %}· ⭐ Priority{% endif %}</div>
-        {% if f.journey_estimate and f.journey_estimate.total %}
-        <div class="journey"><div style="font-size:.8rem;text-transform:uppercase;opacity:0.9">⏱ Journey left</div><div style="font-weight:900">{{ f.journey_estimate.total }} min {% if f.journey_estimate.fast_track %}· Priority{% endif %}</div><div style="font-size:.8rem;opacity:0.9;margin-top:2px">{% for st in f.journey_estimate.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %}</div></div>
-        {% endif %}
-      </div>
-    {% else %}
-      <div class="now" style="background:linear-gradient(135deg,#334155,#475569)"><div class="label">Waiting</div><div class="name" style="font-size:2rem">No call yet — A ń dúró — Muna jiran — Anyị na-eche</div></div>
-    {% endif %}
 
-    <div class="section" style="margin-top:16px">
-      <h2>⏭ Next in {{ screen.clinic_code or 'this clinic' }}</h2>
-      {% for it in feed.next_up[:6] %}
-      <div class="item {% if it.is_fast_track %}fast{% endif %}">
-        <div style="flex:1">
-          <div style="font-weight:800;display:flex;gap:6px;align-items:center">{{ it.name }} {% if it.is_fast_track %}<span class="pill purple" style="font-size:.65rem">⭐ {{ it.fast_track_reason }}</span>{% endif %}</div>
-          <div style="font-size:.8rem;opacity:0.8">{{ it.code }} · {{ it.clinic }} {% if it.room %}→ {{ it.room }}{% endif %}</div>
-          {% if it.estimated_wait is defined %}<div style="margin-top:4px"><span class="wait-badge">⏱ ~{{ it.estimated_wait }}m wait</span> {% if it.journey_estimate and it.journey_estimate.total %}<span class="wait-badge">🛣 {{ it.journey_estimate.total }}m total</span>{% endif %}</div>{% endif %}
-        </div>
-        <span class="pill">{% if it.position %}#{{ it.position }} {% endif %}{{ it.type[:10] }}</span>
-      </div>
-      {% else %}
-      <div class="item">No one waiting — well done! | Babu kowa | Ọ dịghị onye</div>
-      {% endfor %}
-    </div>
+{% if current_user.is_authenticated and current_user.role == 'SUPER_ADMIN' %}
+<div class="admin-bar" id="adminBar">
+  <b style="font-size:.85rem">Admin (only you)</b>
+  <span style="font-size:.78rem;opacity:0.8">{{ rotation.slot_name }} · {{ screen.voice_languages if screen else 'en,yo,ha,ig' }}</span>
+  <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px">
+    <span>🔉</span><input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)"><span id="volLabel" style="font-size:.8rem;font-weight:800">{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}%</span><span>🔊</span>
   </div>
-  <div>
-    <div class="section">
-      <h2>📊 Stats</h2>
-      <div class="stat-grid">
-        <div class="stat"><div class="v">{{ feed.stats.queue_waiting }}</div><div class="l">Queue</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.triaged }}</div><div class="l">Triage</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.in_consultation }}</div><div class="l">With Dr</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.fast_track_waiting or 0 }}</div><div class="l">⭐ Priority</div></div>
+  <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px">
+    <span>🔅</span><input type="range" id="brightSlider" min="10" max="100" value="{{ screen.brightness if screen and screen.brightness is not none else 100 }}" oninput="hmsTv.setBrightness(this.value)" onchange="hmsTv.saveBrightness(this.value)"><span id="brightLabel" style="font-size:.8rem;font-weight:800">{{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span><span>🔆</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px;cursor:pointer" onclick="hmsTv.toggleNight()"><span id="nightIcon">{{ '🌙' if screen and screen.night_mode else '☀️' }}</span><span id="nightLabel" style="font-size:.75rem">{{ 'Night ON' if screen and screen.night_mode else 'Night OFF' }}</span></div>
+  <button onclick="hmsTv.enableVoice()" id="voiceBtn">🔊 Voice</button>
+  <button onclick="hmsTv.testVoice()">🎤 Test</button>
+</div>
+{% endif %}
+
+<div class="main">
+  {% if feed.now_serving %}
+    {% set first = feed.now_serving[0] %}
+    <div class="now-card {% if first.is_fast_track %}fast{% endif %}">
+      <div class="label">Now Serving {% if first.is_fast_track %}· Priority{% endif %}</div>
+      <div class="name">{{ first.name }}</div>
+      <div class="room">{{ first.room }} {% if first.clinic %}· {{ first.clinic }}{% endif %} {% if first.doctor %}· {{ first.doctor }}{% endif %}</div>
+      <span class="code-pill">{{ first.code }}</span>
+      {% if first.is_fast_track %}<span class="code-pill" style="background:#fff;color:#8b5cf6;margin-left:8px">⭐ {{ first.fast_track_reason or 'Priority' }}</span>{% endif %}
+    </div>
+  {% else %}
+    <div class="now-card empty">
+      <div class="label">Waiting</div>
+      <div class="name" style="font-size:2.2rem">No call yet</div>
+      <div class="room" style="font-size:1rem;opacity:0.7">Please wait, you will be called by name</div>
+    </div>
+  {% endif %}
+
+  <div class="grid">
+    <div>
+      <div class="section">
+        <h2>Next — Priority first</h2>
+        {% for item in feed.next_up[:6] %}
+        <div class="next-item {% if item.is_fast_track %}fast{% endif %}">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;font-size:.95rem">{{ item.name }} {% if item.is_fast_track %}<span class="pill purple" style="font-size:.6rem;padding:2px 8px">⭐ {{ item.fast_track_reason or 'Priority' }}</span>{% endif %}</div>
+            <div style="font-size:.78rem;opacity:0.7;margin-top:2px">{{ item.code }} {% if item.clinic %}· {{ item.clinic }}{% endif %}</div>
+            {% if item.estimated_wait is defined %}<span class="wait-mini">⏱ ~{{ item.estimated_wait }}m</span>{% endif %}
+          </div>
+          <span class="wait-mini">#{{ item.position if item.position else loop.index }}</span>
+        </div>
+        {% else %}
+        <div class="row"><span class="left">No one waiting</span></div>
+        {% endfor %}
       </div>
     </div>
-    <div class="section">
-      <h2>🩺 Doctors Ready</h2>
-      {% for s in feed.sessions %}
-      <div class="item"><span>{{ s.doctor.name if s.doctor else 'Doctor' }} · {{ s.consulting_room }}</span><span class="pill" style="background:#10b981;color:#fff">Ready</span></div>
-      {% else %}
-      <div class="item">No doctor ready yet</div>
-      {% endfor %}
-    </div>
-    <div class="section" style="background: rgba(139,92,246,0.15)">
-      <h2>💜 Premium — 4 Languages + Brightness</h2>
-      <div style="font-size:.85rem;line-height:1.5">
-        ⭐ Priority: Elderly 60+, Pregnant, Child &lt;5, Wheelchair — seen first.<br>
-        ⏱ Journey time: Reception → Doctor → Lab/Pharmacy → Home.<br>
-        🔊 4 Languages: EN+YO+HA+IG — 2M2F recycled daily, preferred language first.<br>
-        🔆 Brightness per TV + 🌙 Night auto dim 19:00-07:00.
+    <div>
+      <div class="section">
+        <h2>Doctors Ready</h2>
+        {% for s in feed.sessions[:5] %}
+        <div class="row"><span class="left">{{ s.doctor.name if s.doctor else 'Doctor' }} · {{ s.consulting_room }}</span><span class="right pill green" style="padding:2px 8px;font-size:.7rem">Ready</span></div>
+        {% else %}
+        <div class="row"><span class="left">No doctor ready yet</span></div>
+        {% endfor %}
+      </div>
+      <div class="section">
+        <h2>Your journey in this clinic</h2>
+        <div style="font-size:.82rem;line-height:1.5;opacity:0.85">
+          Triage → Doctor → Lab/Pharmacy if needed → Home<br>
+          ⭐ Priority: elderly 60+, pregnant, child &lt;5, wheelchair — seen first<br>
+          ⏱ Time estimate shown for every patient
+        </div>
+        <div style="margin-top:12px;background:#fff;border-radius:10px;padding:10px;display:flex;gap:10px;align-items:center;color:#000">
+          <div id="qrClinic" style="width:80px;height:80px;background:#eee;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.6rem">QR</div>
+          <div style="font-size:.75rem"><b>Scan to track</b><br>Check your position<br>on your phone<br><span style="opacity:0.6">/welcome</span></div>
+        </div>
       </div>
     </div>
   </div>
 </div>
-<div class="footer">Last update <span id="lu">just now</span> · Auto-refresh 5s · <a href="/tv" style="color:#fff">Main TV</a> · 4 languages · Brightness + Night · Priority active</div>
+
+<div class="footer">Live board · Auto refresh</div>
+<div class="tap-hint" id="tapHint" style="display:none">🔊 Tap anywhere to enable voice</div>
+
 <script>
-function tick(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'}); }
-setInterval(tick,1000); tick();
+function tickClock(){ const el=document.getElementById('clock'); if(el) el.textContent = new Date().toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'}); }
+setInterval(tickClock,1000); tickClock();
+
 window.hmsTv = {
   voices:[], enabled:false, slot: {{ rotation.slot }}, slotName:"{{ rotation.slot_name }}",
-  volume: ({{ screen.voice_volume if screen and screen.voice_volume is not none else 90 }} / 100),
+  volume: ({{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}/100),
   brightness: ({{ screen.brightness if screen and screen.brightness is not none else 100 }}),
   nightMode: {{ 'true' if screen and screen.night_mode else 'false' }},
-  screenCode: "{{ screen.code }}",
-  voiceLangs: "{{ screen.voice_languages if screen and screen.voice_languages else 'en,yo,ha,ig' }}",
+  screenCode:"{{ screen.code if screen else 'DENTAL' }}",
+  voiceLangs:"{{ screen.voice_languages if screen and screen.voice_languages else 'en,yo,ha,ig' }}",
+  lastKey:"",
   init(){
-    const load=()=>{ this.voices = speechSynthesis ? speechSynthesis.getVoices() : []; };
-    load(); if(speechSynthesis){ speechSynthesis.onvoiceschanged=load; setTimeout(load,800); }
-    document.addEventListener('click',()=>{ if(speechSynthesis){ const u=new SpeechSynthesisUtterance(" "); u.volume=0.01; speechSynthesis.speak(u);} },{once:true});
+    const load=()=>{ this.voices=window.speechSynthesis?window.speechSynthesis.getVoices():[]; };
+    load(); if(window.speechSynthesis){ window.speechSynthesis.onvoiceschanged=load; setTimeout(load,800); }
     try{
-      const sv = localStorage.getItem('tv_vol_'+this.screenCode);
-      if(sv!==null){ this.volume = Math.max(0,Math.min(1, parseInt(sv)/100)); const sl=document.getElementById('volSlider'); const lb=document.getElementById('volLabel'); if(sl) sl.value=Math.round(this.volume*100); if(lb) lb.textContent=Math.round(this.volume*100)+'%'; }
-      const sb = localStorage.getItem('tv_bright_'+this.screenCode);
-      if(sb!==null){ this.brightness = Math.max(10,Math.min(100, parseInt(sb))); const sl=document.getElementById('brightSlider'); const lb=document.getElementById('brightLabel'); if(sl) sl.value=this.brightness; if(lb) lb.textContent=this.brightness+'%'; this.applyBrightness(); } else { this.applyBrightness(); }
-      const sn = localStorage.getItem('tv_night_'+this.screenCode);
-      if(sn!==null){ this.nightMode = sn==='1'; }
+      const sv=localStorage.getItem('tv_vol_'+this.screenCode); if(sv!==null) this.volume=Math.max(0,Math.min(1,parseInt(sv)/100));
+      const sb=localStorage.getItem('tv_bright_'+this.screenCode); if(sb!==null) this.brightness=Math.max(10,Math.min(100,parseInt(sb)));
+      const sn=localStorage.getItem('tv_night_'+this.screenCode); if(sn!==null) this.nightMode=sn==='1';
     }catch(e){}
-    this.checkNightMode(); setInterval(()=> this.checkNightMode(), 60000);
+    this.applyBrightness(); this.checkNightMode(); setInterval(()=>this.checkNightMode(),60000);
+    if(!this.enabled){ const hint=document.getElementById('tapHint'); if(hint){ hint.style.display='block'; setTimeout(()=>{hint.style.display='none'},8000);} document.body.addEventListener('click',()=>{this.enableVoice();},{once:true}); }
+    try{
+      fetch("/api/tv/qr-url?code="+encodeURIComponent(this.screenCode)).then(r=>r.json()).then(d=>{
+        const qrEl=document.getElementById('qrClinic');
+        if(qrEl && d.qr){ const img=document.createElement('img'); img.src=d.qr; img.style.width='80px'; img.style.height='80px'; img.style.borderRadius='8px'; qrEl.innerHTML=''; qrEl.appendChild(img); }
+      }).catch(()=>{});
+    }catch(e){}
   },
-  setVolume(v){ this.volume=Math.max(0,Math.min(1, parseInt(v)/100)); const lb=document.getElementById('volLabel'); if(lb) lb.textContent=v+'%'; },
-  saveVolume(v){ this.setVolume(v); try{ localStorage.setItem('tv_vol_'+this.screenCode, v); fetch('/api/tv/volume?code='+encodeURIComponent(this.screenCode)+'&volume='+encodeURIComponent(v), {method:'POST'}).catch(()=>{}); }catch(e){} if(this.enabled){ this.speak("Volume "+v+" percent", "en-NG"); } },
-  setBrightness(v){ this.brightness=Math.max(10,Math.min(100, parseInt(v))); const lb=document.getElementById('brightLabel'); const badge=document.getElementById('brightnessBadge'); if(lb) lb.textContent=v+'%'; if(badge) badge.textContent='🔆 '+v+'%'; this.applyBrightness(); },
-  saveBrightness(v){ this.setBrightness(v); try{ localStorage.setItem('tv_bright_'+this.screenCode, v); fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&brightness='+encodeURIComponent(v), {method:'POST'}).catch(()=>{}); }catch(e){} },
+  unlock(){ if(!window.speechSynthesis) return; try{ const u=new SpeechSynthesisUtterance(" "); u.volume=0.01; window.speechSynthesis.speak(u); }catch(e){} },
+  setVolume(v){ this.volume=Math.max(0,Math.min(1,parseInt(v)/100)); const lb=document.getElementById('volLabel'); if(lb) lb.textContent=v+'%'; },
+  saveVolume(v){ this.setVolume(v); try{ localStorage.setItem('tv_vol_'+this.screenCode, v); fetch('/api/tv/volume?code='+encodeURIComponent(this.screenCode)+'&volume='+encodeURIComponent(v),{method:'POST'}).catch(()=>{});}catch(e){} },
+  setBrightness(v){ this.brightness=Math.max(10,Math.min(100,parseInt(v))); const lb=document.getElementById('brightLabel'); if(lb) lb.textContent=v+'%'; this.applyBrightness(); },
+  saveBrightness(v){ this.setBrightness(v); try{ localStorage.setItem('tv_bright_'+this.screenCode, v); fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&brightness='+encodeURIComponent(v),{method:'POST'}).catch(()=>{});}catch(e){} },
   applyBrightness(){
-    const isNightDim = this.nightMode && this.isNightTime();
-    const effective = isNightDim ? Math.max(10, Math.round(this.brightness * 0.45)) : this.brightness;
-    document.body.style.filter = 'brightness('+effective+'%)' + (isNightDim ? ' contrast(0.92)' : '');
-    const badge=document.getElementById('brightnessBadge'); if(badge) badge.textContent='🔆 '+this.brightness+'%' + (isNightDim ? ' 🌙 dim '+effective+'%' : '');
+    const isNightDim=this.nightMode && this.isNightTime();
+    const effective=isNightDim?Math.max(10,Math.round(this.brightness*0.45)):this.brightness;
+    document.body.style.filter='brightness('+effective+'%)'+(isNightDim?' contrast(0.92)':'');
     if(isNightDim) document.body.classList.add('night'); else document.body.classList.remove('night');
   },
   isNightTime(){ const h=new Date().getHours(); return (h>=19 || h<7); },
   checkNightMode(){
     this.applyBrightness();
     const icon=document.getElementById('nightIcon'); const label=document.getElementById('nightLabel');
-    if(icon) icon.textContent = this.nightMode ? '🌙' : '☀️';
-    if(label) label.textContent = this.nightMode ? (this.isNightTime() ? 'Night ON — dimmed' : 'Night ON — day') : 'Night OFF';
+    if(icon) icon.textContent=this.nightMode?'🌙':'☀️';
+    if(label) label.textContent=this.nightMode?(this.isNightTime()?'Night ON — dimmed':'Night ON — day'):'Night OFF';
   },
   toggleNight(){
-    this.nightMode = !this.nightMode;
-    try{ localStorage.setItem('tv_night_'+this.screenCode, this.nightMode?'1':'0'); fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&night_mode='+(this.nightMode?1:0), {method:'POST'}).catch(()=>{}); }catch(e){}
+    this.nightMode=!this.nightMode;
+    try{ localStorage.setItem('tv_night_'+this.screenCode, this.nightMode?'1':'0'); fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&night_mode='+(this.nightMode?1:0),{method:'POST'}).catch(()=>{});}catch(e){}
     this.checkNightMode();
-    if(this.enabled){ this.speak(this.nightMode ? "Night mode on. TV will auto dim from 7pm to 7am." : "Night mode off.", "en-NG"); }
   },
-  testVoice(){ if(!this.enabled){ this.enableVoice(); setTimeout(()=>this.testVoice(),800); return; } this.speakMulti("Folake Abatan", "Room 3, Dental Clinic", false, "en"); },
   enableVoice(){
-    this.enabled=true;
-    document.getElementById('voiceBar').style.background="#10b981";
-    const left=document.getElementById('voiceBar').querySelector('div'); if(left) left.innerHTML='<b>✅ Voice ON — '+this.slotName+' — EN+YO+HA+IG — Vol '+Math.round(this.volume*100)+'% — Bright '+this.brightness+'%'+(this.nightMode?' 🌙':'' )+'</b>';
-    this.speakMulti("Voice is on. "+this.slotName+" will call patients in English, Yoruba, Hausa and Igbo at "+Math.round(this.volume*100)+" percent.", "Welcome Hall", false, "en");
-    setTimeout(()=> this.speak("Ohun ti wa lori. A o pe awon alaisan ni ede Geesi, Yoruba, Hausa ati Igbo. E kaabo.", "yo-NG"), 3000);
-    setTimeout(()=> this.speak("An kunna murya. Za mu kira marasa lafiya da Turanci, Yarbanci, Hausa da Igbo. Barka da zuwa.", "ha-NG"), 6500);
-    setTimeout(()=> this.speak("Agbanwuru olu. Anyi ga-akpọ ndị ọrịa n'asụsụ Bekee, Yoruba, Hausa na Igbo. Nnọọ.", "ig-NG"), 10000);
+    this.enabled=true; this.unlock();
+    const hint=document.getElementById('tapHint'); if(hint) hint.style.display='none';
+    const btn=document.getElementById('voiceBtn'); if(btn) btn.textContent='🔊 Voice ON';
   },
+  testVoice(){ if(!this.enabled){ this.enableVoice(); setTimeout(()=>this.testVoice(),800); return;} this.speakMulti("Folake Abatan","Room 3, Dental Clinic",false,"en"); },
   pickVoice(lang){
-    if(!this.voices.length) return null;
+    if(!this.voices||!this.voices.length) return null;
     let c=this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes((lang||"en").split("-")[0].toLowerCase()));
     if(!c.length) c=this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes("en"));
     if(!c.length) c=this.voices;
-    const wantFemale = (this.slot%2===0);
-    const hints = wantFemale ? ["female","zira","folake","samantha"] : ["male","emeka","chinedu","david"];
+    const wantFemale=(this.slot%2===0);
+    const hints=wantFemale?["female","zira","folake","samantha"]:["male","emeka","chinedu","david"];
     let f=c.filter(v=> hints.some(h=> (v.name||"").toLowerCase().includes(h)));
     if(f.length) c=f;
     return c[this.slot % c.length] || c[0];
   },
-  speak(t,l){
-    if(!this.enabled||!speechSynthesis) return;
-    const u=new SpeechSynthesisUtterance(t); u.lang=l||"en-NG"; u.volume=this.volume; u.rate=0.92;
-    const v=this.pickVoice(l); if(v) u.voice=v; speechSynthesis.speak(u);
-  },
+  speak(t,l){ if(!this.enabled||!speechSynthesis) return; try{ const u=new SpeechSynthesisUtterance(t); u.lang=l||"en-NG"; u.volume=this.volume; u.rate=0.92; const v=this.pickVoice(l); if(v) u.voice=v; speechSynthesis.speak(u);}catch(e){} },
   speakMulti(name, room, isPriority, preferredLang){
     if(!this.enabled) return;
-    const langsEnabled = (this.voiceLangs || "en,yo,ha,ig").split(",").map(s=>s.trim().toLowerCase());
-    const prio = isPriority ? "Priority patient, " : "";
-    const prioYo = isPriority ? "Alaisan pataki, " : "";
-    const prioHa = isPriority ? "Majinyaci mai fifiko, " : "";
-    const prioIg = isPriority ? "Onye ọrịa dị mkpa, " : "";
-    const enText = prio + name + ", please go to " + room;
-    const yoText = prioYo + name + ", ẹ jọwọ lọ sí " + room;
-    const haText = prioHa + name + ", don Allah je zuwa " + room;
-    const igText = prioIg + name + ", biko gaa na " + room;
-    const order = [];
-    order.push({text: enText, lang: "en-NG", code: "en"});
-    const pref = (preferredLang||"").toLowerCase().substring(0,2);
-    const map = {"yo": {text: yoText, lang: "yo-NG", code: "yo"}, "ha": {text: haText, lang: "ha-NG", code: "ha"}, "ig": {text: igText, lang: "ig-NG", code: "ig"}};
+    const langsEnabled=(this.voiceLangs||"en,yo,ha,ig").split(",").map(s=>s.trim().toLowerCase());
+    const prio=isPriority?"Priority patient, ":""; const prioYo=isPriority?"Alaisan pataki, ":""; const prioHa=isPriority?"Majinyaci mai fifiko, ":""; const prioIg=isPriority?"Onye ọrịa dị mkpa, ":"";
+    const enText=prio+name+", please go to "+room;
+    const yoText=prioYo+name+", ẹ jọwọ lọ sí "+room;
+    const haText=prioHa+name+", don Allah je zuwa "+room;
+    const igText=prioIg+name+", biko gaa na "+room;
+    const order=[]; order.push({text:enText,lang:"en-NG",code:"en"});
+    const pref=(preferredLang||"").toLowerCase().substring(0,2);
+    const map={"yo":{text:yoText,lang:"yo-NG",code:"yo"},"ha":{text:haText,lang:"ha-NG",code:"ha"},"ig":{text:igText,lang:"ig-NG",code:"ig"}};
     if(pref && map[pref] && langsEnabled.includes(pref) && pref!=="en"){ order.push(map[pref]); }
     for(const c of ["yo","ha","ig"]){ if(!langsEnabled.includes(c)) continue; if(order.some(o=>o.code===c)) continue; if(map[c]) order.push(map[c]); }
     let delay=0; for(const item of order){ if(!item) continue; setTimeout(()=> this.speak(item.text, item.lang), delay); delay+=3800; }
   }
-}; hmsTv.init();
-let lastKey="";
-function refresh(){
-  fetch("/api/tv/feed?code={{ screen.code }}").then(r=>r.json()).then(d=>{
-    document.getElementById('lu').textContent=new Date().toLocaleTimeString();
-    if(d.now_serving && d.now_serving.length){
-      const f=d.now_serving[0]; const k=f.code+"|"+f.room;
-      if(k!==lastKey){ lastKey=k; hmsTv.speakMulti(f.name, f.room + (f.clinic ? ", "+f.clinic : ""), !!f.is_fast_track, f.preferred_lang || "en"); setTimeout(()=>location.reload(),1500); }
+};
+hmsTv.init();
+function refreshFeed(){
+  const code="{{ screen.code if screen else 'DENTAL' }}";
+  fetch("/api/tv/feed?code="+encodeURIComponent(code)).then(r=>r.json()).then(data=>{
+    if(data.now_serving && data.now_serving.length){
+      const first=data.now_serving[0]; const key=first.code+"|"+first.room+"|"+first.type;
+      if(key!==hmsTv.lastKey){
+        hmsTv.lastKey=key;
+        const pref=first.preferred_lang||"en";
+        hmsTv.speakMulti(first.name, first.room + (first.clinic ? ", "+first.clinic : ""), !!first.is_fast_track, pref);
+        setTimeout(()=>{ window.location.reload(); },1200);
+      }
     }
   }).catch(()=>{});
 }
-setInterval(refresh,5000);
+setInterval(refreshFeed,5000);
 </script>
 </body>
 </html>

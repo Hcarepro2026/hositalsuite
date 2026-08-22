@@ -1,172 +1,150 @@
-{# TV Main - Waiting Area - shows MORE, friendly attractive, Nigeria voices 2M2F recycled daily
-   Premium++: fast-track, journey time, 4 languages EN+YO+HA+IG, brightness + night mode
-#}
+{# TV Main - Premium clean, no voice details, no footer debug, no duplicate MEGALEX, patient-linked #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ screen.name if screen else 'Waiting Area TV' }} - {{ feed.stats.total_today }} today</title>
+<title>{{ screen.name if screen else 'Waiting Area' }} - Live</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background: linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f4c75 100%);color:#fff;min-height:100vh;overflow-x:hidden;transition: filter 0.6s ease}
   body.night{filter: brightness(0.55) contrast(0.95)}
-  .header{background: rgba(255,255,255,0.08);backdrop-filter: blur(12px);padding:18px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid rgba(255,255,255,0.1)}
-  .header h1{font-size:1.6rem;font-weight:800;letter-spacing:-0.02em}
-  .header .meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-  .pill{background: rgba(255,255,255,0.15);padding:6px 14px;border-radius:999px;font-size:.85rem;font-weight:600}
+  .header{background: rgba(255,255,255,0.07);backdrop-filter: blur(12px);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08)}
+  .header h1{font-size:1.5rem;font-weight:800;letter-spacing:-0.02em;display:flex;align-items:center;gap:10px}
+  .header .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pill{background: rgba(255,255,255,0.12);padding:6px 12px;border-radius:999px;font-size:.8rem;font-weight:600;backdrop-filter: blur(6px)}
   .pill.green{background: #10b981;color:#fff}
-  .pill.amber{background: #f59e0b;color:#000}
   .pill.blue{background: #0ea5e9;color:#fff}
   .pill.purple{background: #8b5cf6;color:#fff}
-  .pill.red{background: #ef4444;color:#fff}
-  .voice-bar{background: linear-gradient(90deg,#f59e0b,#ef4444);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;flex-wrap:wrap}
-  .voice-bar button{background:#fff;color:#000;border:none;padding:10px 22px;border-radius:999px;font-weight:800;font-size:1rem;cursor:pointer}
-  .main{display:grid;grid-template-columns: 1.3fr 1fr;gap:20px;padding:20px 28px}
+  .main{display:grid;grid-template-columns: 1.4fr 0.9fr;gap:18px;padding:18px 22px}
   @media(max-width:900px){.main{grid-template-columns:1fr}}
-  .now-card{background: linear-gradient(135deg,#10b981 0%,#059669 100%);border-radius:20px;padding:28px;box-shadow: 0 20px 40px rgba(16,185,129,0.3);position:relative;overflow:hidden;animation: pulse 2s infinite}
-  .now-card.fast{background: linear-gradient(135deg,#8b5cf6 0%,#ec4899 100%);box-shadow: 0 20px 40px rgba(139,92,246,0.4)}
-  .now-card::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background: radial-gradient(circle,rgba(255,255,255,0.15) 0%,transparent 60%);animation: shimmer 3s infinite}
-  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.01)}}
-  @keyframes shimmer{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-  .now-card .label{text-transform:uppercase;letter-spacing:0.1em;font-size:.8rem;opacity:0.9;margin-bottom:8px}
-  .now-card .name{font-size:3rem;font-weight:900;line-height:1.1;letter-spacing:-0.03em;margin-bottom:6px;text-shadow: 0 2px 10px rgba(0,0,0,0.2)}
-  @media(max-width:600px){.now-card .name{font-size:2rem}}
-  .now-card .room{font-size:1.6rem;font-weight:700;opacity:0.95}
-  .now-card .code{margin-top:12px;font-size:1.1rem;background: rgba(0,0,0,0.2);display:inline-block;padding:6px 14px;border-radius:999px}
-  .journey{margin-top:14px;background: rgba(0,0,0,0.2);border-radius:12px;padding:12px 14px}
-  .journey .jt{font-size:.8rem;letter-spacing:0.06em;text-transform:uppercase;opacity:0.9;margin-bottom:6px}
-  .journey .total{font-size:1.4rem;font-weight:900}
-  .journey .steps{font-size:.85rem;opacity:0.9;margin-top:4px;line-height:1.4}
-  .section{background: rgba(255,255,255,0.08);backdrop-filter: blur(10px);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.1)}
-  .section h2{font-size:1.1rem;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-  .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08)}
+  .now-card{background: linear-gradient(135deg,#10b981 0%,#059669 100%);border-radius:22px;padding:26px 28px;box-shadow: 0 18px 36px rgba(16,185,129,0.28);position:relative;overflow:hidden}
+  .now-card.fast{background: linear-gradient(135deg,#8b5cf6 0%,#ec4899 100%);box-shadow: 0 18px 36px rgba(139,92,246,0.35)}
+  .now-card.empty{background: linear-gradient(135deg,#334155,#1e293b);box-shadow:none}
+  .now-card .label{font-size:.75rem;letter-spacing:0.1em;text-transform:uppercase;opacity:0.9;margin-bottom:6px;font-weight:700}
+  .now-card .name{font-size:2.8rem;font-weight:900;line-height:1.05;letter-spacing:-0.03em;margin-bottom:4px;text-shadow: 0 2px 10px rgba(0,0,0,0.18)}
+  @media(max-width:600px){.now-card .name{font-size:1.9rem}}
+  .now-card .room{font-size:1.4rem;font-weight:700;opacity:0.96;margin-top:6px}
+  .now-card .meta-line{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+  .code-pill{background: rgba(0,0,0,0.22);padding:5px 12px;border-radius:999px;font-size:.85rem;font-weight:700}
+  .badge-fast{background:#fff;color:#8b5cf6;padding:5px 12px;border-radius:999px;font-size:.8rem;font-weight:800}
+  .journey{margin-top:14px;background: rgba(0,0,0,0.18);border-radius:12px;padding:12px 14px}
+  .journey .jt{font-size:.7rem;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;margin-bottom:4px;font-weight:700}
+  .journey .total{font-size:1.25rem;font-weight:900}
+  .journey .steps{font-size:.82rem;opacity:0.88;margin-top:3px;line-height:1.4}
+  .section{background: rgba(255,255,255,0.07);backdrop-filter: blur(10px);border-radius:14px;padding:16px 18px;border:1px solid rgba(255,255,255,0.08);margin-bottom:16px}
+  .section h2{font-size:.95rem;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px;letter-spacing:0.02em}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)}
   .row:last-child{border:none}
-  .row .left{font-weight:600}
-  .row .right{font-size:.9rem;opacity:0.8}
-  .stats-grid{display:grid;grid-template-columns: repeat(4,1fr);gap:12px;margin-top:16px}
+  .row .left{font-weight:600;font-size:.92rem}
+  .row .right{font-size:.8rem;opacity:0.75}
+  .stats-grid{display:grid;grid-template-columns: repeat(4,1fr);gap:10px;margin-top:10px}
   @media(max-width:700px){.stats-grid{grid-template-columns: repeat(2,1fr)}}
-  .stat{background: rgba(255,255,255,0.1);border-radius:12px;padding:14px;text-align:center}
-  .stat .v{font-size:1.8rem;font-weight:900}
-  .stat .l{font-size:.75rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.8;margin-top:2px}
-  .next-list .item{background: rgba(255,255,255,0.06);border-radius:12px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;animation: slideIn 0.4s ease}
-  .next-list .item.fast{border-left:4px solid #8b5cf6;background: rgba(139,92,246,0.15)}
-  @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-  .footer{padding:12px 28px;text-align:center;opacity:0.6;font-size:.8rem}
-  .clock{font-variant-numeric: tabular-nums;font-weight:700;font-size:1.2rem}
-  .yoruba{font-style:italic;opacity:0.85;font-size:1.1rem;margin-top:6px}
-  .badge{background:#fff;color:#059669;padding:4px 10px;border-radius:999px;font-size:.75rem;font-weight:800}
-  .badge.fast{background:#8b5cf6;color:#fff}
-  .wait-badge{background: rgba(0,0,0,0.25);padding:4px 10px;border-radius:999px;font-size:.8rem;font-weight:700}
-  .ctrl{background:rgba(0,0,0,0.2);padding:6px 12px;border-radius:999px;display:flex;align-items:center;gap:6px}
+  .stat{background: rgba(255,255,255,0.08);border-radius:10px;padding:12px;text-align:center}
+  .stat .v{font-size:1.6rem;font-weight:900}
+  .stat .l{font-size:.68rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.75;margin-top:2px}
+  .next-list .item{background: rgba(255,255,255,0.05);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+  .next-list .item.fast{border-left:3px solid #8b5cf6;background: rgba(139,92,246,0.12)}
+  .wait-mini{background: rgba(0,0,0,0.22);padding:3px 8px;border-radius:999px;font-size:.72rem;font-weight:700}
+  .footer{padding:10px 22px;text-align:center;opacity:0.35;font-size:.7rem;letter-spacing:0.02em}
+  .clock{font-variant-numeric: tabular-nums;font-weight:700}
+  .qr-box{background:#fff;border-radius:12px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:6px;color:#000}
+  .admin-bar{background: rgba(0,0,0,0.35);padding:10px 18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-top:1px solid rgba(255,255,255,0.08)}
+  .admin-bar button{background:#fff;color:#000;border:none;padding:6px 14px;border-radius:999px;font-weight:700;font-size:.85rem;cursor:pointer}
+  .admin-bar input[type=range]{width:90px}
+  .tap-hint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background: rgba(0,0,0,0.75);color:#fff;padding:10px 18px;border-radius:999px;font-size:.85rem;font-weight:700;backdrop-filter: blur(10px);z-index:100;animation: fadeIn 0.5s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>🏥 {{ screen.name if screen else 'Waiting Area Main TV' }} {% if screen and screen.location %}· {{ screen.location }}{% endif %}</h1>
+  <h1>🏥 {{ screen.name if screen else 'Waiting Area' }}</h1>
   <div class="meta">
-    <span class="pill blue" id="clock">--:--</span>
-    <span class="pill">{{ rotation.slot_name }}</span>
-    <span class="pill">EN + YO + HA + IG</span>
+    <span class="pill clock" id="clock">--:--</span>
     <span class="pill green">{{ feed.stats.total_today }} today</span>
     {% if feed.stats.fast_track_waiting %}<span class="pill purple">⭐ {{ feed.stats.fast_track_waiting }} priority</span>{% endif %}
-    <span class="pill" id="brightnessBadge">🔆 {{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span>
-    <span class="pill" id="nightBadge" style="display:none">🌙 Night dim</span>
   </div>
 </div>
 
-<div class="voice-bar" id="voiceBar">
-  <div style="flex:1" onclick="hmsTv.enableVoice()">
-    <b>🔊 Nigeria Voices: 2 Male + 2 Female, recycled daily — 4 Languages</b> — Today: <b>{{ rotation.slot_name }}</b> · English + Yorùbá + Hausa + Igbo · Priority lane + Journey time + Brightness
-    <div style="font-size:.85rem;opacity:0.9;margin-top:2px">Tap to enable voice. TV will shout every call in EN, YO, HA, IG (patient's preferred language first). Volume + brightness per TV saved. Night mode auto dims 19:00-07:00.</div>
+{# Public TV is clean — no voice bar. Admin sees controls if logged in as SUPER_ADMIN #}
+{% if current_user.is_authenticated and current_user.role == 'SUPER_ADMIN' %}
+<div class="admin-bar" id="adminBar">
+  <b style="font-size:.85rem">Admin TV controls (only you see this)</b>
+  <span style="font-size:.8rem;opacity:0.8">{{ rotation.slot_name }} · {{ screen.voice_languages if screen else 'en,yo,ha,ig' }}</span>
+  <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px">
+    <span>🔉</span><input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)"><span id="volLabel" style="font-size:.8rem;font-weight:800">{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}%</span><span>🔊</span>
   </div>
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <div class="ctrl">
-      <span style="font-size:.9rem">🔉</span>
-      <input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}" style="width:90px" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)">
-      <span id="volLabel" style="font-size:.9rem;font-weight:800;min-width:32px">{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}%</span>
-      <span style="font-size:.9rem">🔊</span>
-    </div>
-    <div class="ctrl">
-      <span style="font-size:.9rem">🔅</span>
-      <input type="range" id="brightSlider" min="10" max="100" value="{{ screen.brightness if screen and screen.brightness is not none else 100 }}" style="width:90px" oninput="hmsTv.setBrightness(this.value)" onchange="hmsTv.saveBrightness(this.value)">
-      <span id="brightLabel" style="font-size:.9rem;font-weight:800;min-width:32px">{{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span>
-      <span style="font-size:.9rem">🔆</span>
-    </div>
-    <div class="ctrl" style="cursor:pointer" onclick="hmsTv.toggleNight()">
-      <span id="nightIcon">{{ '🌙' if screen and screen.night_mode else '☀️' }}</span>
-      <span id="nightLabel" style="font-size:.8rem;font-weight:700">{{ 'Night ON' if screen and screen.night_mode else 'Night OFF' }}</span>
-    </div>
-    <button id="voiceBtn" onclick="hmsTv.enableVoice()">🔊 Enable Voice</button>
-    <button onclick="hmsTv.testVoice()" style="background:rgba(0,0,0,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:8px 14px;border-radius:999px;font-weight:700;cursor:pointer">🎤 Test</button>
+  <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px">
+    <span>🔅</span><input type="range" id="brightSlider" min="10" max="100" value="{{ screen.brightness if screen and screen.brightness is not none else 100 }}" oninput="hmsTv.setBrightness(this.value)" onchange="hmsTv.saveBrightness(this.value)"><span id="brightLabel" style="font-size:.8rem;font-weight:800">{{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span><span>🔆</span>
   </div>
+  <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px;cursor:pointer" onclick="hmsTv.toggleNight()"><span id="nightIcon">{{ '🌙' if screen and screen.night_mode else '☀️' }}</span><span id="nightLabel" style="font-size:.75rem">{{ 'Night ON' if screen and screen.night_mode else 'Night OFF' }}</span></div>
+  <button onclick="hmsTv.enableVoice()" id="voiceBtn">🔊 Voice</button>
+  <button onclick="hmsTv.testVoice()">🎤 Test</button>
 </div>
+{% endif %}
 
 <div class="main">
   <div>
     {% if feed.now_serving %}
       {% set first = feed.now_serving[0] %}
       <div class="now-card {% if first.is_fast_track %}fast{% endif %}">
-        <div class="label">📣 Now Serving — Ní báyìí — Yanzu — Ugbu a {% if first.is_fast_track %}⭐ Priority — {{ first.fast_track_reason or 'Priority' }}{% endif %}</div>
+        <div class="label">Now Serving {% if first.is_fast_track %}· Priority{% endif %}</div>
         <div class="name">{{ first.name }}</div>
-        <div class="yoruba">{{ first.spoken }} — ẹ jọwọ lọ sí {{ first.room }} | don Allah je zuwa {{ first.room }} | biko gaa na {{ first.room }}</div>
-        <div class="room">{{ first.room }} {% if first.doctor %}· {{ first.doctor }}{% endif %} {% if first.clinic %}· {{ first.clinic }}{% endif %}</div>
-        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-          <span class="code">{{ first.code }} · {{ first.type|replace('_',' ')|title }}</span>
-          {% if first.is_fast_track %}<span class="badge fast">⭐ Priority Lane — {{ first.fast_track_reason }}</span>{% endif %}
-          {% if first.waited %}<span class="wait-badge">Waited {{ first.waited }}m</span>{% endif %}
+        <div class="room">{{ first.room }} {% if first.clinic %}· {{ first.clinic }}{% endif %} {% if first.doctor %}· {{ first.doctor }}{% endif %}</div>
+        <div class="meta-line">
+          <span class="code-pill">{{ first.code }}</span>
+          {% if first.is_fast_track %}<span class="badge-fast">⭐ {{ first.fast_track_reason or 'Priority' }}</span>{% endif %}
         </div>
         {% if first.journey_estimate and first.journey_estimate.total %}
         <div class="journey">
-          <div class="jt">⏱ Estimated journey left</div>
-          <div class="total">{{ first.journey_estimate.total }} minutes {% if first.journey_estimate.fast_track %}· Priority lane (half time){% endif %}</div>
+          <div class="jt">Estimated time left</div>
+          <div class="total">{{ first.journey_estimate.total }} min {% if first.journey_estimate.fast_track %}· priority{% endif %}</div>
           <div class="steps">{% for st in first.journey_estimate.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %}</div>
         </div>
         {% endif %}
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><span class="badge">🔊 {{ rotation.slot_name }} — EN+YO+HA+IG</span><span class="badge">🔆 {{ screen.brightness if screen and screen.brightness is not none else 100 }}% {% if screen and screen.night_mode %}🌙 Night{% endif %}</span></div>
       </div>
     {% else %}
-      <div class="now-card" style="background: linear-gradient(135deg,#334155,#1e293b)">
-        <div class="label">No one called yet</div>
-        <div class="name" style="font-size:2rem">Waiting for next call...</div>
-        <div class="yoruba">A ń dúró fún ìpè tó kàn | Muna jiran kira na gaba | Anyị na-eche oku na-esote</div>
+      <div class="now-card empty">
+        <div class="label">Waiting</div>
+        <div class="name" style="font-size:2rem">No call yet</div>
+        <div class="room" style="font-size:1rem;opacity:0.7">Please wait, you will be called by name</div>
       </div>
     {% endif %}
 
-    <div class="section" style="margin-top:20px">
-      <h2>⏭ Next — Tó kàn — Na gaba — Osote <span class="pill" style="margin-left:auto">{{ feed.next_up|length }} waiting</span></h2>
-      <div class="next-list" id="nextList">
+    <div class="section">
+      <h2>Next — Priority first</h2>
+      <div class="next-list">
         {% for item in feed.next_up[:8] %}
         <div class="item {% if item.is_fast_track %}fast{% endif %}">
-          <div style="flex:1">
-            <div style="font-weight:800;font-size:1.05rem;display:flex;gap:8px;align-items:center">
-              {{ item.name }}
-              {% if item.is_fast_track %}<span class="pill purple" style="font-size:.7rem">⭐ {{ item.fast_track_reason or 'Priority' }}</span>{% endif %}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;font-size:.95rem;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ item.name }}</span>
+              {% if item.is_fast_track %}<span class="pill purple" style="font-size:.65rem;padding:2px 8px">⭐ {{ item.fast_track_reason or 'Priority' }}</span>{% endif %}
             </div>
-            <div style="font-size:.85rem;opacity:0.8">{{ item.code }} · {{ item.clinic }} {% if item.room %}→ {{ item.room }}{% endif %} {% if item.doctor %}· {{ item.doctor }}{% endif %}</div>
+            <div style="font-size:.78rem;opacity:0.7;margin-top:2px">{{ item.code }} {% if item.clinic %}· {{ item.clinic }}{% endif %} {% if item.room %}→ {{ item.room }}{% endif %}</div>
             {% if item.estimated_wait is defined %}
-            <div style="font-size:.8rem;margin-top:4px">
-              <span class="wait-badge">⏱ ~{{ item.estimated_wait }} min wait</span>
-              {% if item.journey_estimate and item.journey_estimate.total %}<span class="wait-badge" style="margin-left:6px">🛣 {{ item.journey_estimate.total }} min total</span>{% endif %}
+            <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
+              <span class="wait-mini">⏱ ~{{ item.estimated_wait }}m wait</span>
+              {% if item.journey_estimate and item.journey_estimate.total %}<span class="wait-mini">🛣 {{ item.journey_estimate.total }}m total</span>{% endif %}
             </div>
             {% endif %}
           </div>
-          <span class="pill amber">{{ item.type|replace('_',' ')|title }} {% if item.position %}#{{ item.position }}{% endif %}</span>
+          <span class="wait-mini" style="margin-left:10px">#{{ item.position if item.position else loop.index }}</span>
         </div>
         {% else %}
-        <div class="row"><span class="left">No one in queue — well done!</span><span class="right">Kò sí ẹnikẹ́ni | Babu kowa | Ọ dịghị onye</span></div>
+        <div class="row"><span class="left">No one waiting</span><span class="right">Well done</span></div>
         {% endfor %}
       </div>
     </div>
 
     {% if feed.reception_enriched %}
-    <div class="section" style="margin-top:20px">
-      <h2>🚪 Reception / Billing / Pay-Point <span class="pill blue">{{ feed.reception_enriched|length }}</span></h2>
-      {% for enriched in feed.reception_enriched[:6] %}
+    <div class="section">
+      <h2>At Reception / Billing / Pay Point</h2>
+      {% for enriched in feed.reception_enriched[:5] %}
       {% set r = enriched.row %}
-      <div class="row {% if enriched.is_fast_track %}fast{% endif %}" style="{% if enriched.is_fast_track %}border-left:4px solid #8b5cf6;padding-left:10px{% endif %}">
-        <span class="left">{{ r.full_name }} {% if enriched.is_fast_track %}<span class="pill purple" style="font-size:.65rem">⭐ {{ enriched.fast_track_reason }}</span>{% endif %}<br><small style="opacity:0.7">{{ r.ref }} · {{ r.stage }}</small></span>
-        <span class="right"><span class="wait-badge">~{{ enriched.estimated_wait }}m</span> <span class="wait-badge">🛣 {{ enriched.journey_estimate.total }}m total</span></span>
+      <div class="row" style="{% if enriched.is_fast_track %}border-left:3px solid #8b5cf6;padding-left:10px{% endif %}">
+        <span class="left">{% if enriched.is_fast_track %}⭐ {% endif %}{{ r.full_name }}<br><small style="opacity:0.6;font-weight:400">{{ r.ref }} · {{ r.stage }}</small></span>
+        <span class="right"><span class="wait-mini">~{{ enriched.estimated_wait }}m</span></span>
       </div>
       {% endfor %}
     </div>
@@ -175,221 +153,172 @@
 
   <div>
     <div class="section">
-      <h2>📊 Live Queue Stats — Iṣirò Láyìí — Kididdiga — Ọnụọgụgụ</h2>
+      <h2>Live Today</h2>
       <div class="stats-grid">
-        <div class="stat"><div class="v">{{ feed.stats.queue_waiting }}</div><div class="l">Queue Waiting</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.triaged }}</div><div class="l">Triage Placed</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.queue_waiting }}</div><div class="l">Queue</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.triaged }}</div><div class="l">Triage</div></div>
         <div class="stat"><div class="v">{{ feed.stats.in_consultation }}</div><div class="l">With Doctor</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.onward_pending }}</div><div class="l">Lab/Pharm/Wards</div></div>
         <div class="stat"><div class="v">{{ feed.stats.reception_waiting }}</div><div class="l">Reception</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.doctors_ready }}</div><div class="l">Doctors Ready</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.fast_track_waiting or 0 }}</div><div class="l">⭐ Priority</div></div>
-        <div class="stat"><div class="v">{{ feed.stats.total_today }}</div><div class="l">Total Today</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.doctors_ready }}</div><div class="l">Doctors</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.fast_track_waiting or 0 }}</div><div class="l">Priority</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.onward_pending }}</div><div class="l">Lab/Pharm</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.total_today }}</div><div class="l">Total</div></div>
       </div>
       {% if feed.clinic_counts %}
-      <h2 style="margin-top:18px">🏥 Per Clinic Today</h2>
-      {% for clinic, count in feed.clinic_counts.items() %}
-      <div class="row"><span class="left">{{ clinic }}</span><span class="right pill blue">{{ count }}</span></div>
-      {% endfor %}
+      <div style="margin-top:14px">
+        {% for clinic, count in feed.clinic_counts.items() %}
+        <div class="row"><span class="left">{{ clinic }}</span><span class="right pill blue" style="padding:2px 10px">{{ count }}</span></div>
+        {% endfor %}
+      </div>
       {% endif %}
     </div>
 
-    <div class="section" style="margin-top:20px">
-      <h2>🩺 Doctors Ready Now</h2>
-      {% for s in feed.sessions[:8] %}
-      <div class="row"><span class="left">{{ s.doctor.name if s.doctor else 'Doctor' }} — {{ s.clinic }} · {{ s.consulting_room }}</span><span class="right pill green">Ready</span></div>
+    <div class="section">
+      <h2>Doctors Ready Now</h2>
+      {% for s in feed.sessions[:6] %}
+      <div class="row"><span class="left">{{ s.doctor.name if s.doctor else 'Doctor' }} · {{ s.consulting_room }} · {{ s.clinic }}</span><span class="right pill green" style="padding:2px 8px;font-size:.7rem">Ready</span></div>
       {% else %}
-      <div class="row"><span class="left">No doctor has clicked ready yet</span></div>
+      <div class="row"><span class="left">No doctor ready yet</span></div>
       {% endfor %}
     </div>
 
-    {% if is_main and feed.onward_pending %}
-    <div class="section" style="margin-top:20px">
-      <h2>🧪 Lab / Pharmacy / Wards Waiting</h2>
-      {% for step in feed.onward_pending[:6] %}
-      {% set visit = feed.patients.get(step.visit_id) if feed.patients else None %}
-      {% set is_ft = visit.is_fast_track if visit else False %}
-      <div class="row" style="{% if is_ft %}border-left:3px solid #8b5cf6;padding-left:10px{% endif %}">
-        <span class="left">{% if is_ft %}⭐ {% endif %}{{ visit.full_name if visit else 'Patient' }} → {{ step.destination }}</span>
-        <span class="right">{{ ((feed.now - step.sent_at).total_seconds()//60)|int }}m ago</span>
+    {% if is_main and feed.onward_enriched %}
+    <div class="section">
+      <h2>Lab / Pharmacy / Billing — Waiting</h2>
+      {% for item in feed.onward_enriched[:6] %}
+      <div class="row" style="{% if item.is_fast_track %}border-left:3px solid #8b5cf6;padding-left:10px{% endif %}">
+        <span class="left">{% if item.is_fast_track %}⭐ {% endif %}{{ item.patient.full_name if item.patient else 'Patient' }}<br><small style="opacity:0.6;font-weight:400">{{ item.step.destination }} · {{ item.patient.hospital_number if item.patient else '' }}</small></span>
+        <span class="right">{{ item.waited }}m ago</span>
       </div>
       {% endfor %}
     </div>
     {% endif %}
 
-    <div class="section" style="margin-top:20px;background: rgba(139,92,246,0.12)">
-      <h2>💜 Premium Patient Care — 4 Languages + Smart Display</h2>
-      <div style="font-size:.9rem;line-height:1.5">
-        ⭐ <b>Priority Lane:</b> Elderly 60+, Pregnant, Child &lt;5, Wheelchair — seen first, half wait.<br>
-        ⏱ <b>Journey Time:</b> Every patient sees estimated total time from now to going home.<br>
-        🔊 <b>Voice 4 Languages:</b> English + Yorùbá + Hausa + Igbo — 2M2F recycled daily, patient's preferred language first.<br>
-        🔆 <b>Brightness:</b> Slider per TV 10-100%, saved per TV. Night mode auto dims 19:00-07:00 to save eyes & power.<br>
-        🛣 <b>Transparent:</b> Reception → Billing → Pay → HIMS → Triage → Doctor → Lab/Pharmacy → Home.
+    <div class="section" style="display:flex;gap:14px;align-items:center">
+      <div class="qr-box">
+        <div style="font-size:.7rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase">Scan to track your journey</div>
+        <div id="qrMain" style="width:110px;height:110px;background:#eee;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.7rem">QR</div>
+        <div style="font-size:.65rem;opacity:0.7;text-align:center">Check your position<br>on your phone</div>
+      </div>
+      <div style="flex:1;font-size:.82rem;line-height:1.45;opacity:0.85">
+        <b>Your journey:</b> Reception → Billing → Pay → HIMS → Triage → Doctor → Lab/Pharmacy → Home<br>
+        <span style="opacity:0.7">⭐ Priority lane for elderly 60+, pregnant, child &lt;5, wheelchair — seen first.</span><br>
+        <span style="opacity:0.7">⏱ Estimated time shown for every patient, based on real hospital speed.</span>
       </div>
     </div>
   </div>
 </div>
 
-<div class="footer">
-  <span id="lastUpdate">Last update: just now</span> · Auto-refresh every 5 seconds · 
-  <a href="/tv" style="color:#fff">Main TV</a> · 
-  {% if screen %}<a href="/api/tv/feed?code={{ screen.code }}" style="color:#fff" target="_blank">JSON feed</a>{% endif %} · 
-  Friendly, attractive, premium++ · 4 languages · Brightness + Night mode · Priority lane active
-</div>
+<div class="footer" id="footerMinimal">Live board · Auto refresh</div>
+
+<div class="tap-hint" id="tapHint" style="display:none">🔊 Tap anywhere to enable voice — 4 languages</div>
 
 <script>
-function tickClock(){
-  const now = new Date();
-  document.getElementById('clock').textContent = now.toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'});
-}
+// Clock
+function tickClock(){ const el=document.getElementById('clock'); if(el) el.textContent = new Date().toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'}); }
 setInterval(tickClock,1000); tickClock();
 
 window.hmsTv = {
-  voices: [],
-  enabled: false,
+  voices: [], enabled: false,
   slot: {{ rotation.slot }},
   slotName: "{{ rotation.slot_name }}",
-  lastSpokenKey: "",
   volume: ({{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }} / 100),
   brightness: ({{ screen.brightness if screen and screen.brightness is not none else 100 }}),
   nightMode: {{ 'true' if screen and screen.night_mode else 'false' }},
   screenCode: "{{ screen.code if screen else 'MAIN' }}",
   voiceLangs: "{{ screen.voice_languages if screen and screen.voice_languages else 'en,yo,ha,ig' }}",
+  lastKey: "",
 
   init(){
     const load = ()=>{ this.voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; };
-    load();
-    if(window.speechSynthesis){ window.speechSynthesis.onvoiceschanged = load; setTimeout(load, 800); }
-    document.addEventListener('click', ()=>{ this.unlock(); }, {once:true});
+    load(); if(window.speechSynthesis){ window.speechSynthesis.onvoiceschanged = load; setTimeout(load,800); }
     try{
-      const savedVol = localStorage.getItem('tv_vol_'+this.screenCode);
-      if(savedVol !== null){
-        this.volume = Math.max(0,Math.min(1, parseInt(savedVol)/100));
-        const sl = document.getElementById('volSlider'); const lb = document.getElementById('volLabel');
-        if(sl) sl.value = Math.round(this.volume*100); if(lb) lb.textContent = Math.round(this.volume*100)+'%';
-      }
-      const savedBright = localStorage.getItem('tv_bright_'+this.screenCode);
-      if(savedBright !== null){
-        this.brightness = Math.max(10,Math.min(100, parseInt(savedBright)));
-        const sl = document.getElementById('brightSlider'); const lb = document.getElementById('brightLabel');
-        if(sl) sl.value = this.brightness; if(lb) lb.textContent = this.brightness+'%';
-        this.applyBrightness();
-      } else { this.applyBrightness(); }
-      const savedNight = localStorage.getItem('tv_night_'+this.screenCode);
-      if(savedNight !== null){ this.nightMode = savedNight === '1'; }
+      const sv = localStorage.getItem('tv_vol_'+this.screenCode);
+      if(sv!==null){ this.volume = Math.max(0,Math.min(1, parseInt(sv)/100)); }
+      const sb = localStorage.getItem('tv_bright_'+this.screenCode);
+      if(sb!==null){ this.brightness = Math.max(10,Math.min(100, parseInt(sb))); }
+      const sn = localStorage.getItem('tv_night_'+this.screenCode);
+      if(sn!==null){ this.nightMode = sn==='1'; }
     }catch(e){}
-    this.checkNightMode();
+    this.applyBrightness(); this.checkNightMode();
     setInterval(()=> this.checkNightMode(), 60000);
-  },
-
-  unlock(){
-    if(!window.speechSynthesis) return;
-    try{ const u = new SpeechSynthesisUtterance(" "); u.volume = 0.01; window.speechSynthesis.speak(u); }catch(e){}
-  },
-
-  setVolume(v){
-    this.volume = Math.max(0,Math.min(1, parseInt(v)/100));
-    const lb = document.getElementById('volLabel'); if(lb) lb.textContent = v + '%';
-  },
-  saveVolume(v){
-    this.setVolume(v);
+    // Public TV: show tap hint if voice not enabled, hide after first interaction
+    if(!this.enabled){
+      const hint = document.getElementById('tapHint');
+      if(hint){ hint.style.display='block'; setTimeout(()=>{ hint.style.display='none'; }, 8000); }
+      document.body.addEventListener('click', ()=>{ this.enableVoice(); }, {once:true});
+    }
+    // QR code for patient portal
     try{
-      localStorage.setItem('tv_vol_'+this.screenCode, v);
-      fetch('/api/tv/volume?code='+encodeURIComponent(this.screenCode)+'&volume='+encodeURIComponent(v), {method:'POST'}).catch(()=>{});
-    }catch(e){}
-    if(this.enabled){ this.speak("Volume "+v+" percent. "+this.slotName+" at "+v+" percent.", "en-NG"); }
-  },
-
-  setBrightness(v){
-    this.brightness = Math.max(10,Math.min(100, parseInt(v)));
-    const lb = document.getElementById('brightLabel'); const badge = document.getElementById('brightnessBadge');
-    if(lb) lb.textContent = v + '%'; if(badge) badge.textContent = '🔆 '+v+'%';
-    this.applyBrightness();
-  },
-  saveBrightness(v){
-    this.setBrightness(v);
-    try{
-      localStorage.setItem('tv_bright_'+this.screenCode, v);
-      fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&brightness='+encodeURIComponent(v), {method:'POST'}).catch(()=>{});
+      const url = window.location.origin + "/welcome";
+      const qrEl = document.getElementById('qrMain');
+      if(qrEl){
+        // Use simple API or generate via canvas? For zero budget, show link text if qrcode lib not available
+        // Try to fetch QR as data URI from server if available
+        fetch("/api/tv/qr-url?code="+encodeURIComponent(this.screenCode)).then(r=>r.json()).then(d=>{
+          if(d.qr){ const img=document.createElement('img'); img.src=d.qr; img.style.width='110px'; img.style.height='110px'; img.style.borderRadius='8px'; qrEl.innerHTML=''; qrEl.appendChild(img); }
+          else { qrEl.textContent = "Scan /welcome"; }
+        }).catch(()=>{ qrEl.textContent = "/welcome"; });
+      }
     }catch(e){}
   },
+
+  unlock(){ if(!window.speechSynthesis) return; try{ const u=new SpeechSynthesisUtterance(" "); u.volume=0.01; window.speechSynthesis.speak(u); }catch(e){} },
+
+  setVolume(v){ this.volume=Math.max(0,Math.min(1, parseInt(v)/100)); const lb=document.getElementById('volLabel'); if(lb) lb.textContent=v+'%'; },
+  saveVolume(v){ this.setVolume(v); try{ localStorage.setItem('tv_vol_'+this.screenCode, v); fetch('/api/tv/volume?code='+encodeURIComponent(this.screenCode)+'&volume='+encodeURIComponent(v), {method:'POST'}).catch(()=>{}); }catch(e){} },
+
+  setBrightness(v){ this.brightness=Math.max(10,Math.min(100, parseInt(v))); const lb=document.getElementById('brightLabel'); if(lb) lb.textContent=v+'%'; this.applyBrightness(); },
+  saveBrightness(v){ this.setBrightness(v); try{ localStorage.setItem('tv_bright_'+this.screenCode, v); fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&brightness='+encodeURIComponent(v), {method:'POST'}).catch(()=>{}); }catch(e){} },
   applyBrightness(){
     const isNightDim = this.nightMode && this.isNightTime();
     const effective = isNightDim ? Math.max(10, Math.round(this.brightness * 0.45)) : this.brightness;
     document.body.style.filter = 'brightness('+effective+'%)' + (isNightDim ? ' contrast(0.92)' : '');
-    const badge = document.getElementById('brightnessBadge');
-    if(badge) badge.textContent = '🔆 '+this.brightness+'%' + (isNightDim ? ' 🌙 dim to '+effective+'%' : '');
-    const nightBadge = document.getElementById('nightBadge');
-    if(nightBadge) nightBadge.style.display = isNightDim ? 'inline-block' : 'none';
-    if(isNightDim){ document.body.classList.add('night'); } else { document.body.classList.remove('night'); }
+    if(isNightDim) document.body.classList.add('night'); else document.body.classList.remove('night');
   },
-  isNightTime(){
-    const h = new Date().getHours(); return (h >= 19 || h < 7);
-  },
+  isNightTime(){ const h=new Date().getHours(); return (h>=19 || h<7); },
   checkNightMode(){
     this.applyBrightness();
-    const icon = document.getElementById('nightIcon'); const label = document.getElementById('nightLabel');
+    const icon=document.getElementById('nightIcon'); const label=document.getElementById('nightLabel');
     if(icon) icon.textContent = this.nightMode ? '🌙' : '☀️';
     if(label) label.textContent = this.nightMode ? (this.isNightTime() ? 'Night ON — dimmed' : 'Night ON — day') : 'Night OFF';
   },
   toggleNight(){
     this.nightMode = !this.nightMode;
-    try{ localStorage.setItem('tv_night_'+this.screenCode, this.nightMode ? '1' : '0'); fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&night_mode='+(this.nightMode?1:0), {method:'POST'}).catch(()=>{}); }catch(e){}
+    try{ localStorage.setItem('tv_night_'+this.screenCode, this.nightMode?'1':'0'); fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&night_mode='+(this.nightMode?1:0), {method:'POST'}).catch(()=>{}); }catch(e){}
     this.checkNightMode();
-    if(this.enabled){ this.speak(this.nightMode ? "Night mode on. TV will auto dim from 7pm to 7am." : "Night mode off. Brightness full.", "en-NG"); }
-  },
-
-  testVoice(){
-    if(!this.enabled){ this.enableVoice(); setTimeout(()=> this.testVoice(), 800); return; }
-    const name = "Folake Abatan"; const room = "Room 3, Dental Clinic";
-    this.speakMulti(name, room, true);
   },
 
   enableVoice(){
-    this.enabled = true; this.unlock();
-    const bar = document.getElementById('voiceBar');
-    bar.style.background = "linear-gradient(90deg,#10b981,#059669)";
-    const left = bar.querySelector('div');
-    if(left){
-      left.innerHTML = '<b>✅ Voice ON — '+this.slotName+' — EN+YO+HA+IG — Vol '+Math.round(this.volume*100)+'% — Bright '+this.brightness+'%'+(this.nightMode?' 🌙 Night':'' )+'</b><div style="font-size:.85rem">TV will shout every call in 4 languages. Patient preferred language first. Drag sliders for volume & brightness.</div>';
-      left.onclick = ()=>{};
-    }
-    const btn = document.getElementById('voiceBtn'); if(btn) btn.textContent = "🔊 Voice ON";
-    this.speakMulti("Voice is on. "+this.slotName+" will call patients in English, Yoruba, Hausa and Igbo at "+Math.round(this.volume*100)+" percent. Priority lane active. Welcome.", "Welcome Hall", false, "en");
-    setTimeout(()=>{ this.speak("Ohun ti wa lori. A o pe awon alaisan ni ede Geesi, Yoruba, Hausa ati Igbo. E kaabo.", "yo-NG"); }, 3000);
-    setTimeout(()=>{ this.speak("An kunna murya. Za mu kira marasa lafiya da Turanci, Yarbanci, Hausa da Igbo. Barka da zuwa.", "ha-NG"); }, 6500);
-    setTimeout(()=>{ this.speak("Agbanwuru olu. Anyi ga-akpọ ndị ọrịa n'asụsụ Bekee, Yoruba, Hausa na Igbo. Nnọọ.", "ig-NG"); }, 10000);
+    this.enabled=true; this.unlock();
+    const hint=document.getElementById('tapHint'); if(hint) hint.style.display='none';
+    const btn=document.getElementById('voiceBtn'); if(btn) btn.textContent='🔊 Voice ON';
+    // No announcement on enable for public clean TV, just ready
+  },
+
+  testVoice(){
+    if(!this.enabled){ this.enableVoice(); setTimeout(()=>this.testVoice(),800); return; }
+    this.speakMulti("Folake Abatan", "Room 3, Dental Clinic", false, "en");
   },
 
   pickVoice(lang){
     if(!this.voices || !this.voices.length) return null;
-    let candidates = this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes(lang.toLowerCase().split('-')[0]));
-    if(!candidates.length) candidates = this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes('en'));
-    if(!candidates.length) candidates = this.voices;
-    const isFemaleSlot = (this.slot % 2 === 0); const wantFemale = isFemaleSlot;
-    const femaleHints = ["female","woman","zira","ada","folake","samantha","google uk english female","google us english"];
-    const maleHints = ["male","man","emeka","chinedu","google uk english male","google us english male","david","mark"];
-    let genderFiltered = candidates.filter(v=>{
-      const n = (v.name||"").toLowerCase();
-      if(wantFemale) return femaleHints.some(h=> n.includes(h));
-      return maleHints.some(h=> n.includes(h));
-    });
-    if(genderFiltered.length) candidates = genderFiltered;
-    const idx = this.slot % candidates.length;
-    return candidates[idx] || candidates[0] || null;
+    let c=this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes((lang||"en").split("-")[0].toLowerCase()));
+    if(!c.length) c=this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes("en"));
+    if(!c.length) c=this.voices;
+    const wantFemale = (this.slot%2===0);
+    const hints = wantFemale ? ["female","zira","folake","samantha"] : ["male","emeka","chinedu","david"];
+    let f=c.filter(v=> hints.some(h=> (v.name||"").toLowerCase().includes(h)));
+    if(f.length) c=f;
+    return c[this.slot % c.length] || c[0];
   },
-
-  speak(text, lang){
-    if(!this.enabled) return; if(!window.speechSynthesis) return;
+  speak(t,l){
+    if(!this.enabled||!speechSynthesis) return;
     try{
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = lang || "en-NG"; u.volume = this.volume; u.rate = 0.92; u.pitch = 1.0;
-      const v = this.pickVoice(lang); if(v) u.voice = v;
-      window.speechSynthesis.speak(u);
-    }catch(e){ console.log("speak failed", e); }
+      const u=new SpeechSynthesisUtterance(t); u.lang=l||"en-NG"; u.volume=this.volume; u.rate=0.92;
+      const v=this.pickVoice(l); if(v) u.voice=v; speechSynthesis.speak(u);
+    }catch(e){}
   },
-
-  // Premium: speak in 4 languages, patient's preferred language first after English
   speakMulti(name, room, isPriority, preferredLang){
     if(!this.enabled) return;
     const langsEnabled = (this.voiceLangs || "en,yo,ha,ig").split(",").map(s=>s.trim().toLowerCase());
@@ -397,64 +326,35 @@ window.hmsTv = {
     const prioYo = isPriority ? "Alaisan pataki, " : "";
     const prioHa = isPriority ? "Majinyaci mai fifiko, " : "";
     const prioIg = isPriority ? "Onye ọrịa dị mkpa, " : "";
-
     const enText = prio + name + ", please go to " + room;
     const yoText = prioYo + name + ", ẹ jọwọ lọ sí " + room;
     const haText = prioHa + name + ", don Allah je zuwa " + room;
     const igText = prioIg + name + ", biko gaa na " + room;
-
-    // Build order: EN always first, then preferred language if not EN, then remaining in YO,HA,IG order
-    const order = [];
-    order.push({text: enText, lang: "en-NG", code: "en"});
-    const pref = (preferredLang || "").toLowerCase().substring(0,2);
-    const map = {
-      "yo": {text: yoText, lang: "yo-NG", code: "yo"},
-      "ha": {text: haText, lang: "ha-NG", code: "ha"},
-      "ig": {text: igText, lang: "ig-NG", code: "ig"},
-      "en": null
-    };
-    if(pref && map[pref] && langsEnabled.includes(pref) && pref !== "en"){
-      order.push(map[pref]);
-    }
-    // Then add remaining enabled languages not already added, in order yo,ha,ig
-    for(const c of ["yo","ha","ig"]){
-      if(!langsEnabled.includes(c)) continue;
-      if(order.some(o=> o.code===c)) continue;
-      if(map[c]) order.push(map[c]);
-    }
-
-    // Speak with delays
-    let delay = 0;
-    for(const item of order){
-      if(!item) continue;
-      setTimeout(()=> this.speak(item.text, item.lang), delay);
-      delay += 3800;
-    }
+    const order=[]; order.push({text:enText, lang:"en-NG", code:"en"});
+    const pref=(preferredLang||"").toLowerCase().substring(0,2);
+    const map={"yo":{text:yoText, lang:"yo-NG", code:"yo"}, "ha":{text:haText, lang:"ha-NG", code:"ha"}, "ig":{text:igText, lang:"ig-NG", code:"ig"}};
+    if(pref && map[pref] && langsEnabled.includes(pref) && pref!=="en"){ order.push(map[pref]); }
+    for(const c of ["yo","ha","ig"]){ if(!langsEnabled.includes(c)) continue; if(order.some(o=>o.code===c)) continue; if(map[c]) order.push(map[c]); }
+    let delay=0; for(const item of order){ if(!item) continue; setTimeout(()=> this.speak(item.text, item.lang), delay); delay+=3800; }
   }
 };
 hmsTv.init();
 
-let lastNowServingKey = "";
 function refreshFeed(){
   const code = "{{ screen.code if screen else 'MAIN' }}";
   fetch("/api/tv/feed?code="+encodeURIComponent(code))
-    .then(r=> r.json())
+    .then(r=>r.json())
     .then(data=>{
-      document.getElementById('lastUpdate').textContent = "Last update: "+ new Date().toLocaleTimeString();
       if(data.now_serving && data.now_serving.length){
-        const first = data.now_serving[0];
-        const key = first.code + "|" + first.room + "|" + first.type;
-        if(key !== lastNowServingKey){
-          lastNowServingKey = key;
-          if(key !== "{{ (feed.now_serving[0].code ~ '|' ~ feed.now_serving[0].room) if feed.now_serving else '' }}"){
-            const pref = first.preferred_lang || (data.screen && data.screen.voice_languages ? data.screen.voice_languages.split(',')[1] : 'yo');
-            hmsTv.speakMulti(first.name, first.room + (first.clinic ? ", " + first.clinic : ""), !!first.is_fast_track, pref);
-            setTimeout(()=>{ window.location.reload(); }, 1500);
-          }
+        const first=data.now_serving[0]; const key=first.code+"|"+first.room+"|"+first.type;
+        if(key!==hmsTv.lastKey){
+          hmsTv.lastKey=key;
+          const pref=first.preferred_lang||"en";
+          hmsTv.speakMulti(first.name, first.room + (first.clinic ? ", "+first.clinic : ""), !!first.is_fast_track, pref);
+          setTimeout(()=>{ window.location.reload(); }, 1200);
         }
       }
-    })
-    .catch(e=>{ console.log("feed failed", e); });
+    }).catch(()=>{});
 }
 setInterval(refreshFeed, 5000);
 setInterval(()=>{ fetch("/api/tv/feed?code=MAIN",{cache:"no-store"}).catch(()=>{}); }, 30000);
