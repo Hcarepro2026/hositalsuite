@@ -1,5 +1,5 @@
 {# TV Main - Waiting Area - shows MORE, friendly attractive, Nigeria voices 2M2F recycled daily
-   Premium++: fast-track elderly/pregnant/child, journey time estimate
+   Premium++: fast-track, journey time, 4 languages EN+YO+HA+IG, brightness + night mode
 #}
 <!DOCTYPE html>
 <html lang="en">
@@ -9,7 +9,8 @@
 <title>{{ screen.name if screen else 'Waiting Area TV' }} - {{ feed.stats.total_today }} today</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background: linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f4c75 100%);color:#fff;min-height:100vh;overflow-x:hidden}
+  body{font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background: linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f4c75 100%);color:#fff;min-height:100vh;overflow-x:hidden;transition: filter 0.6s ease}
+  body.night{filter: brightness(0.55) contrast(0.95)}
   .header{background: rgba(255,255,255,0.08);backdrop-filter: blur(12px);padding:18px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid rgba(255,255,255,0.1)}
   .header h1{font-size:1.6rem;font-weight:800;letter-spacing:-0.02em}
   .header .meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
@@ -19,7 +20,7 @@
   .pill.blue{background: #0ea5e9;color:#fff}
   .pill.purple{background: #8b5cf6;color:#fff}
   .pill.red{background: #ef4444;color:#fff}
-  .voice-bar{background: linear-gradient(90deg,#f59e0b,#ef4444);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer}
+  .voice-bar{background: linear-gradient(90deg,#f59e0b,#ef4444);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;flex-wrap:wrap}
   .voice-bar button{background:#fff;color:#000;border:none;padding:10px 22px;border-radius:999px;font-weight:800;font-size:1rem;cursor:pointer}
   .main{display:grid;grid-template-columns: 1.3fr 1fr;gap:20px;padding:20px 28px}
   @media(max-width:900px){.main{grid-template-columns:1fr}}
@@ -57,6 +58,7 @@
   .badge{background:#fff;color:#059669;padding:4px 10px;border-radius:999px;font-size:.75rem;font-weight:800}
   .badge.fast{background:#8b5cf6;color:#fff}
   .wait-badge{background: rgba(0,0,0,0.25);padding:4px 10px;border-radius:999px;font-size:.8rem;font-weight:700}
+  .ctrl{background:rgba(0,0,0,0.2);padding:6px 12px;border-radius:999px;display:flex;align-items:center;gap:6px}
 </style>
 </head>
 <body>
@@ -65,23 +67,35 @@
   <div class="meta">
     <span class="pill blue" id="clock">--:--</span>
     <span class="pill">{{ rotation.slot_name }}</span>
-    <span class="pill">EN + YO</span>
+    <span class="pill">EN + YO + HA + IG</span>
     <span class="pill green">{{ feed.stats.total_today }} today</span>
     {% if feed.stats.fast_track_waiting %}<span class="pill purple">⭐ {{ feed.stats.fast_track_waiting }} priority</span>{% endif %}
+    <span class="pill" id="brightnessBadge">🔆 {{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span>
+    <span class="pill" id="nightBadge" style="display:none">🌙 Night dim</span>
   </div>
 </div>
 
 <div class="voice-bar" id="voiceBar">
   <div style="flex:1" onclick="hmsTv.enableVoice()">
-    <b>🔊 Nigeria Voices: 2 Male + 2 Female, recycled daily</b> — Today: <b>{{ rotation.slot_name }}</b> · English + Yorùbá · Priority lane for elderly/pregnant/child
-    <div style="font-size:.85rem;opacity:0.9;margin-top:2px">Tap to enable voice. TV will shout every call in English then Yorùbá. Volume per TV saved. Journey time shown for every patient.</div>
+    <b>🔊 Nigeria Voices: 2 Male + 2 Female, recycled daily — 4 Languages</b> — Today: <b>{{ rotation.slot_name }}</b> · English + Yorùbá + Hausa + Igbo · Priority lane + Journey time + Brightness
+    <div style="font-size:.85rem;opacity:0.9;margin-top:2px">Tap to enable voice. TV will shout every call in EN, YO, HA, IG (patient's preferred language first). Volume + brightness per TV saved. Night mode auto dims 19:00-07:00.</div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 12px;border-radius:999px">
+    <div class="ctrl">
       <span style="font-size:.9rem">🔉</span>
-      <input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}" style="width:110px" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)">
+      <input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}" style="width:90px" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)">
       <span id="volLabel" style="font-size:.9rem;font-weight:800;min-width:32px">{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}%</span>
       <span style="font-size:.9rem">🔊</span>
+    </div>
+    <div class="ctrl">
+      <span style="font-size:.9rem">🔅</span>
+      <input type="range" id="brightSlider" min="10" max="100" value="{{ screen.brightness if screen and screen.brightness is not none else 100 }}" style="width:90px" oninput="hmsTv.setBrightness(this.value)" onchange="hmsTv.saveBrightness(this.value)">
+      <span id="brightLabel" style="font-size:.9rem;font-weight:800;min-width:32px">{{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span>
+      <span style="font-size:.9rem">🔆</span>
+    </div>
+    <div class="ctrl" style="cursor:pointer" onclick="hmsTv.toggleNight()">
+      <span id="nightIcon">{{ '🌙' if screen and screen.night_mode else '☀️' }}</span>
+      <span id="nightLabel" style="font-size:.8rem;font-weight:700">{{ 'Night ON' if screen and screen.night_mode else 'Night OFF' }}</span>
     </div>
     <button id="voiceBtn" onclick="hmsTv.enableVoice()">🔊 Enable Voice</button>
     <button onclick="hmsTv.testVoice()" style="background:rgba(0,0,0,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:8px 14px;border-radius:999px;font-weight:700;cursor:pointer">🎤 Test</button>
@@ -90,13 +104,12 @@
 
 <div class="main">
   <div>
-    {# NOW SERVING - most important #}
     {% if feed.now_serving %}
       {% set first = feed.now_serving[0] %}
       <div class="now-card {% if first.is_fast_track %}fast{% endif %}">
-        <div class="label">📣 Now Serving — Ní báyìí {% if first.is_fast_track %}⭐ Priority — {{ first.fast_track_reason or 'Priority' }}{% endif %}</div>
+        <div class="label">📣 Now Serving — Ní báyìí — Yanzu — Ugbu a {% if first.is_fast_track %}⭐ Priority — {{ first.fast_track_reason or 'Priority' }}{% endif %}</div>
         <div class="name">{{ first.name }}</div>
-        <div class="yoruba">{{ first.spoken }} — ẹ jọwọ lọ sí {{ first.room }}</div>
+        <div class="yoruba">{{ first.spoken }} — ẹ jọwọ lọ sí {{ first.room }} | don Allah je zuwa {{ first.room }} | biko gaa na {{ first.room }}</div>
         <div class="room">{{ first.room }} {% if first.doctor %}· {{ first.doctor }}{% endif %} {% if first.clinic %}· {{ first.clinic }}{% endif %}</div>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <span class="code">{{ first.code }} · {{ first.type|replace('_',' ')|title }}</span>
@@ -110,19 +123,18 @@
           <div class="steps">{% for st in first.journey_estimate.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %}</div>
         </div>
         {% endif %}
-        <div style="margin-top:10px"><span class="badge">🔊 Speaking in {{ rotation.slot_name }}</span></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><span class="badge">🔊 {{ rotation.slot_name }} — EN+YO+HA+IG</span><span class="badge">🔆 {{ screen.brightness if screen and screen.brightness is not none else 100 }}% {% if screen and screen.night_mode %}🌙 Night{% endif %}</span></div>
       </div>
     {% else %}
       <div class="now-card" style="background: linear-gradient(135deg,#334155,#1e293b)">
         <div class="label">No one called yet</div>
         <div class="name" style="font-size:2rem">Waiting for next call...</div>
-        <div class="yoruba">A ń dúró fún ìpè tó kàn</div>
+        <div class="yoruba">A ń dúró fún ìpè tó kàn | Muna jiran kira na gaba | Anyị na-eche oku na-esote</div>
       </div>
     {% endif %}
 
-    {# NEXT UP #}
     <div class="section" style="margin-top:20px">
-      <h2>⏭ Next — Tó kàn <span class="pill" style="margin-left:auto">{{ feed.next_up|length }} waiting</span></h2>
+      <h2>⏭ Next — Tó kàn — Na gaba — Osote <span class="pill" style="margin-left:auto">{{ feed.next_up|length }} waiting</span></h2>
       <div class="next-list" id="nextList">
         {% for item in feed.next_up[:8] %}
         <div class="item {% if item.is_fast_track %}fast{% endif %}">
@@ -135,19 +147,18 @@
             {% if item.estimated_wait is defined %}
             <div style="font-size:.8rem;margin-top:4px">
               <span class="wait-badge">⏱ ~{{ item.estimated_wait }} min wait</span>
-              {% if item.journey_estimate and item.journey_estimate.total %}<span class="wait-badge" style="margin-left:6px">🛣 {{ item.journey_estimate.total }} min total journey</span>{% endif %}
+              {% if item.journey_estimate and item.journey_estimate.total %}<span class="wait-badge" style="margin-left:6px">🛣 {{ item.journey_estimate.total }} min total</span>{% endif %}
             </div>
             {% endif %}
           </div>
           <span class="pill amber">{{ item.type|replace('_',' ')|title }} {% if item.position %}#{{ item.position }}{% endif %}</span>
         </div>
         {% else %}
-        <div class="row"><span class="left">No one in queue — well done!</span><span class="right">Kò sí ẹnikẹ́ni</span></div>
+        <div class="row"><span class="left">No one in queue — well done!</span><span class="right">Kò sí ẹnikẹ́ni | Babu kowa | Ọ dịghị onye</span></div>
         {% endfor %}
       </div>
     </div>
 
-    {# Reception waiting with journey time #}
     {% if feed.reception_enriched %}
     <div class="section" style="margin-top:20px">
       <h2>🚪 Reception / Billing / Pay-Point <span class="pill blue">{{ feed.reception_enriched|length }}</span></h2>
@@ -163,9 +174,8 @@
   </div>
 
   <div>
-    {# STATS - waiting area shows MORE #}
     <div class="section">
-      <h2>📊 Live Queue Stats — Iṣirò Láyìí</h2>
+      <h2>📊 Live Queue Stats — Iṣirò Láyìí — Kididdiga — Ọnụọgụgụ</h2>
       <div class="stats-grid">
         <div class="stat"><div class="v">{{ feed.stats.queue_waiting }}</div><div class="l">Queue Waiting</div></div>
         <div class="stat"><div class="v">{{ feed.stats.triaged }}</div><div class="l">Triage Placed</div></div>
@@ -176,7 +186,6 @@
         <div class="stat"><div class="v">{{ feed.stats.fast_track_waiting or 0 }}</div><div class="l">⭐ Priority</div></div>
         <div class="stat"><div class="v">{{ feed.stats.total_today }}</div><div class="l">Total Today</div></div>
       </div>
-
       {% if feed.clinic_counts %}
       <h2 style="margin-top:18px">🏥 Per Clinic Today</h2>
       {% for clinic, count in feed.clinic_counts.items() %}
@@ -185,7 +194,6 @@
       {% endif %}
     </div>
 
-    {# SESSIONS #}
     <div class="section" style="margin-top:20px">
       <h2>🩺 Doctors Ready Now</h2>
       {% for s in feed.sessions[:8] %}
@@ -195,7 +203,6 @@
       {% endfor %}
     </div>
 
-    {# ONWARD PENDING - show more than doctor calls #}
     {% if is_main and feed.onward_pending %}
     <div class="section" style="margin-top:20px">
       <h2>🧪 Lab / Pharmacy / Wards Waiting</h2>
@@ -210,14 +217,14 @@
     </div>
     {% endif %}
 
-    {# Journey time legend #}
     <div class="section" style="margin-top:20px;background: rgba(139,92,246,0.12)">
-      <h2>💜 Premium Patient Care</h2>
+      <h2>💜 Premium Patient Care — 4 Languages + Smart Display</h2>
       <div style="font-size:.9rem;line-height:1.5">
-        ⭐ <b>Priority Lane:</b> Elderly (60+), Pregnant, Child under 5, Wheelchair — seen first, half wait time.<br>
-        ⏱ <b>Journey Time:</b> Every patient sees estimated total time from now to going home, based on real hospital speed.<br>
-        🛣 <b>Transparent:</b> Reception → Billing → Pay → HIMS → Triage → Doctor → Lab/Pharmacy → Home.<br>
-        🔊 <b>Voice:</b> Nigeria native voices, 2 male 2 female recycled daily, English + Yorùbá.
+        ⭐ <b>Priority Lane:</b> Elderly 60+, Pregnant, Child &lt;5, Wheelchair — seen first, half wait.<br>
+        ⏱ <b>Journey Time:</b> Every patient sees estimated total time from now to going home.<br>
+        🔊 <b>Voice 4 Languages:</b> English + Yorùbá + Hausa + Igbo — 2M2F recycled daily, patient's preferred language first.<br>
+        🔆 <b>Brightness:</b> Slider per TV 10-100%, saved per TV. Night mode auto dims 19:00-07:00 to save eyes & power.<br>
+        🛣 <b>Transparent:</b> Reception → Billing → Pay → HIMS → Triage → Doctor → Lab/Pharmacy → Home.
       </div>
     </div>
   </div>
@@ -227,18 +234,16 @@
   <span id="lastUpdate">Last update: just now</span> · Auto-refresh every 5 seconds · 
   <a href="/tv" style="color:#fff">Main TV</a> · 
   {% if screen %}<a href="/api/tv/feed?code={{ screen.code }}" style="color:#fff" target="_blank">JSON feed</a>{% endif %} · 
-  Friendly, attractive, premium++ · No medical record on screen · Priority lane active
+  Friendly, attractive, premium++ · 4 languages · Brightness + Night mode · Priority lane active
 </div>
 
 <script>
-// --- Clock
 function tickClock(){
   const now = new Date();
   document.getElementById('clock').textContent = now.toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'});
 }
 setInterval(tickClock,1000); tickClock();
 
-// --- Nigeria Voices 2M2F recycled daily + Volume slider per TV
 window.hmsTv = {
   voices: [],
   enabled: false,
@@ -246,77 +251,114 @@ window.hmsTv = {
   slotName: "{{ rotation.slot_name }}",
   lastSpokenKey: "",
   volume: ({{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }} / 100),
+  brightness: ({{ screen.brightness if screen and screen.brightness is not none else 100 }}),
+  nightMode: {{ 'true' if screen and screen.night_mode else 'false' }},
   screenCode: "{{ screen.code if screen else 'MAIN' }}",
+  voiceLangs: "{{ screen.voice_languages if screen and screen.voice_languages else 'en,yo,ha,ig' }}",
 
   init(){
-    const load = ()=>{
-      this.voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-    };
+    const load = ()=>{ this.voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; };
     load();
-    if(window.speechSynthesis){
-      window.speechSynthesis.onvoiceschanged = load;
-      setTimeout(load, 800);
-    }
+    if(window.speechSynthesis){ window.speechSynthesis.onvoiceschanged = load; setTimeout(load, 800); }
     document.addEventListener('click', ()=>{ this.unlock(); }, {once:true});
     try{
-      const saved = localStorage.getItem('tv_vol_'+this.screenCode);
-      if(saved !== null){
-        this.volume = Math.max(0,Math.min(1, parseInt(saved)/100));
-        const sl = document.getElementById('volSlider');
-        const lb = document.getElementById('volLabel');
-        if(sl){ sl.value = Math.round(this.volume*100); }
-        if(lb){ lb.textContent = Math.round(this.volume*100)+'%'; }
+      const savedVol = localStorage.getItem('tv_vol_'+this.screenCode);
+      if(savedVol !== null){
+        this.volume = Math.max(0,Math.min(1, parseInt(savedVol)/100));
+        const sl = document.getElementById('volSlider'); const lb = document.getElementById('volLabel');
+        if(sl) sl.value = Math.round(this.volume*100); if(lb) lb.textContent = Math.round(this.volume*100)+'%';
       }
+      const savedBright = localStorage.getItem('tv_bright_'+this.screenCode);
+      if(savedBright !== null){
+        this.brightness = Math.max(10,Math.min(100, parseInt(savedBright)));
+        const sl = document.getElementById('brightSlider'); const lb = document.getElementById('brightLabel');
+        if(sl) sl.value = this.brightness; if(lb) lb.textContent = this.brightness+'%';
+        this.applyBrightness();
+      } else { this.applyBrightness(); }
+      const savedNight = localStorage.getItem('tv_night_'+this.screenCode);
+      if(savedNight !== null){ this.nightMode = savedNight === '1'; }
     }catch(e){}
+    this.checkNightMode();
+    setInterval(()=> this.checkNightMode(), 60000);
   },
 
   unlock(){
     if(!window.speechSynthesis) return;
-    try{
-      const u = new SpeechSynthesisUtterance(" ");
-      u.volume = 0.01;
-      window.speechSynthesis.speak(u);
-    }catch(e){}
+    try{ const u = new SpeechSynthesisUtterance(" "); u.volume = 0.01; window.speechSynthesis.speak(u); }catch(e){}
   },
 
   setVolume(v){
     this.volume = Math.max(0,Math.min(1, parseInt(v)/100));
-    const lb = document.getElementById('volLabel');
-    if(lb) lb.textContent = v + '%';
+    const lb = document.getElementById('volLabel'); if(lb) lb.textContent = v + '%';
   },
-
   saveVolume(v){
     this.setVolume(v);
     try{
       localStorage.setItem('tv_vol_'+this.screenCode, v);
       fetch('/api/tv/volume?code='+encodeURIComponent(this.screenCode)+'&volume='+encodeURIComponent(v), {method:'POST'}).catch(()=>{});
     }catch(e){}
-    if(this.enabled){
-      this.speak("Volume "+v+" percent. "+this.slotName+" at "+v+" percent.", "en-NG");
-    }
+    if(this.enabled){ this.speak("Volume "+v+" percent. "+this.slotName+" at "+v+" percent.", "en-NG"); }
+  },
+
+  setBrightness(v){
+    this.brightness = Math.max(10,Math.min(100, parseInt(v)));
+    const lb = document.getElementById('brightLabel'); const badge = document.getElementById('brightnessBadge');
+    if(lb) lb.textContent = v + '%'; if(badge) badge.textContent = '🔆 '+v+'%';
+    this.applyBrightness();
+  },
+  saveBrightness(v){
+    this.setBrightness(v);
+    try{
+      localStorage.setItem('tv_bright_'+this.screenCode, v);
+      fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&brightness='+encodeURIComponent(v), {method:'POST'}).catch(()=>{});
+    }catch(e){}
+  },
+  applyBrightness(){
+    const isNightDim = this.nightMode && this.isNightTime();
+    const effective = isNightDim ? Math.max(10, Math.round(this.brightness * 0.45)) : this.brightness;
+    document.body.style.filter = 'brightness('+effective+'%)' + (isNightDim ? ' contrast(0.92)' : '');
+    const badge = document.getElementById('brightnessBadge');
+    if(badge) badge.textContent = '🔆 '+this.brightness+'%' + (isNightDim ? ' 🌙 dim to '+effective+'%' : '');
+    const nightBadge = document.getElementById('nightBadge');
+    if(nightBadge) nightBadge.style.display = isNightDim ? 'inline-block' : 'none';
+    if(isNightDim){ document.body.classList.add('night'); } else { document.body.classList.remove('night'); }
+  },
+  isNightTime(){
+    const h = new Date().getHours(); return (h >= 19 || h < 7);
+  },
+  checkNightMode(){
+    this.applyBrightness();
+    const icon = document.getElementById('nightIcon'); const label = document.getElementById('nightLabel');
+    if(icon) icon.textContent = this.nightMode ? '🌙' : '☀️';
+    if(label) label.textContent = this.nightMode ? (this.isNightTime() ? 'Night ON — dimmed' : 'Night ON — day') : 'Night OFF';
+  },
+  toggleNight(){
+    this.nightMode = !this.nightMode;
+    try{ localStorage.setItem('tv_night_'+this.screenCode, this.nightMode ? '1' : '0'); fetch('/api/tv/brightness?code='+encodeURIComponent(this.screenCode)+'&night_mode='+(this.nightMode?1:0), {method:'POST'}).catch(()=>{}); }catch(e){}
+    this.checkNightMode();
+    if(this.enabled){ this.speak(this.nightMode ? "Night mode on. TV will auto dim from 7pm to 7am." : "Night mode off. Brightness full.", "en-NG"); }
   },
 
   testVoice(){
     if(!this.enabled){ this.enableVoice(); setTimeout(()=> this.testVoice(), 800); return; }
-    const en = "Test. "+this.slotName+" speaking at "+Math.round(this.volume*100)+" percent. Priority lane active for elderly, pregnant and children. Folake Abatan, please go to Room 3, Dental Clinic";
-    const yo = "Idanwo. "+this.slotName+" n sọrọ ni "+Math.round(this.volume*100)+" percent. Folake Abatan, ẹ jọwọ lọ sí Room 3";
-    this.speakBilingual(en, yo);
+    const name = "Folake Abatan"; const room = "Room 3, Dental Clinic";
+    this.speakMulti(name, room, true);
   },
 
   enableVoice(){
-    this.enabled = true;
-    this.unlock();
+    this.enabled = true; this.unlock();
     const bar = document.getElementById('voiceBar');
     bar.style.background = "linear-gradient(90deg,#10b981,#059669)";
     const left = bar.querySelector('div');
     if(left){
-      left.innerHTML = '<b>✅ Voice ON — '+this.slotName+' speaking English + Yorùbá — Vol '+Math.round(this.volume*100)+'% — Priority lane active</b><div style=\"font-size:.85rem\">TV will shout every call. 2 Male + 2 Female recycled daily. Journey time announced. Drag slider to change loudness.</div>';
+      left.innerHTML = '<b>✅ Voice ON — '+this.slotName+' — EN+YO+HA+IG — Vol '+Math.round(this.volume*100)+'% — Bright '+this.brightness+'%'+(this.nightMode?' 🌙 Night':'' )+'</b><div style="font-size:.85rem">TV will shout every call in 4 languages. Patient preferred language first. Drag sliders for volume & brightness.</div>';
       left.onclick = ()=>{};
     }
-    const btn = document.getElementById('voiceBtn');
-    if(btn) btn.textContent = "🔊 Voice ON";
-    this.speak("Voice is on. "+this.slotName+" will call patients in English and Yoruba at "+Math.round(this.volume*100)+" percent. Priority lane is active for elderly, pregnant and children. Welcome.", "en-NG");
-    setTimeout(()=>{ this.speak("Ohun ti wa lori. A o pe awon alaisan ni ede Geesi ati Yoruba. E kaabo.", "yo-NG"); }, 2500);
+    const btn = document.getElementById('voiceBtn'); if(btn) btn.textContent = "🔊 Voice ON";
+    this.speakMulti("Voice is on. "+this.slotName+" will call patients in English, Yoruba, Hausa and Igbo at "+Math.round(this.volume*100)+" percent. Priority lane active. Welcome.", "Welcome Hall", false, "en");
+    setTimeout(()=>{ this.speak("Ohun ti wa lori. A o pe awon alaisan ni ede Geesi, Yoruba, Hausa ati Igbo. E kaabo.", "yo-NG"); }, 3000);
+    setTimeout(()=>{ this.speak("An kunna murya. Za mu kira marasa lafiya da Turanci, Yarbanci, Hausa da Igbo. Barka da zuwa.", "ha-NG"); }, 6500);
+    setTimeout(()=>{ this.speak("Agbanwuru olu. Anyi ga-akpọ ndị ọrịa n'asụsụ Bekee, Yoruba, Hausa na Igbo. Nnọọ.", "ig-NG"); }, 10000);
   },
 
   pickVoice(lang){
@@ -324,8 +366,7 @@ window.hmsTv = {
     let candidates = this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes(lang.toLowerCase().split('-')[0]));
     if(!candidates.length) candidates = this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes('en'));
     if(!candidates.length) candidates = this.voices;
-    const isFemaleSlot = (this.slot % 2 === 0);
-    const wantFemale = isFemaleSlot;
+    const isFemaleSlot = (this.slot % 2 === 0); const wantFemale = isFemaleSlot;
     const femaleHints = ["female","woman","zira","ada","folake","samantha","google uk english female","google us english"];
     const maleHints = ["male","man","emeka","chinedu","google uk english male","google us english male","david","mark"];
     let genderFiltered = candidates.filter(v=>{
@@ -339,31 +380,60 @@ window.hmsTv = {
   },
 
   speak(text, lang){
-    if(!this.enabled) return;
-    if(!window.speechSynthesis) return;
+    if(!this.enabled) return; if(!window.speechSynthesis) return;
     try{
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = lang || "en-NG";
-      u.volume = this.volume;
-      u.rate = 0.92;
-      u.pitch = 1.0;
-      const v = this.pickVoice(lang);
-      if(v) u.voice = v;
+      u.lang = lang || "en-NG"; u.volume = this.volume; u.rate = 0.92; u.pitch = 1.0;
+      const v = this.pickVoice(lang); if(v) u.voice = v;
       window.speechSynthesis.speak(u);
     }catch(e){ console.log("speak failed", e); }
   },
 
-  speakBilingual(enText, yoText){
+  // Premium: speak in 4 languages, patient's preferred language first after English
+  speakMulti(name, room, isPriority, preferredLang){
     if(!this.enabled) return;
-    this.speak(enText, "en-NG");
-    if(yoText){
-      setTimeout(()=>{ this.speak(yoText, "yo-NG"); }, 3500);
+    const langsEnabled = (this.voiceLangs || "en,yo,ha,ig").split(",").map(s=>s.trim().toLowerCase());
+    const prio = isPriority ? "Priority patient, " : "";
+    const prioYo = isPriority ? "Alaisan pataki, " : "";
+    const prioHa = isPriority ? "Majinyaci mai fifiko, " : "";
+    const prioIg = isPriority ? "Onye ọrịa dị mkpa, " : "";
+
+    const enText = prio + name + ", please go to " + room;
+    const yoText = prioYo + name + ", ẹ jọwọ lọ sí " + room;
+    const haText = prioHa + name + ", don Allah je zuwa " + room;
+    const igText = prioIg + name + ", biko gaa na " + room;
+
+    // Build order: EN always first, then preferred language if not EN, then remaining in YO,HA,IG order
+    const order = [];
+    order.push({text: enText, lang: "en-NG", code: "en"});
+    const pref = (preferredLang || "").toLowerCase().substring(0,2);
+    const map = {
+      "yo": {text: yoText, lang: "yo-NG", code: "yo"},
+      "ha": {text: haText, lang: "ha-NG", code: "ha"},
+      "ig": {text: igText, lang: "ig-NG", code: "ig"},
+      "en": null
+    };
+    if(pref && map[pref] && langsEnabled.includes(pref) && pref !== "en"){
+      order.push(map[pref]);
+    }
+    // Then add remaining enabled languages not already added, in order yo,ha,ig
+    for(const c of ["yo","ha","ig"]){
+      if(!langsEnabled.includes(c)) continue;
+      if(order.some(o=> o.code===c)) continue;
+      if(map[c]) order.push(map[c]);
+    }
+
+    // Speak with delays
+    let delay = 0;
+    for(const item of order){
+      if(!item) continue;
+      setTimeout(()=> this.speak(item.text, item.lang), delay);
+      delay += 3800;
     }
   }
 };
 hmsTv.init();
 
-// --- Auto-refresh feed every 5 seconds
 let lastNowServingKey = "";
 function refreshFeed(){
   const code = "{{ screen.code if screen else 'MAIN' }}";
@@ -377,11 +447,9 @@ function refreshFeed(){
         if(key !== lastNowServingKey){
           lastNowServingKey = key;
           if(key !== "{{ (feed.now_serving[0].code ~ '|' ~ feed.now_serving[0].room) if feed.now_serving else '' }}"){
-            let en = first.name + ", please go to " + first.room + (first.clinic ? ", " + first.clinic : "");
-            if(first.is_fast_track){ en = "Priority patient, " + en + ". Elderly pregnant and children priority lane."; }
-            const yo = first.spoken + ", ẹ jọwọ lọ sí " + first.room + (first.clinic ? ", " + first.clinic : "");
-            hmsTv.speakBilingual(en, yo);
-            setTimeout(()=>{ window.location.reload(); }, 1000);
+            const pref = first.preferred_lang || (data.screen && data.screen.voice_languages ? data.screen.voice_languages.split(',')[1] : 'yo');
+            hmsTv.speakMulti(first.name, first.room + (first.clinic ? ", " + first.clinic : ""), !!first.is_fast_track, pref);
+            setTimeout(()=>{ window.location.reload(); }, 1500);
           }
         }
       }
