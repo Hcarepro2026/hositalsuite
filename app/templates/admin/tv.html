@@ -3,6 +3,10 @@
 {% block content %}
 <h1>📺 TV Display Screens — Queue + Doctor Calls</h1>
 <p class="muted">Multiple TVs, waiting area shows MORE, full name + queue stats, more than doctor calls, English + Yorùbá, Nigeria native voices 2 Male 2 Female recycled daily. Friendly attractive design. Per-hospital, admin editable.</p>
+<div class="mb" style="display:flex;gap:10px;flex-wrap:wrap">
+  <a class="btn" href="/admin/tv/posters" target="_blank">🖨️ Print All QR Posters (A4 pack)</a>
+  <span class="muted" style="align-self:center">QR encodes /tv/CODE → patient can scan to follow queue on phone</span>
+</div>
 
 <div class="card pad-lg mb">
 <h2 style="margin-top:0">How to set up TV with zero budget</h2>
@@ -25,7 +29,10 @@
   <td class="muted" style="font-size:.8rem">{{ s.clinic_code or '' }} {% if s.department %}· {{ s.department.name }}{% endif %}</td>
   <td class="muted" style="font-size:.8rem">{{ 'ON' if s.voice_enabled else 'OFF' }} · {{ s.voice_languages }} · {{ '2M2F daily' if s.voice_rotate_daily else 'fixed' }}</td>
   <td>{% if s.active %}<span class="pill green">active</span>{% else %}<span class="pill red">suspended</span>{% endif %}</td>
-  <td><a class="btn small ghost" href="/tv/{{ s.code }}" target="_blank">📺 Open /tv/{{ s.code }}</a></td>
+  <td>
+    <a class="btn small ghost" href="/tv/{{ s.code }}" target="_blank">📺 Open /tv/{{ s.code }}</a>
+    <a class="btn small ghost" href="/admin/tv/{{ s.code }}/poster" target="_blank">🖨️ Poster</a>
+  </td>
   <td>
     <form method="post" action="/admin/tv/{{ s.id }}/toggle" style="display:inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn small secondary">{{ 'Suspend' if s.active else 'Activate' }}</button></form>
   </td>

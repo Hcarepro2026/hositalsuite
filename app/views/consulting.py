@@ -151,9 +151,6 @@ def finish(vid: int):
         return redirect(url_for("consulting.room"))
 
     if steps:
-        # One open segment per desk: each is measured separately, so "how long
-        # does the pharmacy take?" is answerable even when the same patient is
-        # also waiting on the laboratory.
         tracking.safely(tracking.leave, visit.org_id, visit_id=visit.id)
         for step in steps:
             tracking.safely(tracking.enter, visit.org_id, _ONWARD_STAGE.get(step.destination, "PHARMACY"),
@@ -161,6 +158,13 @@ def finish(vid: int):
                            staff_id=current_user.id, close_previous=False)
     else:
         tracking.safely(tracking.close_journey, visit.org_id, visit_id=visit.id)
+        # Thank-you SMS when visit closed directly (no onward)
+        try:
+            from .. import aftercare
+            aftercare.thank_you_sms(visit.org_id, visit, patient)
+        except Exception:
+            pass
+
     consulting.announce_onward(visit, patient, steps)
     audit("CONSULTATION_FINISHED", "patient_visit", visit.id,
           {"sent_to": [s.destination for s in steps] or ["home"]})
@@ -227,8 +231,13 @@ def onward_done(step_id: int):
     closed = consulting.complete_step(step, current_user.id)
     if closed:
         tracking.safely(tracking.close_journey, step.org_id, visit_id=step.visit_id)
+        try:
+            from .. import aftercare
+            if patient is not None and visit is not None:
+                aftercare.thank_you_sms(step.org_id, visit, patient)
+        except Exception:
+            pass
     if closed and patient is not None:
-        # Everything is finished — tell them they can go home.
         consulting.announce_onward(visit, patient, [])
     audit("ONWARD_STEP_COMPLETED", "visit_onward", step.id,
           {"destination": step.destination, "closed_visit": closed})

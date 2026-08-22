@@ -237,3 +237,83 @@ def admin_delete(sid: int):
     db.session.commit()
     flash(f"TV {s.name} deleted.", "success")
     return redirect(url_for("tv.admin_list"))
+
+
+# ------------------------------------------------------------------ QR poster
+def _tv_base_url() -> str:
+    try:
+        return request.url_root.rstrip("/")
+    except Exception:
+        return ""
+
+
+def _qr_data_uri(text: str, box_size: int = 10) -> str:
+    try:
+        import base64
+        import io
+        import qrcode
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=box_size, border=2)
+        qr.add_data(text)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{b64}"
+    except Exception:
+        return ""
+
+
+@bp.get("/admin/tv/posters")
+@require_role(*SUPER)
+def admin_posters():
+    org_id = current_user.org_id
+    tv_engine.ensure_default_screens(org_id)
+    screens = db.session.query(TvScreen).filter_by(org_id=org_id).order_by(TvScreen.code).all()
+    base = _tv_base_url()
+    items = []
+    for s in screens:
+        url = f"{base}/tv/{s.code}" if base else f"/tv/{s.code}"
+        items.append({"screen": s, "url": url, "qr": _qr_data_uri(url, box_size=8)})
+    return render_template("admin/tv_posters.html", items=items, base_url=base)
+
+
+@bp.get("/admin/tv/<code>/poster")
+@require_role(*SUPER)
+def admin_poster_one(code: str):
+    code = (code or "").strip().upper()[:20]
+    org_id = current_user.org_id
+    s = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
+    if not s:
+        abort(404)
+    base = _tv_base_url()
+    url = f"{base}/tv/{s.code}" if base else f"/tv/{s.code}"
+    qr = _qr_data_uri(url, box_size=12)
+    rotation = tv_engine.voice_rotation_for_today(org_id, s.id)
+    return render_template("admin/tv_poster_single.html", screen=s, url=url, qr=qr, rotation=rotation, base_url=base)
+
+
+@bp.get("/admin/tv/qr/<code>.png")
+@require_role(*SUPER)
+def admin_qr_png(code: str):
+    code = (code or "").strip().upper()[:20]
+    org_id = current_user.org_id
+    s = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
+    if not s:
+        abort(404)
+    base = _tv_base_url()
+    url = f"{base}/tv/{s.code}" if base else f"/tv/{s.code}"
+    try:
+        import io
+        import qrcode
+        from flask import send_file
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=12, border=2)
+        qr.add_data(url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype="image/png", as_attachment=False, download_name=f"TV-{s.code}-QR.png")
+    except Exception:
+        abort(500)

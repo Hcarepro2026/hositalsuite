@@ -56,6 +56,16 @@ def clear(step_id: int):
     closed = lahsma.issue_clearance(step, current_user.id)
     if closed:
         tracking.safely(tracking.close_journey, step.org_id, visit_id=step.visit_id)
+        try:
+            from .. import aftercare
+            from ..models import Patient, PatientVisit
+            v = db.session.get(PatientVisit, step.visit_id)
+            if v:
+                pt = db.session.get(Patient, v.patient_id)
+                if pt:
+                    aftercare.thank_you_sms(step.org_id, v, pt)
+        except Exception:
+            pass
 
     audit(
         "LAHSMA_CLEARANCE_ISSUED",
