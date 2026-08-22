@@ -53,17 +53,25 @@ def _get(intake_id: int) -> ReceptionIntake:
 
 
 def _waiting(stage: str):
-    """Patients queued for one desk, longest wait first."""
+    """Patients queued for one desk, priority first, then longest wait first — premium patient care."""
     now = now_naive()
     rows = (db.session.query(ReceptionIntake)
             .filter(ReceptionIntake.org_id == current_user.org_id,
                     ReceptionIntake.stage == stage)
-            .order_by(ReceptionIntake.created_at.asc()).limit(200).all())
+            .order_by(ReceptionIntake.is_fast_track.desc(),
+                      ReceptionIntake.created_at.asc()).limit(200).all())
     out = []
     for r in rows:
         since = (r.billed_at if stage == "PAYMENT" else r.created_at) or r.created_at
+        try:
+            from .. import tracking as tracking_engine
+            # Estimate journey for each intake — shows total time left, premium
+            journey = tracking_engine.estimate_intake_journey(current_user.org_id, r)
+        except Exception:
+            journey = {"total": 0, "stages": [], "fast_track": bool(r.is_fast_track)}
         out.append({"intake": r,
-                    "waited": max(0, int((now - since).total_seconds() // 60))})
+                    "waited": max(0, int((now - since).total_seconds() // 60)),
+                    "journey": journey})
     return out
 
 

@@ -37,18 +37,19 @@ from .models import Patient, PatientVisit, VisitOnward, db, now_naive
 
 
 def pending(org_id: int) -> list[dict]:
-    """Patients waiting at LAHSMA desk, oldest first.
+    """Patients waiting at LAHSMA desk, priority first, then oldest — premium patient care.
 
-    Returns list of dicts: {step, visit, patient, waited_minutes}
+    Returns list of dicts: {step, visit, patient, waited_minutes, journey, is_fast_track}
     """
     steps = (
         db.session.query(VisitOnward)
+        .join(PatientVisit, VisitOnward.visit_id == PatientVisit.id)
         .filter(
             VisitOnward.org_id == org_id,
             VisitOnward.destination == "LAHSMA",
             VisitOnward.status == "PENDING",
         )
-        .order_by(VisitOnward.sent_at.asc())
+        .order_by(PatientVisit.is_fast_track.desc(), VisitOnward.sent_at.asc())
         .limit(200)
         .all()
     )
@@ -76,14 +77,25 @@ def pending(org_id: int) -> list[dict]:
         v = visits.get(s.visit_id)
         p = patients.get(v.patient_id) if v else None
         waited = max(0, int((now - s.sent_at).total_seconds() // 60))
+        is_fast = bool(v.is_fast_track) if v else False
+        try:
+            from . import tracking as tracking_engine
+            journey = tracking_engine.estimate_remaining_journey(org_id, v) if v else {"total": 0, "stages": [], "fast_track": is_fast}
+        except Exception:
+            journey = {"total": 0, "stages": [], "fast_track": is_fast}
         out.append(
             {
                 "step": s,
                 "visit": v,
                 "patient": p,
                 "waited": waited,
+                "is_fast_track": is_fast,
+                "fast_track_reason": getattr(v, 'fast_track_reason', None) if v else None,
+                "journey": journey,
             }
         )
+    # Ensure priority first in final list (DB already ordered, but re-sort to be safe)
+    out.sort(key=lambda x: (not x["is_fast_track"], x["step"].sent_at))
     return out
 
 
