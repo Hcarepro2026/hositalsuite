@@ -72,6 +72,14 @@ COLUMNS = [
     ("queue_ticket", "patient_id", "INTEGER"),
     ("queue_ticket", "patient_visit_id", "INTEGER"),
     ("queue_ticket", "intake_id", "INTEGER"),
+    # --- TV screens (2026-08-22)
+    ("tv_screen", "location", "VARCHAR(120)"),
+    ("tv_screen", "screen_type", "VARCHAR(20)"),
+    ("tv_screen", "clinic_code", "VARCHAR(20)"),
+    ("tv_screen", "show_full_name", "INTEGER DEFAULT 1"),
+    ("tv_screen", "show_queue_stats", "INTEGER DEFAULT 1"),
+    ("tv_screen", "voice_rotate_daily", "INTEGER DEFAULT 1"),
+    ("tv_screen", "voice_languages", "VARCHAR(20)"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

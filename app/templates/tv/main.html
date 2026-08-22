@@ -1,0 +1,306 @@
+{# TV Main - Waiting Area - shows MORE, friendly attractive, Nigeria voices 2M2F recycled daily #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ screen.name if screen else 'Waiting Area TV' }} - {{ feed.stats.total_today }} today</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background: linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f4c75 100%);color:#fff;min-height:100vh;overflow-x:hidden}
+  .header{background: rgba(255,255,255,0.08);backdrop-filter: blur(12px);padding:18px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid rgba(255,255,255,0.1)}
+  .header h1{font-size:1.6rem;font-weight:800;letter-spacing:-0.02em}
+  .header .meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .pill{background: rgba(255,255,255,0.15);padding:6px 14px;border-radius:999px;font-size:.85rem;font-weight:600}
+  .pill.green{background: #10b981;color:#fff}
+  .pill.amber{background: #f59e0b;color:#000}
+  .pill.blue{background: #0ea5e9;color:#fff}
+  .voice-bar{background: linear-gradient(90deg,#f59e0b,#ef4444);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer}
+  .voice-bar button{background:#fff;color:#000;border:none;padding:10px 22px;border-radius:999px;font-weight:800;font-size:1rem;cursor:pointer}
+  .main{display:grid;grid-template-columns: 1.3fr 1fr;gap:20px;padding:20px 28px}
+  @media(max-width:900px){.main{grid-template-columns:1fr}}
+  .now-card{background: linear-gradient(135deg,#10b981 0%,#059669 100%);border-radius:20px;padding:28px;box-shadow: 0 20px 40px rgba(16,185,129,0.3);position:relative;overflow:hidden;animation: pulse 2s infinite}
+  .now-card::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background: radial-gradient(circle,rgba(255,255,255,0.15) 0%,transparent 60%);animation: shimmer 3s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.01)}}
+  @keyframes shimmer{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  .now-card .label{text-transform:uppercase;letter-spacing:0.1em;font-size:.8rem;opacity:0.9;margin-bottom:8px}
+  .now-card .name{font-size:3rem;font-weight:900;line-height:1.1;letter-spacing:-0.03em;margin-bottom:6px;text-shadow: 0 2px 10px rgba(0,0,0,0.2)}
+  @media(max-width:600px){.now-card .name{font-size:2rem}}
+  .now-card .room{font-size:1.6rem;font-weight:700;opacity:0.95}
+  .now-card .code{margin-top:12px;font-size:1.1rem;background: rgba(0,0,0,0.2);display:inline-block;padding:6px 14px;border-radius:999px}
+  .section{background: rgba(255,255,255,0.08);backdrop-filter: blur(10px);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.1)}
+  .section h2{font-size:1.1rem;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08)}
+  .row:last-child{border:none}
+  .row .left{font-weight:600}
+  .row .right{font-size:.9rem;opacity:0.8}
+  .stats-grid{display:grid;grid-template-columns: repeat(4,1fr);gap:12px;margin-top:16px}
+  @media(max-width:700px){.stats-grid{grid-template-columns: repeat(2,1fr)}}
+  .stat{background: rgba(255,255,255,0.1);border-radius:12px;padding:14px;text-align:center}
+  .stat .v{font-size:1.8rem;font-weight:900}
+  .stat .l{font-size:.75rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.8;margin-top:2px}
+  .next-list .item{background: rgba(255,255,255,0.06);border-radius:12px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;animation: slideIn 0.4s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+  .footer{padding:12px 28px;text-align:center;opacity:0.6;font-size:.8rem}
+  .clock{font-variant-numeric: tabular-nums;font-weight:700;font-size:1.2rem}
+  .yoruba{font-style:italic;opacity:0.85;font-size:1.1rem;margin-top:6px}
+  .badge{background:#fff;color:#059669;padding:4px 10px;border-radius:999px;font-size:.75rem;font-weight:800}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🏥 {{ screen.name if screen else 'Waiting Area Main TV' }} {% if screen and screen.location %}· {{ screen.location }}{% endif %}</h1>
+  <div class="meta">
+    <span class="pill blue" id="clock">--:--</span>
+    <span class="pill">{{ rotation.slot_name }}</span>
+    <span class="pill">EN + YO</span>
+    <span class="pill green">{{ feed.stats.total_today }} today</span>
+  </div>
+</div>
+
+<div class="voice-bar" id="voiceBar" onclick="hmsTv.enableVoice()">
+  <div>
+    <b>🔊 Nigeria Voices: 2 Male + 2 Female, recycled daily</b> — Today: <b>{{ rotation.slot_name }}</b> · English + Yorùbá
+    <div style="font-size:.85rem;opacity:0.9;margin-top:2px">Tap anywhere to enable voice. TV will shout every call in English then Yorùbá.</div>
+  </div>
+  <button id="voiceBtn">🔊 Enable Voice</button>
+</div>
+
+<div class="main">
+  <div>
+    {# NOW SERVING - most important #}
+    {% if feed.now_serving %}
+      {% set first = feed.now_serving[0] %}
+      <div class="now-card">
+        <div class="label">📣 Now Serving — Ní báyìí</div>
+        <div class="name">{{ first.name }}</div>
+        <div class="yoruba">{{ first.spoken }} — ẹ jọwọ lọ sí {{ first.room }}</div>
+        <div class="room">{{ first.room }} {% if first.doctor %}· {{ first.doctor }}{% endif %} {% if first.clinic %}· {{ first.clinic }}{% endif %}</div>
+        <div class="code">{{ first.code }} · {{ first.type|replace('_',' ')|title }}</div>
+        <div style="margin-top:10px"><span class="badge">🔊 Speaking in {{ rotation.slot_name }}</span></div>
+      </div>
+    {% else %}
+      <div class="now-card" style="background: linear-gradient(135deg,#334155,#1e293b)">
+        <div class="label">No one called yet</div>
+        <div class="name" style="font-size:2rem">Waiting for next call...</div>
+        <div class="yoruba">A ń dúró fún ìpè tó kàn</div>
+      </div>
+    {% endif %}
+
+    {# NEXT UP #}
+    <div class="section" style="margin-top:20px">
+      <h2>⏭ Next — Tó kàn <span class="pill" style="margin-left:auto">{{ feed.next_up|length }} waiting</span></h2>
+      <div class="next-list" id="nextList">
+        {% for item in feed.next_up[:8] %}
+        <div class="item">
+          <div>
+            <div style="font-weight:800;font-size:1.05rem">{{ item.name }}</div>
+            <div style="font-size:.85rem;opacity:0.8">{{ item.code }} · {{ item.clinic }} {% if item.room %}→ {{ item.room }}{% endif %}</div>
+          </div>
+          <span class="pill amber">{{ item.type|replace('_',' ')|title }}</span>
+        </div>
+        {% else %}
+        <div class="row"><span class="left">No one in queue — well done!</span><span class="right">Kò sí ẹnikẹ́ni</span></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div>
+    {# STATS - waiting area shows MORE #}
+    <div class="section">
+      <h2>📊 Live Queue Stats — Iṣirò Láyìí</h2>
+      <div class="stats-grid">
+        <div class="stat"><div class="v">{{ feed.stats.queue_waiting }}</div><div class="l">Queue Waiting</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.triaged }}</div><div class="l">Triage Placed</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.in_consultation }}</div><div class="l">With Doctor</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.onward_pending }}</div><div class="l">Lab/Pharm/Wards</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.reception_waiting }}</div><div class="l">Reception</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.doctors_ready }}</div><div class="l">Doctors Ready</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.queue_done }}</div><div class="l">Done Today</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.total_today }}</div><div class="l">Total Today</div></div>
+      </div>
+
+      {% if feed.clinic_counts %}
+      <h2 style="margin-top:18px">🏥 Per Clinic Today</h2>
+      {% for clinic, count in feed.clinic_counts.items() %}
+      <div class="row"><span class="left">{{ clinic }}</span><span class="right pill blue">{{ count }}</span></div>
+      {% endfor %}
+      {% endif %}
+    </div>
+
+    {# SESSIONS #}
+    <div class="section" style="margin-top:20px">
+      <h2>🩺 Doctors Ready Now</h2>
+      {% for s in feed.sessions[:8] %}
+      <div class="row"><span class="left">{{ s.doctor.name if s.doctor else 'Doctor' }} — {{ s.clinic }} · {{ s.consulting_room }}</span><span class="right pill green">Ready</span></div>
+      {% else %}
+      <div class="row"><span class="left">No doctor has clicked ready yet</span></div>
+      {% endfor %}
+    </div>
+
+    {# ONWARD PENDING - show more than doctor calls #}
+    {% if is_main and feed.onward_pending %}
+    <div class="section" style="margin-top:20px">
+      <h2>🧪 Lab / Pharmacy / Wards Waiting</h2>
+      {% for step in feed.onward_pending[:6] %}
+      {% set visit = feed.patients.get(step.visit_id) if feed.patients else None %}
+      <div class="row">
+        <span class="left">{{ visit.full_name if visit else 'Patient' }} → {{ step.destination }}</span>
+        <span class="right">{{ ((feed.now - step.sent_at).total_seconds()//60)|int }}m ago</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="footer">
+  <span id="lastUpdate">Last update: just now</span> · Auto-refresh every 5 seconds · 
+  <a href="/tv" style="color:#fff">Main TV</a> · 
+  {% if screen %}<a href="/api/tv/feed?code={{ screen.code }}" style="color:#fff" target="_blank">JSON feed</a>{% endif %} · 
+  Friendly, attractive, premium++ · No medical record on screen
+</div>
+
+<script>
+// --- Clock
+function tickClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'});
+}
+setInterval(tickClock,1000); tickClock();
+
+// --- Nigeria Voices 2M2F recycled daily
+window.hmsTv = {
+  voices: [],
+  enabled: false,
+  slot: {{ rotation.slot }},
+  slotName: "{{ rotation.slot_name }}",
+  lastSpokenKey: "",
+
+  init(){
+    // Load voices
+    const load = ()=>{
+      this.voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    };
+    load();
+    if(window.speechSynthesis){
+      window.speechSynthesis.onvoiceschanged = load;
+      setTimeout(load, 800); // Android needs grace period
+    }
+    // Try auto-enable if already interacted
+    document.addEventListener('click', ()=>{ this.unlock(); }, {once:true});
+  },
+
+  unlock(){
+    if(!window.speechSynthesis) return;
+    try{
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0.01;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  },
+
+  enableVoice(){
+    this.enabled = true;
+    this.unlock();
+    const bar = document.getElementById('voiceBar');
+    bar.style.background = "linear-gradient(90deg,#10b981,#059669)";
+    bar.innerHTML = '<div><b>✅ Voice ON — '+this.slotName+' speaking English + Yorùbá</b><div style="font-size:.85rem">TV will shout every call. 2 Male + 2 Female recycled daily.</div></div><button>🔊 Voice ON</button>';
+    this.speak("Voice is on. "+this.slotName+" will call patients in English and Yoruba. Welcome to the hospital.", "en-NG");
+    setTimeout(()=>{ this.speak("Ohun ti wa lori. A o pe awon alaisan ni ede Geesi ati Yoruba. E kaabo.", "yo-NG"); }, 2500);
+  },
+
+  pickVoice(lang){
+    // Prefer Nigerian voices, then any matching lang, then fallback
+    // lang can be en-NG, yo-NG, en
+    if(!this.voices || !this.voices.length) return null;
+    // Filter by lang
+    let candidates = this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes(lang.toLowerCase().split('-')[0]));
+    if(!candidates.length) candidates = this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes('en'));
+    if(!candidates.length) candidates = this.voices;
+
+    // Try to detect gender from name
+    // Slot mapping: 0=F1,1=M1,2=F2,3=M2
+    const isFemaleSlot = (this.slot % 2 === 0);
+    const wantFemale = isFemaleSlot;
+    // Heuristics for gender
+    const femaleHints = ["female","woman","zira","ada","folake","samantha","google uk english female","google us english"];
+    const maleHints = ["male","man","emeka","chinedu","google uk english male","google us english male","david","mark"];
+
+    let genderFiltered = candidates.filter(v=>{
+      const n = (v.name||"").toLowerCase();
+      if(wantFemale) return femaleHints.some(h=> n.includes(h));
+      return maleHints.some(h=> n.includes(h));
+    });
+    if(genderFiltered.length) candidates = genderFiltered;
+
+    // Daily rotation within candidates: pick by slot + day
+    const idx = this.slot % candidates.length;
+    return candidates[idx] || candidates[0] || null;
+  },
+
+  speak(text, lang){
+    if(!this.enabled) return;
+    if(!window.speechSynthesis) return;
+    try{
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang || "en-NG";
+      u.volume = 1.0;
+      u.rate = 0.92; // slightly slower for clarity in waiting hall
+      u.pitch = 1.0;
+      const v = this.pickVoice(lang);
+      if(v) u.voice = v;
+      window.speechSynthesis.speak(u);
+    }catch(e){ console.log("speak failed", e); }
+  },
+
+  speakBilingual(enText, yoText){
+    if(!this.enabled) return;
+    this.speak(enText, "en-NG");
+    if(yoText){
+      setTimeout(()=>{ this.speak(yoText, "yo-NG"); }, 3500);
+    }
+  }
+};
+hmsTv.init();
+
+// --- Auto-refresh feed every 5 seconds
+let lastNowServingKey = "";
+function refreshFeed(){
+  const code = "{{ screen.code if screen else 'MAIN' }}";
+  fetch("/api/tv/feed?code="+encodeURIComponent(code))
+    .then(r=> r.json())
+    .then(data=>{
+      document.getElementById('lastUpdate').textContent = "Last update: "+ new Date().toLocaleTimeString();
+      // If now_serving changed, speak bilingual
+      if(data.now_serving && data.now_serving.length){
+        const first = data.now_serving[0];
+        const key = first.code + "|" + first.room + "|" + first.type;
+        if(key !== lastNowServingKey){
+          lastNowServingKey = key;
+          // Update big card if changed (simple reload for now - friendly)
+          if(key !== "{{ (feed.now_serving[0].code ~ '|' ~ feed.now_serving[0].room) if feed.now_serving else '' }}"){
+            // Speak
+            const en = first.name + ", please go to " + first.room + (first.clinic ? ", " + first.clinic : "");
+            const yo = first.spoken + ", ẹ jọwọ lọ sí " + first.room + (first.clinic ? ", " + first.clinic : "");
+            hmsTv.speakBilingual(en, yo);
+            // Reload page to show new data attractively
+            setTimeout(()=>{ window.location.reload(); }, 1000);
+          }
+        }
+      }
+      // Update stats numbers live without reload
+      if(data.stats){
+        // Could update DOM here for premium smoothness, but reload keeps design simple and attractive
+      }
+    })
+    .catch(e=>{ console.log("feed failed", e); });
+}
+setInterval(refreshFeed, 5000);
+
+// Keep TV awake: ping every 30s
+setInterval(()=>{ fetch("/api/tv/feed?code=MAIN",{cache:"no-store"}).catch(()=>{}); }, 30000);
+</script>
+</body>
+</html>

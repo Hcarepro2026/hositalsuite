@@ -1457,6 +1457,56 @@ class ClinicDestination(db.Model):
     )
 
 
+class TvScreen(db.Model):
+    """A TV / monitor in the hospital showing live queue + doctor calls.
+
+    WHY THIS TABLE
+    --------------
+    Founder wants NIGERIA NATIVE VOICES, 2 male 2 female recycled daily,
+    multiple TVs but waiting area shows MORE, full name + queue stats,
+    more than doctor calls, English + Yoruba, friendly attractive.
+
+    One row per physical TV. Waiting area main TV shows everything,
+    clinic TVs show only their clinic, department TVs show only their desk.
+
+    Per-tenant, admin editable, no EMR columns.
+    """
+    __tablename__ = "tv_screen"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(20), nullable=False)  # e.g. MAIN, DENTAL1, PHARM
+    name = db.Column(db.String(120), nullable=False)  # Waiting Area Main TV
+    location = db.Column(db.String(120))  # e.g. General Waiting Hall
+    # What to show
+    screen_type = db.Column(db.String(20), default="WAITING_MAIN", nullable=False)  # WAITING_MAIN | CLINIC | DEPARTMENT | WARD
+    clinic_code = db.Column(db.String(20))  # filter: only show this clinic (DENTAL) - null = all
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"))  # filter: only this department
+    # Display options
+    show_full_name = db.Column(db.Boolean, default=True, nullable=False)  # True = Folake Abatan, False = D-012 only
+    show_queue_stats = db.Column(db.Boolean, default=True, nullable=False)
+    show_reception = db.Column(db.Boolean, default=True, nullable=False)
+    show_triage = db.Column(db.Boolean, default=True, nullable=False)
+    show_consulting = db.Column(db.Boolean, default=True, nullable=False)
+    show_onward = db.Column(db.Boolean, default=True, nullable=False)
+    # Voice options - Nigeria native voices, 2 male 2 female recycled daily
+    voice_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    voice_rotate_daily = db.Column(db.Boolean, default=True, nullable=False)  # True = 2M2F recycled daily
+    voice_languages = db.Column(db.String(20), default="en,yo")  # en,yo = English + Yoruba
+    active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=now_naive)
+
+    department = db.relationship("Department")
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "code", name="uq_tv_org_code"),
+        db.Index("ix_tv_org_active", "org_id", "active"),
+    )
+
+    @property
+    def languages(self) -> list[str]:
+        return [l.strip() for l in (self.voice_languages or "en").split(",") if l.strip()]
+
+
 class DoctorSession(db.Model):
     """A doctor saying "I am in this room and ready to see patients".
 

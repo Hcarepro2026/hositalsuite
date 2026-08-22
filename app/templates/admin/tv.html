@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}TV Screens{% endblock %}
+{% block content %}
+<h1>📺 TV Display Screens — Queue + Doctor Calls</h1>
+<p class="muted">Multiple TVs, waiting area shows MORE, full name + queue stats, more than doctor calls, English + Yorùbá, Nigeria native voices 2 Male 2 Female recycled daily. Friendly attractive design. Per-hospital, admin editable.</p>
+
+<div class="card pad-lg mb">
+<h2 style="margin-top:0">How to set up TV with zero budget</h2>
+<ol style="margin-left:18px">
+  <li>Take any Android phone, open Chrome, go to <code>/tv/MAIN</code> for main waiting area, or <code>/tv/DENTAL</code> for Dental TV</li>
+  <li>Tap <b>Enable Voice</b> once — TV will shout every call in English then Yorùbá with today's Nigerian voice</li>
+  <li>Connect phone to TV via HDMI cable or Cast / Miracast — TV now shows big live board</li>
+  <li>Leave phone plugged to power — it auto-refreshes every 5 seconds, pings every 30s to stay awake</li>
+</ol>
+<p class="hint">Waiting Area Main TV shows 8 stats, per-clinic counts, now serving, next 8, doctors ready, Lab/Pharmacy/Wards pending. Clinic TV shows only its clinic. All per-tenant.</p>
+</div>
+
+<table class="table">
+<tr><th>Code</th><th>Name / Location</th><th>Type</th><th>Filter</th><th>Voice</th><th>Status</th><th>Open</th><th>Actions</th></tr>
+{% for s in screens %}
+<tr>
+  <td><code>{{ s.code }}</code></td>
+  <td><b>{{ s.name }}</b><br><span class="muted" style="font-size:.8rem">{{ s.location }}</span></td>
+  <td>{{ s.screen_type }}</td>
+  <td class="muted" style="font-size:.8rem">{{ s.clinic_code or '' }} {% if s.department %}· {{ s.department.name }}{% endif %}</td>
+  <td class="muted" style="font-size:.8rem">{{ 'ON' if s.voice_enabled else 'OFF' }} · {{ s.voice_languages }} · {{ '2M2F daily' if s.voice_rotate_daily else 'fixed' }}</td>
+  <td>{% if s.active %}<span class="pill green">active</span>{% else %}<span class="pill red">suspended</span>{% endif %}</td>
+  <td><a class="btn small ghost" href="/tv/{{ s.code }}" target="_blank">📺 Open /tv/{{ s.code }}</a></td>
+  <td>
+    <form method="post" action="/admin/tv/{{ s.id }}/toggle" style="display:inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn small secondary">{{ 'Suspend' if s.active else 'Activate' }}</button></form>
+  </td>
+</tr>
+<tr>
+  <td colspan="8">
+    <details><summary class="muted">Edit {{ s.code }}</summary>
+      <form method="post" action="/admin/tv/{{ s.id }}/edit" class="grid cols3 mt">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div><label>Name</label><input name="name" value="{{ s.name }}" required></div>
+        <div><label>Location</label><input name="location" value="{{ s.location or '' }}"></div>
+        <div><label>Type</label>
+          <select name="screen_type">
+            <option value="WAITING_MAIN" {% if s.screen_type=='WAITING_MAIN' %}selected{% endif %}>WAITING_MAIN — shows MORE</option>
+            <option value="CLINIC" {% if s.screen_type=='CLINIC' %}selected{% endif %}>CLINIC — filtered to one clinic</option>
+            <option value="DEPARTMENT" {% if s.screen_type=='DEPARTMENT' %}selected{% endif %}>DEPARTMENT — e.g. Pharmacy TV</option>
+            <option value="WARD" {% if s.screen_type=='WARD' %}selected{% endif %}>WARD — Male/Female Ward TV</option>
+          </select>
+        </div>
+        <div><label>Clinic filter (e.g. DENTAL)</label>
+          <select name="clinic_code">
+            <option value="">— all clinics —</option>
+            {% for c in clinics %}<option value="{{ c.code }}" {% if s.clinic_code==c.code %}selected{% endif %}>{{ c.name }} ({{ c.code }})</option>{% endfor %}
+          </select>
+        </div>
+        <div><label>Department filter</label>
+          <select name="department_id">
+            <option value="">— all departments —</option>
+            {% for d in depts %}<option value="{{ d.id }}" {% if s.department_id==d.id %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div><label>Voice languages</label><input name="voice_languages" value="{{ s.voice_languages }}" placeholder="en,yo"></div>
+        <div><label><input type="checkbox" name="show_full_name" {% if s.show_full_name %}checked{% endif %}> Show full name</label></div>
+        <div><label><input type="checkbox" name="show_queue_stats" {% if s.show_queue_stats %}checked{% endif %}> Show queue stats</label></div>
+        <div><label><input type="checkbox" name="voice_enabled" {% if s.voice_enabled %}checked{% endif %}> Voice enabled</label></div>
+        <div><label><input type="checkbox" name="voice_rotate_daily" {% if s.voice_rotate_daily %}checked{% endif %}> 2M2F recycled daily</label></div>
+        <div><label><input type="checkbox" name="active" {% if s.active %}checked{% endif %}> Active</label></div>
+        <div><button class="btn small">Save</button></div>
+      </form>
+      <form method="post" action="/admin/tv/{{ s.id }}/delete" class="mt" onsubmit="return confirm('Delete {{ s.code }}?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn small secondary" style="color:#b91c1c">Delete</button></form>
+    </details>
+  </td>
+</tr>
+{% endfor %}
+</table>
+
+<h3 class="mt">Add new TV screen</h3>
+<form method="post" action="/admin/tv/create" class="grid cols3">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <div><label>Code (e.g. ANC, THEATER, MALE_WARD)</label><input name="code" required maxlength="20" placeholder="ANC"></div>
+  <div><label>Name</label><input name="name" required placeholder="ANC Clinic TV"></div>
+  <div><label>Location</label><input name="location" placeholder="ANC Waiting Area"></div>
+  <div><label>Type</label>
+    <select name="screen_type">
+      <option value="WAITING_MAIN">WAITING_MAIN — shows MORE</option>
+      <option value="CLINIC" selected>CLINIC</option>
+      <option value="DEPARTMENT">DEPARTMENT</option>
+      <option value="WARD">WARD</option>
+    </select>
+  </div>
+  <div><label>Clinic filter</label>
+    <select name="clinic_code">
+      <option value="">— all clinics —</option>
+      {% for c in clinics %}<option value="{{ c.code }}">{{ c.name }} ({{ c.code }})</option>{% endfor %}
+    </select>
+  </div>
+  <div><label>Department filter</label>
+    <select name="department_id">
+      <option value="">— all —</option>
+      {% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div><button class="btn">Add TV screen</button></div>
+</form>
+
+<div class="card pad-lg mt">
+<h3>Nigeria Native Voices — 2 Male + 2 Female recycled daily — How it works</h3>
+<table class="table">
+<tr><th>Day</th><th>Voice</th><th>Example Name</th><th>Language</th></tr>
+<tr><td>Monday (Day %4 =0)</td><td>Female 1</td><td>Ada</td><td>English → Yorùbá</td></tr>
+<tr><td>Tuesday (1)</td><td>Male 1</td><td>Emeka</td><td>English → Yorùbá</td></tr>
+<tr><td>Wednesday (2)</td><td>Female 2</td><td>Folake</td><td>English → Yorùbá</td></tr>
+<tr><td>Thursday (3)</td><td>Male 2</td><td>Chinedu</td><td>English → Yorùbá</td></tr>
+<tr><td>Friday repeats Female 1...</td><td colspan="3">Automatically changes every day, no admin action needed</td></tr>
+</table>
+<p class="hint">Browser picks best available voice: prefers en-NG, yo-NG, then en-GB, en-US. Gender detected from voice name. If no Nigerian voice installed, uses best English voice but still rotates 4 slots. Zero budget — uses built-in phone/TTV voices, no server cost.</p>
+</div>
+
+{% endblock %}

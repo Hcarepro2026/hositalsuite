@@ -1,0 +1,135 @@
+{# Clinic TV - e.g. Dental, OPD - filtered, still friendly #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ screen.name }} - TV</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background: linear-gradient(135deg,#1e3a8a 0%,#3730a3 50%,#7c3aed 100%);color:#fff;min-height:100vh}
+  .header{background: rgba(0,0,0,0.2);padding:16px 24px;display:flex;justify-content:space-between;align-items:center}
+  .header h1{font-size:1.4rem;font-weight:900}
+  .pill{background: rgba(255,255,255,0.2);padding:5px 12px;border-radius:999px;font-size:.8rem}
+  .voice-bar{background:#f59e0b;color:#000;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+  .voice-bar button{background:#000;color:#fff;border:none;padding:8px 16px;border-radius:999px;font-weight:800}
+  .main{padding:20px 24px;display:grid;grid-template-columns: 1.2fr 0.8fr;gap:18px}
+  @media(max-width:800px){.main{grid-template-columns:1fr}}
+  .now{background: linear-gradient(135deg,#f59e0b,#ef4444);border-radius:18px;padding:24px;box-shadow:0 12px 30px rgba(0,0,0,0.3)}
+  .now .label{font-size:.8rem;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9}
+  .now .name{font-size:2.6rem;font-weight:900;margin:6px 0}
+  .now .room{font-size:1.3rem;font-weight:700}
+  .now .yo{font-style:italic;margin-top:6px}
+  .section{background: rgba(255,255,255,0.12);border-radius:14px;padding:16px;margin-bottom:16px}
+  .section h2{font-size:1rem;font-weight:800;margin-bottom:10px}
+  .item{background: rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between}
+  .stat-grid{display:grid;grid-template-columns: repeat(3,1fr);gap:10px}
+  .stat{background: rgba(255,255,255,0.15);border-radius:10px;padding:12px;text-align:center}
+  .stat .v{font-size:1.5rem;font-weight:900}
+  .stat .l{font-size:.7rem;text-transform:uppercase;opacity:0.8}
+  .footer{padding:10px;text-align:center;opacity:0.6;font-size:.75rem}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🩺 {{ screen.name }} · {{ screen.location }}</h1>
+  <div><span class="pill" id="clock">--:--</span> <span class="pill">{{ rotation.slot_name }}</span> <span class="pill">{{ screen.clinic_code or screen.screen_type }}</span></div>
+</div>
+<div class="voice-bar" id="voiceBar" onclick="hmsTv.enableVoice()">
+  <div><b>🔊 {{ rotation.slot_name }}</b> — English + Yorùbá — Tap to enable voice</div>
+  <button>Enable Voice</button>
+</div>
+<div class="main">
+  <div>
+    {% if feed.now_serving %}
+      {% set f = feed.now_serving[0] %}
+      <div class="now">
+        <div class="label">📣 Now Serving</div>
+        <div class="name">{{ f.name }}</div>
+        <div class="yo">{{ f.spoken }} — ẹ jọwọ lọ sí {{ f.room }}</div>
+        <div class="room">{{ f.room }} {% if f.clinic %}· {{ f.clinic }}{% endif %}</div>
+        <div style="margin-top:8px;font-size:.9rem;background:rgba(0,0,0,0.2);display:inline-block;padding:5px 12px;border-radius:999px">{{ f.code }}</div>
+      </div>
+    {% else %}
+      <div class="now" style="background:linear-gradient(135deg,#334155,#475569)"><div class="label">Waiting</div><div class="name" style="font-size:2rem">No call yet — A ń dúró</div></div>
+    {% endif %}
+
+    <div class="section" style="margin-top:16px">
+      <h2>⏭ Next in {{ screen.clinic_code or 'this clinic' }}</h2>
+      {% for it in feed.next_up[:6] %}
+      <div class="item"><div><b>{{ it.name }}</b><div style="font-size:.8rem;opacity:0.8">{{ it.code }} · {{ it.clinic }}</div></div><span class="pill">{{ it.type[:10] }}</span></div>
+      {% else %}
+      <div class="item">No one waiting — well done!</div>
+      {% endfor %}
+    </div>
+  </div>
+  <div>
+    <div class="section">
+      <h2>📊 Stats</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="v">{{ feed.stats.queue_waiting }}</div><div class="l">Queue</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.triaged }}</div><div class="l">Triage</div></div>
+        <div class="stat"><div class="v">{{ feed.stats.in_consultation }}</div><div class="l">With Dr</div></div>
+      </div>
+    </div>
+    <div class="section">
+      <h2>🩺 Doctors Ready</h2>
+      {% for s in feed.sessions %}
+      <div class="item"><span>{{ s.doctor.name if s.doctor else 'Doctor' }} · {{ s.consulting_room }}</span><span class="pill" style="background:#10b981;color:#fff">Ready</span></div>
+      {% else %}
+      <div class="item">No doctor ready yet</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+<div class="footer">Last update <span id="lu">just now</span> · Auto-refresh 5s · <a href="/tv" style="color:#fff">Main TV</a></div>
+<script>
+function tick(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'}); }
+setInterval(tick,1000); tick();
+window.hmsTv = {
+  voices:[], enabled:false, slot: {{ rotation.slot }}, slotName:"{{ rotation.slot_name }}",
+  init(){
+    const load=()=>{ this.voices = speechSynthesis ? speechSynthesis.getVoices() : []; };
+    load(); if(speechSynthesis){ speechSynthesis.onvoiceschanged=load; setTimeout(load,800); }
+    document.addEventListener('click',()=>{ if(speechSynthesis){ const u=new SpeechSynthesisUtterance(" "); u.volume=0.01; speechSynthesis.speak(u);} },{once:true});
+  },
+  enableVoice(){
+    this.enabled=true;
+    document.getElementById('voiceBar').style.background="#10b981";
+    document.getElementById('voiceBar').innerHTML='<div><b>✅ Voice ON — '+this.slotName+' — EN + YO</b></div><button>ON</button>';
+    const u=new SpeechSynthesisUtterance("Voice is on. "+this.slotName+" will call patients."); u.lang="en-NG"; speechSynthesis.speak(u);
+  },
+  pickVoice(lang){
+    if(!this.voices.length) return null;
+    let c=this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes((lang||"en").split("-")[0].toLowerCase()));
+    if(!c.length) c=this.voices.filter(v=> v.lang && v.lang.toLowerCase().includes("en"));
+    if(!c.length) c=this.voices;
+    const wantFemale = (this.slot%2===0);
+    const hints = wantFemale ? ["female","zira","folake","samantha"] : ["male","emeka","chinedu","david"];
+    let f=c.filter(v=> hints.some(h=> (v.name||"").toLowerCase().includes(h)));
+    if(f.length) c=f;
+    return c[this.slot % c.length] || c[0];
+  },
+  speak(t,l){
+    if(!this.enabled||!speechSynthesis) return;
+    const u=new SpeechSynthesisUtterance(t); u.lang=l||"en-NG"; u.volume=1; u.rate=0.92;
+    const v=this.pickVoice(l); if(v) u.voice=v; speechSynthesis.speak(u);
+  },
+  speakBilingual(en,yo){
+    this.speak(en,"en-NG"); if(yo) setTimeout(()=>this.speak(yo,"yo-NG"),3500);
+  }
+}; hmsTv.init();
+let lastKey="";
+function refresh(){
+  fetch("/api/tv/feed?code={{ screen.code }}").then(r=>r.json()).then(d=>{
+    document.getElementById('lu').textContent=new Date().toLocaleTimeString();
+    if(d.now_serving && d.now_serving.length){
+      const f=d.now_serving[0]; const k=f.code+"|"+f.room;
+      if(k!==lastKey){ lastKey=k; const en=f.name+", please go to "+f.room; const yo=f.spoken+", ẹ jọwọ lọ sí "+f.room; hmsTv.speakBilingual(en,yo); setTimeout(()=>location.reload(),1200); }
+    }
+  }).catch(()=>{});
+}
+setInterval(refresh,5000);
+</script>
+</body>
+</html>
