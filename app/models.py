@@ -1505,8 +1505,11 @@ class TvScreen(db.Model):
     # Voice options - Nigeria native voices, 2 male 2 female recycled daily
     voice_enabled = db.Column(db.Boolean, default=True, nullable=False)
     voice_rotate_daily = db.Column(db.Boolean, default=True, nullable=False)  # True = 2M2F recycled daily
-    voice_languages = db.Column(db.String(20), default="en,yo")  # en,yo = English + Yoruba
+    voice_languages = db.Column(db.String(30), default="en,yo,ha,ig")  # en,yo,ha,ig = 4 Nigerian languages
     voice_volume = db.Column(db.Integer, default=100, nullable=False)  # 0-100 slider per TV
+    # Brightness / night mode — per TV, per-tenant, premium UX
+    brightness = db.Column(db.Integer, default=100, nullable=False)  # 0-100 brightness slider per TV
+    night_mode = db.Column(db.Boolean, default=False, nullable=False)  # auto dim at night 19:00-07:00
     active = db.Column(db.Boolean, default=True, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=now_naive)
 

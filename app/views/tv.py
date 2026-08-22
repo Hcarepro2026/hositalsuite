@@ -81,15 +81,51 @@ def api_volume():
     vol = request.args.get("volume", type=int)
     if vol is None:
         vol = request.form.get("volume", type=int)
-    if not code or vol is None:
+    bright = request.args.get("brightness", type=int)
+    if bright is None:
+        bright = request.form.get("brightness", type=int)
+    if not code:
         return jsonify({"ok": False}), 400
-    vol = max(0, min(100, vol))
     screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
     if not screen:
         return jsonify({"ok": False}), 404
-    screen.voice_volume = vol
+    if vol is not None:
+        vol = max(0, min(100, vol))
+        screen.voice_volume = vol
+    if bright is not None:
+        bright = max(10, min(100, bright))
+        screen.brightness = bright
     db.session.commit()
-    return jsonify({"ok": True, "code": code, "volume": vol})
+    return jsonify({"ok": True, "code": code, "volume": screen.voice_volume, "brightness": getattr(screen, 'brightness', 100)})
+
+
+@bp.post("/api/tv/brightness")
+def api_brightness():
+    """Save brightness + night mode per TV — public, per-tenant."""
+    org_id = _resolve_org()
+    if not org_id:
+        return jsonify({"error": "no org"}), 503
+    code = (request.args.get("code") or request.form.get("code") or "").strip().upper()[:20]
+    bright = request.args.get("brightness", type=int)
+    if bright is None:
+        bright = request.form.get("brightness", type=int)
+    night = request.args.get("night_mode")
+    if night is None:
+        night = request.form.get("night_mode")
+    if not code:
+        return jsonify({"ok": False}), 400
+    screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
+    if not screen:
+        return jsonify({"ok": False}), 404
+    if bright is not None:
+        screen.brightness = max(10, min(100, bright))
+    if night is not None:
+        # Accept 0/1, true/false, on/off
+        if isinstance(night, str):
+            night = night.lower() in ("1", "true", "on", "yes")
+        screen.night_mode = bool(night)
+    db.session.commit()
+    return jsonify({"ok": True, "code": code, "brightness": getattr(screen, 'brightness', 100), "night_mode": bool(getattr(screen, 'night_mode', False))})
 
 
 @bp.get("/api/tv/feed")
@@ -111,7 +147,15 @@ def api_feed():
 
     return jsonify(
         {
-            "screen": {"code": screen.code, "name": screen.name, "type": screen.screen_type, "clinic": screen.clinic_code} if screen else None,
+            "screen": {
+                "code": screen.code,
+                "name": screen.name,
+                "type": screen.screen_type,
+                "clinic": screen.clinic_code,
+                "voice_languages": getattr(screen, 'voice_languages', 'en,yo,ha,ig'),
+                "brightness": getattr(screen, 'brightness', 100),
+                "night_mode": bool(getattr(screen, 'night_mode', False)),
+            } if screen else None,
             "now_serving": feed["now_serving"],
             "next_up": feed["next_up"],
             "stats": feed["stats"],
@@ -169,8 +213,10 @@ def admin_create():
         show_queue_stats=True,
         voice_enabled=True,
         voice_rotate_daily=True,
-        voice_languages="en,yo",
+        voice_languages="en,yo,ha,ig",
         voice_volume=100,
+        brightness=100,
+        night_mode=False,
         active=True,
     )
     db.session.add(s)
@@ -196,12 +242,18 @@ def admin_edit(sid: int):
     s.show_queue_stats = bool(request.form.get("show_queue_stats"))
     s.voice_enabled = bool(request.form.get("voice_enabled"))
     s.voice_rotate_daily = bool(request.form.get("voice_rotate_daily"))
-    s.voice_languages = (request.form.get("voice_languages") or "en,yo").strip()[:20]
+    s.voice_languages = (request.form.get("voice_languages") or "en,yo,ha,ig").strip()[:30]
     try:
         vol = int(request.form.get("voice_volume") or s.voice_volume or 100)
         s.voice_volume = max(0, min(100, vol))
     except ValueError:
         pass
+    try:
+        bright = int(request.form.get("brightness") or getattr(s, 'brightness', 100) or 100)
+        s.brightness = max(10, min(100, bright))
+    except ValueError:
+        pass
+    s.night_mode = bool(request.form.get("night_mode"))
     s.active = bool(request.form.get("active"))
     db.session.commit()
     flash(f"TV {s.name} updated.", "success")

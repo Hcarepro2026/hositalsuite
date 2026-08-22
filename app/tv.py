@@ -77,8 +77,10 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             show_onward=True,
             voice_enabled=True,
             voice_rotate_daily=True,
-            voice_languages="en,yo",
+            voice_languages="en,yo,ha,ig",
             voice_volume=100,
+            brightness=100,
+            night_mode=False,
             active=True,
         ),
         TvScreen(
@@ -92,8 +94,10 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             show_queue_stats=True,
             voice_enabled=True,
             voice_rotate_daily=True,
-            voice_languages="en,yo",
+            voice_languages="en,yo,ha,ig",
             voice_volume=90,
+            brightness=100,
+            night_mode=False,
             active=True,
         ),
         TvScreen(
@@ -107,8 +111,10 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             show_queue_stats=True,
             voice_enabled=True,
             voice_rotate_daily=True,
-            voice_languages="en,yo",
+            voice_languages="en,yo,ha,ig",
             voice_volume=90,
+            brightness=100,
+            night_mode=False,
             active=True,
         ),
         TvScreen(
@@ -121,8 +127,10 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             show_queue_stats=False,
             voice_enabled=True,
             voice_rotate_daily=True,
-            voice_languages="en,yo",
+            voice_languages="en,yo,ha,ig",
             voice_volume=80,
+            brightness=100,
+            night_mode=False,
             active=True,
         ),
     ]
@@ -241,6 +249,7 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
                 "is_fast_track": bool(v.is_fast_track),
                 "fast_track_reason": v.fast_track_reason,
                 "journey_estimate": journey_est,
+                "preferred_lang": getattr(p, 'preferred_lang', 'en') or 'en',
             }
         )
     # 2. Recently called queue tickets
@@ -289,6 +298,7 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
                 "position": idx + 1,
                 "estimated_wait": wait_est,
                 "journey_estimate": journey_est,
+                "preferred_lang": getattr(p, 'preferred_lang', 'en') or 'en',
             }
         )
     # Queue waiting: fast-track first
@@ -378,21 +388,31 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
 
 # ------------------------------------------------------------------ voice rotation
 def voice_rotation_for_today(org_id: int, screen_id: int | None = None) -> dict:
-    """Pick 2 male 2 female Nigerian voices recycled daily.
+    """Pick 2 male 2 female Nigerian voices recycled daily, 4 languages.
 
     Returns dict with day_index, voice_slot, and description.
     Actual voice selection happens in browser (getVoices), but we tell browser
     which slot to use today so all TVs in same hospital speak same voice that day.
+    Now includes Hausa + Igbo (en,yo,ha,ig) — founder wanted Nigeria native voices,
+    premium++ speaks patient's preferred language + all 4 for inclusivity.
     """
     day_of_year = now_naive().timetuple().tm_yday
     # 4 slots: 0=Female1,1=Male1,2=Female2,3=Male2
     slot = day_of_year % 4
     slot_names = ["Female Voice 1 - Ada (Nigerian)", "Male Voice 1 - Emeka (Nigerian)", "Female Voice 2 - Folake (Nigerian)", "Male Voice 2 - Chinedu (Nigerian)"]
+    # Language codes for browser Speech API — includes Hausa + Igbo
+    # Not all devices have ha-NG/ig-NG voices installed, but we request them;
+    # browser falls back to en-NG with Nigerian accent, still premium.
     return {
         "day_of_year": day_of_year,
         "slot": slot,
         "slot_name": slot_names[slot],
         "all_slots": slot_names,
-        # Yoruba + English enabled
-        "languages": ["en-NG", "yo-NG", "en"],
+        "languages": ["en-NG", "yo-NG", "ha-NG", "ig-NG", "en"],
+        "language_labels": {
+            "en": "English",
+            "yo": "Yorùbá",
+            "ha": "Hausa",
+            "ig": "Igbo",
+        },
     }
