@@ -344,6 +344,11 @@ def privacy():
     return render_template("privacy.html", today=now_naive())
 
 
+@bp.get("/sales")
+def sales_landing():
+    """World-class premium sales landing page — Adobe/Figma/Apple/Canva inspired."""
+    return render_template("landing_sales.html")
+
 @bp.get("/privacy/request")
 def privacy_request():
     return render_template("privacy_request.html")
