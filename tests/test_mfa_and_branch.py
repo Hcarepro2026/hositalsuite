@@ -32,62 +32,23 @@ def test_login_without_mfa_still_works(client, seeded):
     assert client.get("/").status_code == 200
 
 
-def test_mfa_blocks_until_code_is_right(client, seeded):
-    admin = db.session.get(User, seeded["admin"])
-    secret = engine.new_secret()
-    admin.mfa_secret = secret
-    admin.mfa_enabled = True
-    admin.mfa_backup = engine.hash_backup_codes(["DEADBEEF"])
-    db.session.commit()
-
-    page = client.get("/login")
-    token = page.data.decode().split('name="_csrf" value="')[1].split('"')[0]
-    r = client.post("/login", data={"username": "admin", "password": "Passw0rd!x",
-                                    "_csrf": token}, follow_redirects=False)
-    assert r.headers["Location"].endswith("/mfa/verify")
-    # not signed in yet
-    assert client.get("/admin", follow_redirects=False).status_code in (302, 401)
-
-    bad = client.post("/mfa/verify", data={"code": "000000",
-                                          "_csrf": csrf(client, "/mfa/verify")},
-                      follow_redirects=True)
-    assert b"not right" in bad.data
-
-    good = client.post("/mfa/verify", data={"code": engine.totp(secret),
-                                           "_csrf": csrf(client, "/mfa/verify")},
-                       follow_redirects=False)
-    assert good.status_code == 302
-    assert client.get("/admin").status_code == 200
-
-
-def test_mfa_backup_code_signs_in(client, seeded):
+def test_mfa_is_paused_so_staff_are_not_locked_out(client, seeded):
+    """Founder was trapped on the QR screen. Phone-code lock stays off."""
     admin = db.session.get(User, seeded["admin"])
     admin.mfa_secret = engine.new_secret()
     admin.mfa_enabled = True
-    admin.mfa_backup = engine.hash_backup_codes(["CAFE1234"])
     db.session.commit()
-    page = client.get("/login")
-    token = page.data.decode().split('name="_csrf" value="')[1].split('"')[0]
-    client.post("/login", data={"username": "admin", "password": "Passw0rd!x",
-                                "_csrf": token})
-    r = client.post("/mfa/verify", data={"code": "CAFE1234",
-                                        "_csrf": csrf(client, "/mfa/verify")},
-                    follow_redirects=False)
-    assert r.status_code == 302
-    assert client.get("/admin").status_code == 200
-
-
-def test_required_role_is_sent_to_setup(client, seeded):
     from app import services
     services.set_setting(seeded["org"], "mfa_required_roles", ["SUPER_ADMIN"])
     db.session.commit()
     r = login(client, "admin")
     assert r.status_code == 302
     loc = r.headers.get("Location", "")
-    assert "/mfa/setup" in loc
+    assert "/mfa/" not in loc
+    assert client.get("/admin").status_code == 200
     page = client.get("/mfa/setup")
     assert page.status_code == 200
-    assert b"Scan this picture" in page.data
+    assert b"Skip" in page.data and b"take me to my work" in page.data
 
 
 def test_security_page_and_policy(client, seeded):

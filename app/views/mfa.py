@@ -26,7 +26,19 @@ def _required_roles(org_id: int) -> list:
     return list(raw)
 
 
+def mfa_is_enforced() -> bool:
+    """Phone-code lock. Off until the hospital is ready to use it.
+
+    The founder was trapped on the setup screen and could not reach the
+    hospital. Keep the feature, but do not block sign-in unless MFA_ENFORCED=1.
+    """
+    import os
+    return os.environ.get("MFA_ENFORCED", "0") == "1"
+
+
 def user_must_setup(user) -> bool:
+    if not mfa_is_enforced():
+        return False
     if not user or getattr(user, "mfa_enabled", False):
         return False
     return engine.role_must_use_mfa(user.role, _required_roles(user.org_id))
@@ -34,6 +46,10 @@ def user_must_setup(user) -> bool:
 
 def enforce_mfa():
     """Before-request: pending verify (not yet signed in) or forced setup."""
+    if not mfa_is_enforced():
+        session.pop("pending_mfa_uid", None)
+        session.pop("mfa_force_setup", None)
+        return None
     pending = session.get("pending_mfa_uid")
     if pending and not current_user.is_authenticated:
         if request.endpoint in VERIFY_ALLOWED:

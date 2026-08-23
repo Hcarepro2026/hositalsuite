@@ -98,7 +98,8 @@ def login_post():
         flash("Your account is waiting for administrator approval. "
               "Please ask your hospital administrator to approve it.", "error")
         return render_template("login.html", next=nxt, username=username), 403
-    if getattr(user, "mfa_enabled", False):
+    from .mfa import mfa_is_enforced
+    if getattr(user, "mfa_enabled", False) and mfa_is_enforced():
         session["pending_mfa_uid"] = user.id
         session["pending_mfa_next"] = nxt
         session.permanent = True

@@ -29,9 +29,9 @@
 
 <div class="card mb" style="max-width:640px">
   <h2>Who must use a phone code</h2>
-  <p class="hint">Tick the jobs that must scan a phone app after their password.
-    Super Admin is strongly recommended. People already signed in are asked
-    the next time they sign in.</p>
+  <p class="hint">Phone-code lock is <b>paused</b> so nobody is locked out of
+    the hospital. You can still turn it on for yourself under 🔐. Ticking jobs
+    here is saved, but the lock will not trap anyone until we switch it back on.</p>
   <form method="post" action="/admin/security/policy">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     {% for code, label in role_choices %}

@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Protect my sign-in{% endblock %}
 {% block content %}
+<p class="mb"><a class="btn big" href="/" style="width:100%;background:#1a7f37">← Skip — take me to my work</a></p>
 <h1>📱 Protect my sign-in</h1>
-<p class="muted">A password can be guessed. A phone code cannot. After you turn this
-  on, signing in needs both — your password and a 6-digit number from an app
-  on your phone.</p>
+<p class="muted">This is optional. You can skip it and work as usual. A password can be guessed. A phone code cannot.</p>
 
 {% if enabled %}
 <div class="flash success">Phone code is <b>on</b> for your account.</div>
@@ -28,6 +27,7 @@
 <div class="flash info">Your job requires a phone code. You cannot use the system
   until this is done. It takes about one minute.</div>
 {% endif %}
+<p class="mb"><a class="btn big" href="/" style="width:100%;background:#1a7f37">← Skip — take me to my work</a></p>
 <div class="card mb" style="max-width:560px">
   <h2>1. Install an authenticator app</h2>
   <p>On your phone, install <b>Google Authenticator</b> or
