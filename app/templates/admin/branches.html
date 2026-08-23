@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Hospital sites{% endblock %}
+{% block content %}
+<h1>🏢 Hospital sites</h1>
+<p class="muted">One hospital can have more than one building (Main + Annex).
+  Staff and today's visits belong to a site, so the annex queue does not mix
+  with the main one. Colours and the logo stay hospital-wide.</p>
+
+<div class="card mb">
+  <h2>Sites</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Name</th><th>Code</th><th>Phone</th><th>Staff</th><th></th></tr>
+    {% for b in items %}
+    <tr>
+      <td><b>{{ b.name }}</b>
+        {% if b.is_main %}<span class="pill blue">Main</span>{% endif %}
+        {% if not b.active %}<span class="pill red">Hidden</span>{% endif %}
+        {% if b.address %}<div class="hint">{{ b.address }}</div>{% endif %}
+      </td>
+      <td><code>{{ b.code }}</code></td>
+      <td>{{ b.phone or '—' }}</td>
+      <td>{{ counts.get(b.id, 0) }}</td>
+      <td class="right">
+        {% if not b.is_main %}
+        <form method="post" action="/admin/branches/{{ b.id }}/main" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small ghost">Make main</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/admin/branches/{{ b.id }}/toggle" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small ghost">{{ 'Show' if not b.active else 'Hide' }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+</div>
+
+<div class="grid cols2">
+  <form class="card" method="post" action="/admin/branches">
+    <h2>Add a site</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Name people will say</label>
+    <input type="text" name="name" required placeholder="e.g. Annex">
+    <label>Short code</label>
+    <input type="text" name="code" required maxlength="16" placeholder="ANNEX"
+           style="text-transform:uppercase">
+    <label>Address</label>
+    <input type="text" name="address" placeholder="Street, area">
+    <label>Phone</label>
+    <input type="tel" name="phone" placeholder="0801…">
+    <label>Email (optional)</label>
+    <input type="email" name="email">
+    <button class="btn mt">Add site</button>
+  </form>
+
+  <form class="card" method="post" action="/admin/branches">
+    <h2>Edit a site</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Which site</label>
+    <select name="branch_id" required>
+      <option value="">— pick —</option>
+      {% for b in items %}<option value="{{ b.id }}">{{ b.name }} ({{ b.code }})</option>{% endfor %}
+    </select>
+    <label>Name</label>
+    <input type="text" name="name" required>
+    <label>Short code</label>
+    <input type="text" name="code" required maxlength="16">
+    <label>Address</label>
+    <input type="text" name="address">
+    <label>Phone</label>
+    <input type="tel" name="phone">
+    <label>Email</label>
+    <input type="email" name="email">
+    <button class="btn mt">Save changes</button>
+  </form>
+</div>
+<p class="mt"><a href="/admin/hospital">← Hospital name, logo and colours</a></p>
+{% endblock %}

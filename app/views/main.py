@@ -133,7 +133,8 @@ def patient_hub():
 
     org = current_org()
     if not org:
-        abort(503)
+        # Empty database: send the founder to the setup walk, not a dead page.
+        return redirect(url_for("onboard.start"))
 
     # Keep the QR-location tag (?loc=) and referral code (?ref=) across the hub
     # so posters keep attributing correctly when the patient picks a service.

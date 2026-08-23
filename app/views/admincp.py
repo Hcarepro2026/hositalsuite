@@ -11,7 +11,7 @@ from flask_login import current_user
 from .. import services, whatsapp
 from ..audit import audit, verify_chain
 from ..config import Config
-from ..models import (AppNotification, AuditLog, Complaint, ComplaintCategory,
+from ..models import (AppNotification, AuditLog, Branch, Complaint, ComplaintCategory,
                       Department, DutyRoster, Organization, QrLocation, ReportFile,
                       ROLES, Section, Unit, User, WhatsAppMessage, db, new_code,
                       now_naive, role_label)
@@ -52,7 +52,12 @@ def overview():
 @require_role(*SUPER)
 def hospital():
     org = db.session.get(Organization, current_user.org_id)
-    return render_template("admin/hospital.html", org=org)
+    brand = {
+        "brand_primary": services.get_setting(org.id, "brand_primary") or "#0E5A8A",
+        "brand_accent": services.get_setting(org.id, "brand_accent") or "#12B5A5",
+        "brand_gold": services.get_setting(org.id, "brand_gold") or "#FFD700",
+    }
+    return render_template("admin/hospital.html", org=org, brand=brand)
 
 
 @bp.post("/hospital")
@@ -93,6 +98,12 @@ def hospital_save():
                               "info")
             except Exception:                            # noqa: BLE001 - never block the save
                 current_app.logger.exception("logo dimension check failed")
+    # Colours — per hospital, never per-deploy. Only accept #RRGGBB.
+    import re as _re
+    for key in ("brand_primary", "brand_accent", "brand_gold"):
+        raw = (request.form.get(key) or "").strip()
+        if _re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
+            services.set_setting(org.id, key, raw.upper())
     audit("HOSPITAL_UPDATED", "organization", org.id, {"name": org.name, "code": org.code})
     db.session.commit()
     flash("Hospital profile updated.", "success")
@@ -109,7 +120,11 @@ def users():
              .filter_by(org_id=current_user.org_id, active=True)
              .order_by(Department.name).all())
     pending = [u for u in items if not u.approved]
+    from .. import branches as br
+    br.ensure_main_branch(current_user.org_id)
+    sites = br.list_active(current_user.org_id)
     return render_template("admin/users.html", items=items, depts=depts, pending=pending,
+                           branches=sites,
                            role_choices=[(r, role_label(r)) for r in ROLES])
 
 
@@ -123,6 +138,7 @@ def user_create():
     phone = (request.form.get("phone") or "").strip()
     password = request.form.get("password") or ""
     dept_id = request.form.get("department_id", type=int)
+    branch_id = request.form.get("branch_id", type=int)
     phone = clean_phone(phone)
     if phone and not PHONE_RE.match(phone):
         flash("Enter a valid phone number (digits only, e.g. 08012345678).", "error")
@@ -131,6 +147,11 @@ def user_create():
         d = db.session.get(Department, dept_id)
         if not d or d.org_id != current_user.org_id:
             flash("Unknown department.", "error")
+            return redirect(url_for("admin.users"))
+    if branch_id:
+        from .. import branches as br
+        if not br.get_in_org(branch_id, current_user.org_id):
+            flash("Unknown site.", "error")
             return redirect(url_for("admin.users"))
     if not username or not name or role not in ROLES:
         flash("Username, full name and a valid role are required.", "error")
@@ -145,6 +166,7 @@ def user_create():
         return redirect(url_for("admin.users"))
     u = User(org_id=current_user.org_id, username=username, name=name, role=role,
              email=email or None, phone=phone or None, department_id=dept_id or None,
+             branch_id=branch_id or None,
              approved=True, must_change_password=True)
     u.set_password(password)
     db.session.add(u)
@@ -176,10 +198,16 @@ def user_edit(uid: int):
         flash("Enter a valid phone number (digits only, e.g. 08012345678).", "error")
         return redirect(url_for("admin.users"))
     dept_id = request.form.get("department_id", type=int)
+    branch_id = request.form.get("branch_id", type=int)
     if dept_id:
         d = db.session.get(Department, dept_id)
         if not d or d.org_id != current_user.org_id:
             flash("Unknown department.", "error")
+            return redirect(url_for("admin.users"))
+    if branch_id:
+        from .. import branches as br
+        if not br.get_in_org(branch_id, current_user.org_id):
+            flash("Unknown site.", "error")
             return redirect(url_for("admin.users"))
     # Never let an admin strip the last SUPER_ADMIN of its role — that would
     # lock every administrator out of the system with no way back in.
@@ -193,15 +221,17 @@ def user_edit(uid: int):
                   "error")
             return redirect(url_for("admin.users"))
     old = {"name": u.name, "role": u.role, "email": u.email, "phone": u.phone,
-           "department_id": u.department_id}
+           "department_id": u.department_id, "branch_id": u.branch_id}
     u.name = name
     u.role = role
     u.email = email or None
     u.phone = phone or None
     u.department_id = dept_id or None
+    u.branch_id = branch_id or None
     audit("USER_EDITED", "user", u.id, {"old": old, "new": {"name": name, "role": role,
                                         "email": email, "phone": phone,
-                                        "department_id": dept_id}})
+                                        "department_id": dept_id,
+                                        "branch_id": branch_id}})
     db.session.commit()
     flash(f"User {name} updated.", "success")
     return redirect(url_for("admin.users"))
@@ -1447,3 +1477,140 @@ def users_import_confirm():
           f"{result['skipped']} row(s) skipped. Each account is awaiting your approval.",
           "success")
     return render_template("admin/users_import_done.html", result=result)
+
+
+# ================================================================ security (Build 6)
+@bp.get("/security")
+@require_role(*SUPER)
+def security_check():
+    from .. import pentest
+    sample = {}
+    # Run the header checks against a real response from this app.
+    try:
+        with current_app.test_request_context("/login"):
+            pass
+        probe = current_app.test_client().get("/login")
+        sample = dict(probe.headers)
+    except Exception:                                         # noqa: BLE001
+        current_app.logger.exception("security header probe failed")
+    checks = pentest.run(current_app, current_user.org_id, sample_headers=sample)
+    tally = pentest.summary(checks)
+    required = services.get_setting(current_user.org_id, "mfa_required_roles") or []
+    staff = (db.session.query(User)
+             .filter_by(org_id=current_user.org_id, active=True)
+             .order_by(User.role, User.name).all())
+    return render_template("admin/security.html", checks=checks, tally=tally,
+                           required=set(required), roles=ROLES,
+                           role_choices=[(r, role_label(r)) for r in ROLES],
+                           staff=staff)
+
+
+@bp.post("/security/policy")
+@require_role(*SUPER)
+def security_policy():
+    picked = [r for r in request.form.getlist("mfa_required_roles") if r in ROLES]
+    services.set_setting(current_user.org_id, "mfa_required_roles", picked)
+    audit("MFA_POLICY_UPDATED", "settings", current_user.org_id, {"roles": picked})
+    db.session.commit()
+    flash("Phone-code rule saved. People in those jobs must set it up at next sign-in.",
+          "success")
+    return redirect(url_for("admin.security_check"))
+
+
+# ================================================================ branches (Build 6)
+@bp.get("/branches")
+@require_role(*SUPER)
+def branches():
+    from .. import branches as br
+    br.ensure_main_branch(current_user.org_id)
+    db.session.commit()
+    items = (db.session.query(Branch)
+             .filter_by(org_id=current_user.org_id)
+             .order_by(Branch.is_main.desc(), Branch.name).all())
+    counts = {}
+    for b in items:
+        counts[b.id] = db.session.query(User).filter_by(org_id=current_user.org_id,
+                                                        branch_id=b.id).count()
+    return render_template("admin/branches.html", items=items, counts=counts)
+
+
+@bp.post("/branches")
+@require_role(*SUPER)
+def branch_save():
+    from .. import branches as br
+    bid = request.form.get("branch_id", type=int)
+    name = (request.form.get("name") or "").strip()
+    code = (request.form.get("code") or "").strip().upper()
+    if not name:
+        flash("Give the site a name people will recognise (e.g. Main, Annex).", "error")
+        return redirect(url_for("admin.branches"))
+    if not code or not code.replace("-", "").isalnum() or len(code) > 16:
+        flash("Site code must be short letters or numbers (e.g. MAIN, ANNEX).", "error")
+        return redirect(url_for("admin.branches"))
+    if bid:
+        b = br.get_in_org(bid, current_user.org_id)
+        if not b:
+            abort(404)
+        clash = (db.session.query(Branch)
+                 .filter(Branch.org_id == current_user.org_id,
+                         Branch.code == code, Branch.id != b.id).first())
+        if clash:
+            flash("Another site already uses that code.", "error")
+            return redirect(url_for("admin.branches"))
+        b.name = name
+        b.code = code
+        b.address = (request.form.get("address") or "").strip() or None
+        b.phone = (request.form.get("phone") or "").strip() or None
+        b.email = (request.form.get("email") or "").strip() or None
+        audit("BRANCH_UPDATED", "branch", b.id, {"name": name, "code": code})
+    else:
+        clash = (db.session.query(Branch)
+                 .filter_by(org_id=current_user.org_id, code=code).first())
+        if clash:
+            flash("Another site already uses that code.", "error")
+            return redirect(url_for("admin.branches"))
+        b = Branch(org_id=current_user.org_id, code=code, name=name,
+                   address=(request.form.get("address") or "").strip() or None,
+                   phone=(request.form.get("phone") or "").strip() or None,
+                   email=(request.form.get("email") or "").strip() or None,
+                   is_main=False, active=True)
+        db.session.add(b)
+        db.session.flush()
+        audit("BRANCH_CREATED", "branch", b.id, {"name": name, "code": code})
+    db.session.commit()
+    flash("Site saved.", "success")
+    return redirect(url_for("admin.branches"))
+
+
+@bp.post("/branches/<int:bid>/main")
+@require_role(*SUPER)
+def branch_make_main(bid: int):
+    from .. import branches as br
+    b = br.get_in_org(bid, current_user.org_id)
+    if not b:
+        abort(404)
+    for other in db.session.query(Branch).filter_by(org_id=current_user.org_id).all():
+        other.is_main = (other.id == b.id)
+    audit("BRANCH_SET_MAIN", "branch", b.id, {"name": b.name})
+    db.session.commit()
+    flash(f"{b.name} is now the main site.", "success")
+    return redirect(url_for("admin.branches"))
+
+
+@bp.post("/branches/<int:bid>/toggle")
+@require_role(*SUPER)
+def branch_toggle(bid: int):
+    from .. import branches as br
+    b = br.get_in_org(bid, current_user.org_id)
+    if not b:
+        abort(404)
+    if b.is_main and b.active:
+        flash("The main site cannot be switched off. Make another site main first.",
+              "error")
+        return redirect(url_for("admin.branches"))
+    b.active = not b.active
+    audit("BRANCH_TOGGLED", "branch", b.id, {"active": b.active, "name": b.name})
+    db.session.commit()
+    flash(f"{b.name} {'is open again' if b.active else 'is hidden from new work'}.",
+          "success")
+    return redirect(url_for("admin.branches"))

@@ -78,6 +78,26 @@
 <div class="card mb"><h2>Notes</h2><p>{{ p.notes }}</p></div>
 {% endif %}
 
+{% if open_visit %}
+<div class="flash info mb" style="border:2px solid #0e5a8a">
+  <b>Today's visit is already open — {{ open_visit.visit_no }}</b>
+  <p style="margin:6px 0 10px">{{ p.first_name }} is already in the hospital
+    today ({{ open_visit.status.replace('_',' ')|lower }}). Do not start another
+    visit. Use the buttons below.</p>
+  <p style="display:flex;flex-wrap:wrap;gap:8px;margin:0">
+    <a class="btn" href="/triage/">Continue to Triage</a>
+    <a class="btn ghost" href="/tracking/patient/{{ open_visit.id }}">See this visit</a>
+    {% if can_edit %}
+    <form method="post" action="/hims/visit/{{ open_visit.id }}/close" style="display:inline"
+          onsubmit="return confirm('Close visit {{ open_visit.visit_no }}? Only do this if they have left.')">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button class="btn ghost">Close visit</button>
+    </form>
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+
 <!-- ---------------------------------------------- visits -->
 <div class="card mb">
   <h2>Attendance history</h2>
@@ -114,7 +134,7 @@
   {% endif %}
 </div>
 
-{% if can_edit and p.active %}
+{% if can_edit and p.active and not open_visit %}
 <div class="card mb">
   <h2>➕ Start a visit</h2>
   <p class="hint">The patient is here today. Starting a visit puts them in the queue for

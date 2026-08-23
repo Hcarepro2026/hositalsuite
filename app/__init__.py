@@ -60,6 +60,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
 
     from .security import register_security_hooks
     from .views.auth import bp as auth_bp
+    from .views.mfa import bp as mfa_bp
     from .views.main import bp as main_bp
     from .views.inspections import bp as insp_bp
     from .views.complaints import bp as comp_bp
@@ -86,12 +87,13 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.api import bp as api_bp
     from .views.twilio_diag import bp as twilio_diag_bp
     from .views.fasttrack import bp as fasttrack_bp
+    from .views.onboard import bp as onboard_bp
 
-    for blueprint in (auth_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
+    for blueprint in (auth_bp, mfa_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
                       chat_bp, ref_bp, roster_bp, hims_bp, reception_bp, triage_bp, consulting_bp, tracking_bp, cashdesk_bp,
                       lahsma_bp,
                       admin_bp, rolesadmin_bp, deptdesk_bp, svcpts_bp, tv_bp, hospstruct_bp,
-                      reports_bp, api_bp, twilio_diag_bp, fasttrack_bp):
+                      reports_bp, api_bp, twilio_diag_bp, fasttrack_bp, onboard_bp):
         app.register_blueprint(blueprint)
 
     register_security_hooks(app)
@@ -187,6 +189,11 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                 db.session.commit()
             _boot_step("seed_roles", _seed_roles)
 
+            def _seed_branches():
+                from .branches import ensure_all_orgs
+                ensure_all_orgs()
+            _boot_step("seed_branches", _seed_branches)
+
     @app.context_processor
     def inject_globals():
         from .security import csrf_token
@@ -199,8 +206,6 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
             u = current_user if current_user.is_authenticated else None
         except Exception:
             u = None
-        if u is not None:
-            bundle = org_settings_bundle(u.org_id)
         lang = i18n.get_lang()
         hospital = None
         try:
@@ -211,6 +216,13 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                 hospital = db.session.query(Organization).order_by(Organization.id).first()
         except Exception:
             hospital = None
+        if u is not None:
+            bundle = org_settings_bundle(u.org_id)
+        elif hospital is not None:
+            try:
+                bundle = org_settings_bundle(hospital.id)
+            except Exception:
+                bundle = {}
         def nav_permissions():
             """Menu visibility. Same source of truth as the route guards."""
             from flask_login import current_user
@@ -223,10 +235,19 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                 # administrator's menu to whoever happens to be signed in.
                 return permissions_for(None)
 
-        return dict(csrf_token=csrf_token, settings=bundle, app_version="1.2.0",
+        branch = None
+        try:
+            if u is not None and getattr(u, "branch_id", None):
+                from .models import Branch
+                branch = db.session.get(Branch, u.branch_id)
+        except Exception:
+            branch = None
+        return dict(csrf_token=csrf_token, settings=bundle, app_version="1.4.0",
                     _=i18n.translate, lang=lang, langs=i18n.LANGS,
                     speech_lang=i18n.speech_tag(lang), hospital=hospital,
-                    nav_permissions=nav_permissions)
+                    current_branch=branch,
+                    nav_permissions=nav_permissions,
+                    onboard_guide=bool(bundle.get("onboard_guide")))
 
     @app.errorhandler(404)
     def not_found(e):

@@ -101,6 +101,16 @@ COLUMNS = [
     ("tv_screen", "show_fast_track_only", _bool_sql),
     ("tv_screen", "is_executive", _bool_sql),
     ("sms_message", "to_user_id", "INTEGER"),
+    # --- Build 6: MFA + Branch layer
+    ("user", "mfa_secret", "VARCHAR(64)"),
+    ("user", "mfa_enabled", _bool_sql),
+    ("user", "mfa_backup", "TEXT"),
+    ("user", "mfa_confirmed_at", "TIMESTAMP"),
+    ("user", "branch_id", "INTEGER"),
+    ("department", "branch_id", "INTEGER"),
+    ("patient", "branch_id", "INTEGER"),
+    ("patient_visit", "branch_id", "INTEGER"),
+    ("reception_intake", "branch_id", "INTEGER"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

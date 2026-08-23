@@ -251,6 +251,8 @@ def open_folder(intake_id: int):
         patient = Patient(org_id=current_user.org_id,
                           hospital_number=hims.next_hospital_number(org),
                           created_by=current_user.id, consent_at=now_naive(),
+                          branch_id=getattr(current_user, "branch_id", None)
+                          or getattr(intake, "branch_id", None),
                           **values)
         db.session.add(patient)
         try:
@@ -261,7 +263,10 @@ def open_folder(intake_id: int):
             patient = Patient(org_id=current_user.org_id,
                               hospital_number=hims.next_hospital_number(org),
                               created_by=current_user.id,
-                              consent_at=now_naive(), **values)
+                              consent_at=now_naive(),
+                              branch_id=getattr(current_user, "branch_id", None)
+                              or getattr(intake, "branch_id", None),
+                              **values)
             db.session.add(patient)
             db.session.flush()
 

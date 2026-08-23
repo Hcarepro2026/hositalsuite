@@ -98,14 +98,27 @@ def login_post():
         flash("Your account is waiting for administrator approval. "
               "Please ask your hospital administrator to approve it.", "error")
         return render_template("login.html", next=nxt, username=username), 403
+    if getattr(user, "mfa_enabled", False):
+        session["pending_mfa_uid"] = user.id
+        session["pending_mfa_next"] = nxt
+        session.permanent = True
+        audit("LOGIN_MFA_PENDING", "user", user.id, {"username": user.username})
+        db.session.commit()
+        return redirect(url_for("mfa.verify"))
     login_user(user, remember=False)
     session.permanent = True
+    session.pop("pending_mfa_uid", None)
     user.last_login_at = now_naive()
     db.session.commit()
     audit("LOGIN", "user", user.id, {"username": user.username}, user=user, org_id=user.org_id)
     if user.must_change_password:
         flash("This is a temporary password. Please choose your own password now.", "info")
         return redirect(url_for("auth.change_password"))
+    from .mfa import user_must_setup
+    if user_must_setup(user):
+        flash("Your job requires a phone code. Set it up now — it takes one minute.",
+              "info")
+        return redirect(url_for("mfa.setup"))
     target = safe_next(nxt, "")
     if target:
         return redirect(target)
@@ -116,6 +129,9 @@ def login_post():
 def logout():
     if current_user.is_authenticated:
         audit("LOGOUT", "user", current_user.id, user=current_user, org_id=current_user.org_id)
+    session.pop("pending_mfa_uid", None)
+    session.pop("pending_mfa_next", None)
+    session.pop("mfa_setup_secret", None)
     logout_user()
     return redirect(url_for("auth.login"))
 
@@ -152,6 +168,9 @@ def change_password_post():
     audit("PASSWORD_CHANGED", "user", current_user.id, {"self": True})
     db.session.commit()
     flash("Password updated successfully.", "success")
+    from .mfa import user_must_setup
+    if user_must_setup(current_user):
+        return redirect(url_for("mfa.setup"))
     return redirect(url_for("main.dashboard"))
 
 

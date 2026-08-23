@@ -106,13 +106,18 @@ def desk():
     from .. import reception
     from ..models import ReceptionIntake
 
-    paid_waiting = (
+    from .. import branches as br
+    paid_q = (
         db.session.query(ReceptionIntake)
         .filter(
             ReceptionIntake.org_id == current_user.org_id,
             ReceptionIntake.stage == "PAID",
         )
-        .order_by(ReceptionIntake.paid_at.asc().nullsfirst(), ReceptionIntake.created_at.asc())
+    )
+    paid_q = br.apply_branch_filter(paid_q, ReceptionIntake.branch_id)
+    paid_waiting = (
+        paid_q.order_by(ReceptionIntake.paid_at.asc().nullsfirst(),
+                        ReceptionIntake.created_at.asc())
         .limit(100)
         .all()
     )
@@ -198,6 +203,8 @@ def open_folder_from_intake(intake_id: int):
             hospital_number=hims.next_hospital_number(org),
             created_by=current_user.id,
             consent_at=now_naive(),
+            branch_id=getattr(current_user, "branch_id", None)
+            or getattr(row, "branch_id", None),
             **values,
         )
         db.session.add(patient)
@@ -210,6 +217,8 @@ def open_folder_from_intake(intake_id: int):
                 hospital_number=hims.next_hospital_number(org),
                 created_by=current_user.id,
                 consent_at=now_naive(),
+                branch_id=getattr(current_user, "branch_id", None)
+                or getattr(row, "branch_id", None),
                 **values,
             )
             db.session.add(patient)
@@ -302,7 +311,9 @@ def register_save():
 
     patient = Patient(org_id=current_user.org_id,
                       hospital_number=hims.next_hospital_number(org),
-                      created_by=current_user.id, consent_at=now_naive(), **values)
+                      created_by=current_user.id, consent_at=now_naive(),
+                      branch_id=getattr(current_user, "branch_id", None),
+                      **values)
     db.session.add(patient)
     try:
         db.session.flush()
@@ -311,7 +322,9 @@ def register_save():
         db.session.rollback()
         patient = Patient(org_id=current_user.org_id,
                           hospital_number=hims.next_hospital_number(org),
-                          created_by=current_user.id, consent_at=now_naive(), **values)
+                          created_by=current_user.id, consent_at=now_naive(),
+                          branch_id=getattr(current_user, "branch_id", None),
+                          **values)
         db.session.add(patient)
         db.session.flush()
 
@@ -340,6 +353,10 @@ def folder(pid: int):
     p = db.session.get(Patient, pid)
     if not p or p.org_id != current_user.org_id:
         abort(404)
+    open_visit = next((v for v in p.visits
+                       if v.status not in ("CLOSED", "CANCELLED")
+                       and v.started_at
+                       and v.started_at.date() == now_naive().date()), None)
     return render_template("hims/folder.html", p=p, visits=p.visits[:25],
                            payer_labels=PAYER_LABELS, category_labels=CATEGORY_LABELS,
                            assistance_labels=ASSISTANCE_LABELS,
@@ -347,6 +364,7 @@ def folder(pid: int):
                            .filter_by(org_id=current_user.org_id, active=True)
                            .order_by(Department.name).all(),
                            visit_types=VISIT_TYPES,
+                           open_visit=open_visit,
                            can_edit=current_user.role in DESK)
 
 
@@ -397,12 +415,23 @@ def start_visit(pid: int):
     p = db.session.get(Patient, pid)
     if not p or p.org_id != current_user.org_id:
         abort(404)
-    open_already = [v for v in p.visits
-                    if v.status not in ("CLOSED", "CANCELLED")
-                    and v.started_at.date() == now_naive().date()]
+    # One person in the building = one open visit. Live site used to flash a
+    # red error and leave the clerk stranded. Reception already reuses the
+    # visit; HIMS must do the same so the patient still reaches Triage.
+    open_already = next((v for v in p.visits
+                         if v.status not in ("CLOSED", "CANCELLED")
+                         and v.started_at
+                         and v.started_at.date() == now_naive().date()), None)
     if open_already:
-        flash(f"{p.full_name} already has an open visit today "
-              f"({open_already[0].visit_no}). Close it before starting another.", "error")
+        extra = (request.form.get("reason") or "").strip()
+        if extra and not open_already.reason:
+            open_already.reason = extra[:300]
+        audit("PATIENT_VISIT_REUSED", "visit", open_already.id,
+              {"patient": p.hospital_number, "visit": open_already.visit_no})
+        db.session.commit()
+        flash(f"{p.full_name} already has today's visit open "
+              f"({open_already.visit_no}). Using that one — they are still "
+              "in the flow. Close it only when they have left.", "info")
         return redirect(url_for("hims.folder", pid=p.id))
     visit = hims.open_visit(p, user_id=current_user.id,
                             reason=request.form.get("reason", ""),

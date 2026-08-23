@@ -118,9 +118,17 @@ class User(UserMixin, db.Model):
     approved = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=now_naive)
     last_login_at = db.Column(db.DateTime)
+    # Which site this person works at (Hospital → Branch → Department).
+    branch_id = db.Column(db.Integer, db.ForeignKey("branch.id"), index=True)
+    # Two-step sign-in. Secret is only used when mfa_enabled is True.
+    mfa_secret = db.Column(db.String(64))
+    mfa_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    mfa_backup = db.Column(db.Text)                 # hashed backup codes, JSON
+    mfa_confirmed_at = db.Column(db.DateTime)
 
     org = db.relationship("Organization", backref="users")
     department = db.relationship("Department", foreign_keys=[department_id])
+    branch = db.relationship("Branch", foreign_keys=[branch_id])
 
     @property
     def is_super(self): return self.role == "SUPER_ADMIN"
@@ -154,10 +162,36 @@ class User(UserMixin, db.Model):
         return str(self.id)
 
 
+# ---------------------------------------------------------------- branches (Hospital → Branch → Department)
+class Branch(db.Model):
+    """One physical site of a hospital.
+
+    A teaching hospital may have a main site and an annex. Staff, today's
+    visits and (optionally) departments belong to a branch so Ijede Main
+    does not see Ijede Annex's queue. Branding (name on the door, phone,
+    address) can differ per site; colours stay hospital-wide so the suite
+    still looks like one product.
+    """
+    __tablename__ = "branch"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(16), nullable=False)          # MAIN, ANNEX
+    name = db.Column(db.String(160), nullable=False)
+    address = db.Column(db.String(300))
+    phone = db.Column(db.String(64))
+    email = db.Column(db.String(160))
+    is_main = db.Column(db.Boolean, default=False, nullable=False)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_naive)
+    org = db.relationship("Organization", backref="branches")
+    __table_args__ = (db.UniqueConstraint("org_id", "code", name="uq_branch_org_code"),)
+
+
 # ---------------------------------------------------------------- structure
 class Department(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey("branch.id"), index=True)
     name = db.Column(db.String(120), nullable=False)
     hod_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     # HOD contact recorded ON the department, so a department can have a named
@@ -172,6 +206,7 @@ class Department(db.Model):
     sections = db.relationship("Section", backref="department", lazy="select",
                                cascade="all, delete-orphan", order_by="Section.name")
     hod = db.relationship("User", foreign_keys=[hod_user_id])
+    branch = db.relationship("Branch", foreign_keys=[branch_id])
     __table_args__ = (db.UniqueConstraint("org_id", "name", name="uq_dept_org_name"),)
 
 
@@ -997,6 +1032,7 @@ class Patient(db.Model):
     """
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey("branch.id"), index=True)
     hospital_number = db.Column(db.String(32), nullable=False, index=True)
 
     # --- identity
@@ -1054,6 +1090,7 @@ class Patient(db.Model):
     last_visit_at = db.Column(db.DateTime, index=True)
 
     creator = db.relationship("User", foreign_keys=[created_by])
+    branch = db.relationship("Branch", foreign_keys=[branch_id])
     visits = db.relationship("PatientVisit", backref="patient", lazy="select",
                              order_by="PatientVisit.started_at.desc()")
 
@@ -1149,6 +1186,7 @@ class PatientVisit(db.Model):
     """
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey("branch.id"), index=True)
     patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False, index=True)
     visit_no = db.Column(db.String(40), nullable=False, index=True)
     visit_type = db.Column(db.String(16), default="FOLLOW_UP", nullable=False)
@@ -1180,6 +1218,7 @@ class PatientVisit(db.Model):
     department = db.relationship("Department")
     doctor = db.relationship("User", foreign_keys=[doctor_id])
     registrar = db.relationship("User", foreign_keys=[registered_by])
+    branch = db.relationship("Branch", foreign_keys=[branch_id])
 
     __table_args__ = (db.UniqueConstraint("org_id", "visit_no", name="uq_visit_org_no"),)
 
@@ -1243,6 +1282,7 @@ class ReceptionIntake(db.Model):
     """
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey("branch.id"), index=True)
     ref = db.Column(db.String(40), unique=True, nullable=False, index=True)
 
     # --- identity (what Reception actually asks for)

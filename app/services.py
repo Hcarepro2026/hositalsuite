@@ -45,6 +45,15 @@ DEFAULT_SETTINGS = {
     "fast_track_booking_requires_payment": False,  # when True, booking must be paid upfront
     "fast_track_payment_instructions": "You can pay at reception or by transfer. Please show your receipt at the Fast Track Desk.",
     "fast_track_price_note": "Pay a little more and be seen quickly in our quiet executive lounge.",
+    # ---- Security (Build 6) ----
+    "mfa_required_roles": [],           # e.g. ["SUPER_ADMIN", "HEAD_ADMIN_HR"]
+    # ---- Branding (Build 6) — per hospital, never per-deploy ----
+    "brand_primary": "#0e5a8a",
+    "brand_accent": "#12b5a5",
+    "brand_gold": "#FFD700",
+    "onboarding_complete": False,
+    "onboard_guide": False,
+    "voice_lang": "en",
 }
 
 
@@ -114,8 +123,18 @@ def set_setting(org_id: int, key: str, value):
     Setting.set(org_id, key, value)
 
 
+def _safe_hex(val, fallback: str) -> str:
+    import re as _re
+    s = (val or "").strip() if isinstance(val, str) else ""
+    return s if _re.fullmatch(r"#[0-9A-Fa-f]{6}", s) else fallback
+
+
 def org_settings_bundle(org_id: int) -> dict:
-    return {k: get_setting(org_id, k) for k in DEFAULT_SETTINGS}
+    out = {k: get_setting(org_id, k) for k in DEFAULT_SETTINGS}
+    out["brand_primary"] = _safe_hex(out.get("brand_primary"), "#0e5a8a")
+    out["brand_accent"] = _safe_hex(out.get("brand_accent"), "#12b5a5")
+    out["brand_gold"] = _safe_hex(out.get("brand_gold"), "#FFD700")
+    return out
 
 
 def parse_hhmm(s: str) -> tuple[int, int]:

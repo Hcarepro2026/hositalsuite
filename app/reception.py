@@ -215,17 +215,21 @@ def create_intake(org_id: int, values: dict, user_id: int | None = None) -> Rece
                           stage="RECEPTION", **values)
     db.session.add(row)
     db.session.flush()
+    from . import branches as br
+    br.stamp_branch(row)
     return row
 
 
 def waiting(org_id: int, stages: tuple[str, ...] | None = None) -> list[ReceptionIntake]:
     """Everyone currently mid-walk, fast-track first, then oldest first."""
     stages = stages or ("RECEPTION", "BILLING", "PAYMENT", "PAID")
-    return (db.session.query(ReceptionIntake)
-            .filter(ReceptionIntake.org_id == org_id,
-                    ReceptionIntake.stage.in_(stages))
-            .order_by(ReceptionIntake.is_fast_track.desc(),
-                      ReceptionIntake.created_at.asc())
+    from . import branches as br
+    q = (db.session.query(ReceptionIntake)
+         .filter(ReceptionIntake.org_id == org_id,
+                 ReceptionIntake.stage.in_(stages)))
+    q = br.apply_branch_filter(q, ReceptionIntake.branch_id)
+    return (q.order_by(ReceptionIntake.is_fast_track.desc(),
+                       ReceptionIntake.created_at.asc())
             .limit(200).all())
 
 

@@ -301,15 +301,19 @@ def test_folder_can_be_opened_without_starting_a_visit(client, seeded):
     assert p.last_visit_at is None and p.is_returning is False
 
 
-def test_two_open_visits_on_the_same_day_are_blocked(client, seeded):
+def test_two_open_visits_on_the_same_day_are_reused_not_blocked(client, seeded):
+    """Live bug: a red error stranded the clerk. Reuse today's visit instead."""
     login(client, "admin")
     _folder(client, start_visit="1")
     p = db.session.query(Patient).first()
     r = client.post(f"/hims/folder/{p.id}/visit",
                     data={"_csrf": csrf(client, f"/hims/folder/{p.id}")},
                     follow_redirects=True)
-    assert b"already has an open visit today" in r.data
     assert db.session.query(PatientVisit).count() == 1
+    body = client.get(f"/hims/folder/{p.id}").data
+    assert b"already open" in body
+    assert b"Start a visit" not in body
+    assert b"Continue to Triage" in body
 
 
 def test_visit_numbers_are_unique_and_dated(client, seeded):

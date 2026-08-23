@@ -111,8 +111,10 @@ def search(org_id: int, term: str, limit: int = MAX_SEARCH_RESULTS) -> list[Pati
     term = (term or "").strip()
     if not term:
         return []
+    from . import branches as br
     q = db.session.query(Patient).filter(Patient.org_id == org_id,
                                          Patient.active.is_(True))
+    q = br.apply_branch_filter(q, Patient.branch_id)
     digits = _digits(term)
     like = f"%{term.lower()}%"
     conds = [
@@ -324,12 +326,19 @@ def open_visit(patient: Patient, *, user_id: int, reason: str = "",
                 fast_track_reason = fast_track_reason or "PREGNANT"
         except Exception:
             pass
+    branch_id = getattr(patient, "branch_id", None)
+    if not branch_id:
+        try:
+            from flask_login import current_user
+            branch_id = getattr(current_user, "branch_id", None)
+        except Exception:
+            branch_id = None
     visit = PatientVisit(
         org_id=patient.org_id, patient_id=patient.id,
         visit_no=next_visit_no(patient.org_id), visit_type=visit_type,
         status="REGISTERED", reason=(reason or "").strip()[:300],
         payer_type=patient.payer_type, department_id=department_id,
-        registered_by=user_id,
+        registered_by=user_id, branch_id=branch_id,
         is_fast_track=bool(is_fast_track),
         fast_track_reason=(fast_track_reason or None))
     db.session.add(visit)
@@ -339,8 +348,10 @@ def open_visit(patient: Patient, *, user_id: int, reason: str = "",
 
 def today_visits(org_id: int, status: str | None = None) -> list[PatientVisit]:
     start = datetime.combine(now_naive().date(), datetime.min.time())
+    from . import branches as br
     q = (db.session.query(PatientVisit)
          .filter(PatientVisit.org_id == org_id, PatientVisit.started_at >= start))
+    q = br.apply_branch_filter(q, PatientVisit.branch_id)
     if status:
         q = q.filter(PatientVisit.status == status)
     return q.order_by(PatientVisit.started_at.desc()).all()

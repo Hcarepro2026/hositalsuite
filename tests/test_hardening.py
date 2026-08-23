@@ -98,6 +98,8 @@ def test_security_headers_present(client):
     csp = r.headers["Content-Security-Policy"]
     assert "frame-ancestors 'none'" in csp
     assert "object-src 'none'" in csp
+    assert r.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    assert r.headers["X-Permitted-Cross-Domain-Policies"] == "none"
 
 
 def test_hsts_only_over_https(client):

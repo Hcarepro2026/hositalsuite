@@ -28,6 +28,25 @@
   <p class="hint mt">Current logo:</p>
   <img src="/branding/logo" alt="Hospital logo" style="max-height:120px;max-width:280px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px">
   {% endif %}
+
+  <h2 class="mt">Colours — how the suite looks</h2>
+  <p class="hint">These colours appear on every staff screen for this hospital only.
+    Another hospital on the same software keeps their own.</p>
+  <div class="grid cols3">
+    <div>
+      <label>Main colour</label>
+      <input type="color" name="brand_primary" value="{{ (brand.brand_primary if brand else settings.brand_primary) or '#0e5a8a' }}">
+    </div>
+    <div>
+      <label>Accent</label>
+      <input type="color" name="brand_accent" value="{{ (brand.brand_accent if brand else settings.brand_accent) or '#12b5a5' }}">
+    </div>
+    <div>
+      <label>Fast Track gold</label>
+      <input type="color" name="brand_gold" value="{{ (brand.brand_gold if brand else settings.brand_gold) or '#ffd700' }}">
+    </div>
+  </div>
   <button class="btn mt">Save</button>
 </form>
+<p class="mt"><a class="btn ghost" href="/admin/branches">🏢 Manage hospital sites (Main / Annex) →</a></p>
 {% endblock %}

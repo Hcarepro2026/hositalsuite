@@ -51,6 +51,12 @@
             <option value="{{ d.id }}" {{ 'selected' if u.department_id==d.id }}>{{ d.name }}</option>
             {% endfor %}
           </select>
+          <select name="branch_id" class="mt" style="margin-top:6px">
+            <option value="">— Whole hospital —</option>
+            {% for b in branches %}
+            <option value="{{ b.id }}" {{ 'selected' if u.branch_id==b.id }}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
           <input type="email" name="email" value="{{ u.email or '' }}" placeholder="email" class="mt" style="margin-top:6px">
           <input type="tel" name="phone" value="{{ u.phone or '' }}" placeholder="phone (WhatsApp)" class="mt" style="margin-top:6px">
           <button class="btn small mt">Save user</button>
@@ -93,6 +99,11 @@
         <select name="department_id">
           <option value="">— No department —</option>
           {% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select></div>
+      <div><label>Site (branch)</label>
+        <select name="branch_id">
+          <option value="">— Whole hospital —</option>
+          {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
         </select></div>
       <div><label>Phone (for WhatsApp)</label><input type="tel" name="phone" placeholder="08012345678"></div>
       <div><label>Email</label><input type="email" name="email"></div>

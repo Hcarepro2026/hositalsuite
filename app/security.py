@@ -253,7 +253,9 @@ def register_security_hooks(app):
     app.before_request(csrf_protect)
 
     from .views.auth import enforce_pending_password_change
+    from .views.mfa import enforce_mfa
     app.before_request(enforce_pending_password_change)
+    app.before_request(enforce_mfa)
 
     @app.after_request
     def security_headers(resp):
@@ -273,6 +275,9 @@ def register_security_hooks(app):
             "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
             "script-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' data:; "
             "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+        resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        resp.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        resp.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
         if request.path.startswith("/static/"):
             resp.headers.setdefault("Cache-Control", "public, max-age=3600")
         else:

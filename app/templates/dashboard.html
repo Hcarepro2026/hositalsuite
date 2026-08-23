@@ -2,6 +2,23 @@
 {% block title %}Dashboard — Hospital Suite{% endblock %}
 {% block content %}
 
+{% if onboard_guide and current_user.role == 'SUPER_ADMIN' %}
+<div class="card pad-lg mb" style="border-left:6px solid var(--accent)">
+  <h2 style="margin:0">Your hospital is new — do these next</h2>
+  <p class="muted">Booking → Register → Triage → Doctor → next desk. Voice stays on.</p>
+  <div class="btn-row grid cols2">
+    <a class="btn" href="/admin/users">Add staff</a>
+    <a class="btn secondary" href="/admin/posters">Print posters</a>
+    <a class="btn secondary" href="/admin/security">Phone code</a>
+    <a class="btn secondary" href="/welcome">Patient view</a>
+  </div>
+  <form method="post" action="/start/guide-done" class="mt">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="btn ghost small" type="submit">Hide this card</button>
+  </form>
+</div>
+{% endif %}
+
 {# ---------------- your own department, first ---------------- #}
 {% set can = nav_permissions() %}
 {% if can.dept_desk and not can.admin %}
