@@ -323,6 +323,36 @@ def can_see_department(user, department_id) -> bool:
     return allowed is None or department_id in allowed
 
 
+def can_see_department_audit(user, department_id, action: str = "ACCESS") -> bool:
+    """Check department sight + audit when blocked — for scope enforcement audit (feature 5).
+
+    Returns True if allowed, False if blocked and audit logged.
+    """
+    if can_see_department(user, department_id):
+        return True
+    # Blocked — audit scope violation
+    try:
+        from .audit import audit
+        from .models import db as _db
+        detail = {
+            "blocked_dept_id": department_id,
+            "user_role": getattr(user, "role", ""),
+            "user_dept_id": getattr(user, "department_id", None),
+            "scope": scope_of(user),
+            "visible": visible_department_ids(user),
+            "action": action,
+        }
+        audit("SCOPE_BLOCKED", "department", department_id or 0, detail, org_id=getattr(user, "org_id", None))
+        _db.session.commit()
+    except Exception:
+        try:
+            from .models import db as _db
+            _db.session.rollback()
+        except Exception:
+            pass
+    return False
+
+
 def scope_note(user) -> str:
     """One honest sentence for the top of a filtered page.
 

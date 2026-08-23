@@ -217,6 +217,8 @@ def admin_create():
         voice_volume=100,
         brightness=100,
         night_mode=False,
+        show_fast_track_only=bool(request.form.get("show_fast_track_only") or request.form.get("is_executive")),
+        is_executive=bool(request.form.get("is_executive")),
         active=True,
     )
     db.session.add(s)
@@ -243,6 +245,11 @@ def admin_edit(sid: int):
     s.voice_enabled = bool(request.form.get("voice_enabled"))
     s.voice_rotate_daily = bool(request.form.get("voice_rotate_daily"))
     s.voice_languages = (request.form.get("voice_languages") or "en,yo,ha,ig").strip()[:30]
+    s.show_fast_track_only = bool(request.form.get("show_fast_track_only"))
+    s.is_executive = bool(request.form.get("is_executive"))
+    if s.is_executive and not s.show_fast_track_only:
+        # Executive TV usually wants gold only, but allow admin to override — if executive checked, suggest fast only
+        pass
     try:
         vol = int(request.form.get("voice_volume") or s.voice_volume or 100)
         s.voice_volume = max(0, min(100, vol))

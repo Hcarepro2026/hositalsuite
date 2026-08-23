@@ -133,6 +133,28 @@ def ensure_default_screens(org_id: int) -> list[TvScreen]:
             night_mode=False,
             active=True,
         ),
+        TvScreen(
+            org_id=org_id,
+            code="FASTTRACK",
+            name="⭐ Fast Track Executive TV",
+            location="Executive Premium Building — Fast Track Lounge",
+            screen_type="EXECUTIVE",
+            show_full_name=True,
+            show_queue_stats=True,
+            show_reception=True,
+            show_triage=True,
+            show_consulting=True,
+            show_onward=True,
+            show_fast_track_only=True,
+            is_executive=True,
+            voice_enabled=True,
+            voice_rotate_daily=True,
+            voice_languages="en,yo,ha,ig",
+            voice_volume=100,
+            brightness=100,
+            night_mode=False,
+            active=True,
+        ),
     ]
     for s in defaults:
         db.session.add(s)
@@ -153,6 +175,9 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     # Determine filters
     clinic_filter = (screen.clinic_code or "").strip().upper() if screen else None
     dept_filter = screen.department_id if screen and screen.department_id else None
+    fast_only = bool(getattr(screen, 'show_fast_track_only', False)) if screen else False
+    is_executive = bool(getattr(screen, 'is_executive', False)) if screen else False
+    # Executive TV automatically implies fast-track gold theme, but filter is explicit
 
     # --- Queue tickets today
     q_q = db.session.query(QueueTicket).filter(
@@ -160,6 +185,8 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     )
     if dept_filter:
         q_q = q_q.filter(QueueTicket.department_id == dept_filter)
+    if fast_only:
+        q_q = q_q.filter(QueueTicket.is_fast_track.is_(True))
     queue_all = q_q.order_by(QueueTicket.created_at.desc()).limit(100).all()
     queue_waiting = [t for t in queue_all if t.status == "WAITING"]
     queue_called = [t for t in queue_all if t.status == "CALLED"]
@@ -169,6 +196,8 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     r_q = db.session.query(ReceptionIntake).filter(
         ReceptionIntake.org_id == org_id, ReceptionIntake.created_at >= start
     )
+    if fast_only:
+        r_q = r_q.filter(ReceptionIntake.is_fast_track.is_(True))
     reception_rows = r_q.filter(ReceptionIntake.stage.in_(("RECEPTION", "BILLING", "PAYMENT", "PAID"))).order_by(
         ReceptionIntake.created_at.asc()
     ).limit(50).all()
@@ -179,6 +208,8 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     )
     if clinic_filter:
         v_q = v_q.filter(db.func.upper(db.func.trim(PatientVisit.clinic)) == clinic_filter)
+    if fast_only:
+        v_q = v_q.filter(PatientVisit.is_fast_track.is_(True))
     visits = v_q.order_by(PatientVisit.started_at.desc()).limit(100).all()
     visits_by_id = {v.id: v for v in visits}
     patient_ids = {v.patient_id for v in visits}
@@ -209,6 +240,8 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         VisitOnward.org_id == org_id, VisitOnward.status == "PENDING",
         PatientVisit.started_at >= start,
     )
+    if fast_only:
+        o_q = o_q.filter(PatientVisit.is_fast_track.is_(True))
     pending_onward_raw = o_q.order_by(PatientVisit.is_fast_track.desc(), VisitOnward.sent_at.asc()).limit(100).all()
     # Deduplicate by (visit_id, destination) — unique constraint should prevent dupes,
     # but guard against race / old data

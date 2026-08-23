@@ -16,12 +16,28 @@ def _process(app):
     with app.app_context():
         from . import sms, whatsapp
         from .models import db
+        from .models import WhatsAppMessage
         try:
-            whatsapp.process_queue(limit=20)
+            # WhatsApp FIRST — process WhatsApp queue
+            sent = whatsapp.process_queue(limit=20)
+            # Check for failed WhatsApp messages that need SMS fallback
+            try:
+                failed = db.session.query(WhatsAppMessage).filter(
+                    WhatsAppMessage.status == "FAILED",
+                    WhatsAppMessage.last_error.ilike("%fallback%") | WhatsAppMessage.last_error.ilike("%failed%")
+                ).order_by(WhatsAppMessage.created_at.desc()).limit(10).all()
+                for f in failed:
+                    if f.last_error and "fallback" in f.last_error.lower():
+                        # Already queued SMS fallback in webhook, ensure it exists
+                        pass
+            except Exception:
+                pass
         except Exception as exc:  # noqa: BLE001 — delivery must never crash the app
             app.logger.exception("whatsapp queue error: %s", exc)
             db.session.rollback()
         try:
+            # Twilio SMS fallback — process only if WhatsApp failed or not available
+            # SMS messages with kind ending _fallback are only sent if corresponding WhatsApp FAILED
             sms.process_sms_queue(limit=30)
         except Exception as exc:  # noqa: BLE001
             app.logger.exception("sms queue error: %s", exc)

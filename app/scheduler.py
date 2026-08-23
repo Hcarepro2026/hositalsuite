@@ -106,7 +106,7 @@ def job_overdue_inspection(app):
 
 
 def job_complaint_sla(app):
-    """Warn before SLA expiry; escalate to MD/CEO when it expires."""
+    """Warn before SLA expiry; escalate to MD/CEO when it expires — WhatsApp voice (feature 6)."""
     now = now_naive()
     for org in db.session.query(Organization).all():
         open_complaints = (db.session.query(Complaint)
@@ -128,22 +128,40 @@ def job_complaint_sla(app):
                 audit("COMPLAINT_ESCALATED", "complaint", c.id,
                       {"reason": "SLA expired", "deadline": str(c.sla_deadline_at)}, org_id=org.id)
                 ctx = {"ref": c.ref, "dept": c.department.name, "hospital": org.name}
+                # WhatsApp-first escalation to MD/CEO + HOD + voice announcement
                 for md in notifications.md_ceos(org.id):
                     notifications.notify(org.id, md, "complaint_escalated", ctx,
                                          channels=["inapp", "email", "whatsapp"],
                                          entity_type="complaint", entity_id=c.id)
+                    # Voice reminder — standing requirement
+                    try:
+                        from . import announce as _ann
+                        _ann.to_user(org.id, md, "complaint_escalated_voice",
+                                     place=c.department.name,
+                                     detail=f"Complaint {c.ref} for {c.department.name} breached SLA. Immediate action needed. Voice alert.",
+                                     entity_type="complaint", entity_id=c.id)
+                    except Exception:
+                        pass
                 hod = services.route_hod(c.department)
                 if hod:
                     notifications.notify(org.id, hod, "complaint_escalated", ctx,
                                          channels=["inapp", "whatsapp"],
                                          entity_type="complaint", entity_id=c.id)
+                    try:
+                        from . import announce as _ann2
+                        _ann2.to_user(org.id, hod, "complaint_escalated_voice",
+                                      place=c.department.name,
+                                      detail=f"Complaint {c.ref} breached SLA — escalated to MD/CEO. Please check now. Voice alert.",
+                                      entity_type="complaint", entity_id=c.id)
+                    except Exception:
+                        pass
                 duty = services.on_duty(org.id, now.date())
                 if duty:
                     notifications.notify(org.id, duty, "complaint_escalated", ctx,
                                          channels=["inapp"], entity_type="complaint", entity_id=c.id)
                 notifications.notify_complaint_patient(org, c, "escalated")
             else:
-                # 4-hour warning, once
+                # 4-hour warning, once — with voice
                 remaining = (c.sla_deadline_at - now).total_seconds() / 3600
                 if 0 < remaining <= 4 and not _sent_marker(org.id, "complaint_sla_warning", "complaint", c.id):
                     hod = services.route_hod(c.department)
@@ -153,6 +171,14 @@ def job_complaint_sla(app):
                                               "hours": f"{remaining:.0f}", "hospital": org.name},
                                              channels=["inapp", "whatsapp"],
                                              entity_type="complaint", entity_id=c.id)
+                        try:
+                            from . import announce as _ann3
+                            _ann3.to_user(org.id, hod, "complaint_sla_warning_voice",
+                                          place=c.department.name,
+                                          detail=f"{c.ref} — {remaining:.0f} hours left. Voice reminder.",
+                                          entity_type="complaint", entity_id=c.id)
+                        except Exception:
+                            pass
                         _mark("complaint_sla_warning", hod, "SLA warning", org.id, "complaint", c.id)
 
 

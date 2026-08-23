@@ -74,6 +74,21 @@
       <div class="hint">Records older than this are eligible for purge. Default 2190 (6 years).</div></div>
   </div>
 
+  <h2 class="mt" style="background: linear-gradient(135deg,#FFD700,#FFA500);color:#000;padding:8px 12px;border-radius:8px">👑 Fast Track — Quick, Calm, Private</h2>
+  <p class="hint">Fast Track is our premium service. Patients are seen quickly in a quiet, comfortable lounge. No long queue. For anyone who values time and comfort. Price is per hospital and can be changed anytime.</p>
+  <div class="grid cols3">
+    <div><label><input type="checkbox" name="fast_track_enabled" value="1" {{ 'checked' if s.fast_track_enabled }} style="width:auto"> Fast Track enabled</label></div>
+    <div><label>Price (e.g. 15000) — premium</label><input type="number" name="fast_track_price" min="0" max="1000000" value="{{ s.fast_track_price }}"></div>
+    <div><label>Currency</label><input type="text" name="fast_track_currency" value="{{ s.fast_track_currency }}" placeholder="NGN"></div>
+  </div>
+  <div class="grid cols2 mt">
+    <div><label>Executive building name</label><input type="text" name="fast_track_building_name" value="{{ s.fast_track_building_name }}" placeholder="Executive Premium Building"></div>
+    <div><label>Price note (short)</label><input type="text" name="fast_track_price_note" value="{{ s.fast_track_price_note }}" placeholder="Pay more, get fast — gold lane"></div>
+  </div>
+  <div class="mt"><label>Description (shown to patients)</label><textarea name="fast_track_description" rows="2" placeholder="Dedicated fast and special hospital services...">{{ s.fast_track_description }}</textarea></div>
+  <div class="mt"><label>Payment instructions for Fast Track Booking upfront</label><textarea name="fast_track_payment_instructions" rows="2" placeholder="Pay at Reception or via transfer... Show receipt at Fast Track Desk">{{ s.fast_track_payment_instructions }}</textarea></div>
+  <div class="mt"><label><input type="checkbox" name="fast_track_booking_requires_payment" value="1" {{ 'checked' if s.fast_track_booking_requires_payment }} style="width:auto"> Booking requires payment upfront — pay before arrival (premium)</label><div class="hint">When checked, Fast Track Booking shows PAY button and staff must mark as PAID before patient is seen. If unchecked, patient pays at Reception/Billing as normal but still gold lane.</div></div>
+
   <button class="btn big mt">Save configuration</button>
 </form>
 

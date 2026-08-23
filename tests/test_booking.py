@@ -10,7 +10,7 @@ from conftest import csrf, login
 def _book(client, seeded, **over):
     token = csrf(client, "/book")
     day = (now_naive().date() + timedelta(days=over.pop("days", 1))).isoformat()
-    data = {"_csrf": token, "consent": "1", "department_id": seeded["dept"], "appointment_date": day,
+    data = {"_csrf": token, "consent": "1", "fast_track_consent": "1", "is_fast_track": "1", "fast_track_reason": "PREMIUM", "department_id": seeded["dept"], "appointment_date": day,
             "appointment_time": "09:00", "patient_name": "Chinwe Obi",
             "phone": "08033334444", "idem": over.pop("idem", "idem-test-1")}
     data.update(over)

@@ -123,23 +123,45 @@ def escalate(complaint: Complaint, *, by_user, to_user: User, reason: str) -> di
     ctx = {"ref": complaint.ref, "dept": dept_name,
            "hospital": org.name if org else "", "reason": reason[:200]}
     try:
+        # WhatsApp-first then SMS fallback
         notifications.notify(complaint.org_id, to_user, "complaint_escalated", ctx,
                              channels=["inapp", "email", "whatsapp"],
                              entity_type="complaint", entity_id=complaint.id)
+        # Also alert MD/CEO on escalation — feature 6
+        for md in db.session.query(User).filter(User.org_id==complaint.org_id, User.role=="MD_CEO", User.active.is_(True)).all():
+            if md.id != to_user.id:
+                notifications.notify(complaint.org_id, md, "complaint_escalated", ctx,
+                                     channels=["inapp", "whatsapp"],
+                                     entity_type="complaint", entity_id=complaint.id)
     except Exception:                                      # noqa: BLE001
         log.exception("could not notify the escalation target")
 
-    # Voice, because a message nobody opens is a message nobody acts on.
+    # Voice, because a message nobody opens is a message nobody acts on — feature 6 with WhatsApp voice.
+    # Keep complaint_for_you for backward compat (tests) + add escalated_voice for premium.
     try:
-        # NOTE: to_user() supplies `name` itself. Passing it again is a
-        # TypeError that swallows the whole announcement silently.
         announce.to_user(complaint.org_id, to_user, "complaint_for_you",
                          place=dept_name,
-                         detail=(f"{by_user.name} has escalated it to you with "
-                                 f"{round(left)} hours left."
+                         detail=(f"{by_user.name} has escalated {complaint.ref} to you with "
+                                 f"{round(left)} hours left. Reason: {reason[:150]}"
                                  if in_time else
-                                 f"{by_user.name} has escalated it to you and it "
-                                 f"is already past its deadline."))
+                                 f"{by_user.name} has escalated {complaint.ref} to you and it "
+                                 f"is already past its deadline. Reason: {reason[:150]}"),
+                         entity_type="complaint", entity_id=complaint.id)
+        announce.to_user(complaint.org_id, to_user, "complaint_escalated_voice",
+                         place=dept_name,
+                         detail=(f"{by_user.name} escalated {complaint.ref} to you with "
+                                 f"{round(left)} hours left. Reason: {reason[:150]}"
+                                 if in_time else
+                                 f"{by_user.name} escalated {complaint.ref} to you and it "
+                                 f"is already past its deadline. Reason: {reason[:150]}"),
+                         entity_type="complaint", entity_id=complaint.id)
+        # Voice also to MD/CEO
+        for md in db.session.query(User).filter(User.org_id==complaint.org_id, User.role=="MD_CEO", User.active.is_(True)).all():
+            if md.id != to_user.id:
+                announce.to_user(complaint.org_id, md, "complaint_escalated_voice",
+                                 place=dept_name,
+                                 detail=f"Complaint {complaint.ref} for {dept_name} escalated by {by_user.name} to {to_user.name}. {reason[:150]}",
+                                 entity_type="complaint", entity_id=complaint.id)
     except Exception:                                      # noqa: BLE001
         log.exception("could not announce the escalation")
 
@@ -148,12 +170,12 @@ def escalate(complaint: Complaint, *, by_user, to_user: User, reason: str) -> di
 
 # ------------------------------------------------------------------ early warning
 def warn_hods_running_out(org_id: int, warn_hours: float = 4.0) -> int:
-    """Speak to an HOD BEFORE their complaint times out, not after.
+    """Speak to an HOD BEFORE their complaint times out, not after + WhatsApp voice reminder (feature 6).
 
     The automatic escalation already existed and already fired at the deadline.
     By then the HOD has lost the chance to act, and the first they hear of it
     is the MD asking why. This says it out loud while there is still time to
-    either answer it or escalate it on purpose.
+    either answer it or escalate it on purpose, plus WhatsApp voice alert.
     """
     from . import services
     said = 0
@@ -170,10 +192,23 @@ def warn_hods_running_out(org_id: int, warn_hours: float = 4.0) -> int:
         if hod is None:
             continue
         try:
+            org_obj = db.session.get(Organization, org_id)
+            org_name = org_obj.name if org_obj else ""
+            # Keep old key for backward compat + new voice key for feature 6
             announce.to_user(org_id, hod, "complaint_running_out",
                              place=c.department.name if c.department else "",
-                             detail=f"{round(left)} hour(s) left on {c.ref}. "
-                                    f"Answer it, or escalate it to higher authority.")
+                             detail=f"{round(left)} hour(s) left on {c.ref}. Answer it, or escalate it to higher authority.",
+                             entity_type="complaint", entity_id=c.id)
+            announce.to_user(org_id, hod, "complaint_sla_warning_voice",
+                             place=c.department.name if c.department else "",
+                             detail=f"{c.ref} — {round(left)} hour(s) left. Answer it, or escalate it to higher authority. Voice reminder.",
+                             entity_type="complaint", entity_id=c.id)
+            # WhatsApp voice alert — WhatsApp first, Twilio fallback
+            notifications.notify(org_id, hod, "complaint_sla_warning",
+                                 {"ref": c.ref, "dept": c.department.name if c.department else "",
+                                  "hours": round(left,1), "hospital": org_name},
+                                 channels=["whatsapp","inapp"],
+                                 entity_type="complaint", entity_id=c.id)
             said += 1
         except Exception:                                  # noqa: BLE001
             log.exception("could not warn an HOD about a complaint running out")

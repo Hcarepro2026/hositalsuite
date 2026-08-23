@@ -782,8 +782,23 @@ def settings_save():
     if valid_slots:
         services.set_setting(org_id, "booking_slots", valid_slots)
     services.set_setting(org_id, "booking_confirmation_sms", bool(f.get("booking_confirmation_sms")))
+    # ---- Fast Track executive premium (per-tenant pricing) ----
+    try:
+        ft_price_raw = (f.get("fast_track_price") or "15000").replace(",", "").strip()
+        ft_price = int(ft_price_raw or 15000)
+        services.set_setting(org_id, "fast_track_price", max(0, min(1000000, ft_price)))
+    except ValueError:
+        pass
+    services.set_setting(org_id, "fast_track_currency", (f.get("fast_track_currency") or "NGN").strip().upper()[:6] or "NGN")
+    services.set_setting(org_id, "fast_track_building_name", (f.get("fast_track_building_name") or "Executive Premium Building").strip()[:120] or "Executive Premium Building")
+    services.set_setting(org_id, "fast_track_description", (f.get("fast_track_description") or "").strip()[:500])
+    services.set_setting(org_id, "fast_track_payment_instructions", (f.get("fast_track_payment_instructions") or "").strip()[:500])
+    services.set_setting(org_id, "fast_track_price_note", (f.get("fast_track_price_note") or "").strip()[:300])
+    services.set_setting(org_id, "fast_track_enabled", bool(f.get("fast_track_enabled")))
+    services.set_setting(org_id, "fast_track_booking_requires_payment", bool(f.get("fast_track_booking_requires_payment")))
     audit("SETTINGS_UPDATED", "settings", org_id,
-          {"sla_hours": sla, "gps_mode": services.get_setting(org_id, "gps_mode")})
+          {"sla_hours": sla, "gps_mode": services.get_setting(org_id, "gps_mode"),
+           "fast_track_price": services.get_setting(org_id, "fast_track_price")})
     db.session.commit()
     flash("Settings saved.", "success")
     return redirect(url_for("admin.settings"))

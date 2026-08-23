@@ -92,6 +92,15 @@ COLUMNS = [
     ("queue_ticket", "fast_track_reason", "VARCHAR(40)"),
     ("appointment", "is_fast_track", _bool_sql),
     ("appointment", "fast_track_reason", "VARCHAR(40)"),
+    # --- Fast Track payment upfront + TV executive filter (Aug 23)
+    ("appointment", "fast_track_paid", _bool_sql),
+    ("appointment", "fast_track_payment_ref", "VARCHAR(80)"),
+    ("appointment", "fast_track_amount", "INTEGER"),
+    ("appointment", "fast_track_payment_status", "VARCHAR(20)"),
+    ("appointment", "fast_track_paid_at", "TIMESTAMP"),
+    ("tv_screen", "show_fast_track_only", _bool_sql),
+    ("tv_screen", "is_executive", _bool_sql),
+    ("sms_message", "to_user_id", "INTEGER"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

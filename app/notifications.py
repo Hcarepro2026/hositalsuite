@@ -91,9 +91,13 @@ def notify(org_id: int, user: User, template_key: str, ctx: dict,
            channels: list[str] | None = None, entity_type: str = None,
            entity_id: int = None, wa_body_override: str = None,
            wa_media_path: str = None, wa_kind: str = "alert"):
-    """Send a templated notification through configured channels. Always logged."""
+    """Send a templated notification — WhatsApp FIRST, Twilio SMS fallback (premium).
+
+    Acceptance: WhatsApp is primary online channel, Twilio SMS is fallback if WhatsApp not available.
+    """
     channels = channels or services.get_setting(org_id, "reminder_channels", ["inapp"])
     subject, body = render(template_key, ctx)
+    text = wa_body_override or body
 
     # 1) in-app — always recorded
     db.session.add(AppNotification(org_id=org_id, user_id=user.id, channel="inapp",
@@ -108,17 +112,43 @@ def notify(org_id: int, user: User, template_key: str, ctx: dict,
                                        entity_type=entity_type, entity_id=entity_id,
                                        status="SENT" if err is None else "FAILED", error=err))
 
-    # 3) WhatsApp — queue for the WhatsApp engine (official Business API / sandbox)
-    if "whatsapp" in channels and user.phone:
-        whatsapp.queue_message(org_id, user.phone, wa_body_override or body, kind=wa_kind,
-                               media_path=wa_media_path, entity_type=entity_type,
-                               entity_id=entity_id, to_user_id=user.id)
+    # 3) WhatsApp FIRST — queue for Meta Cloud API
+    wa_queued = False
+    if ("whatsapp" in channels or "sms" in channels) and user.phone:
+        # Always try WhatsApp first
+        try:
+            whatsapp.queue_message(org_id, user.phone, text, kind=wa_kind,
+                                   media_path=wa_media_path, entity_type=entity_type,
+                                   entity_id=entity_id, to_user_id=user.id)
+            wa_queued = True
+        except Exception:
+            wa_queued = False
 
-    # 4) SMS — provider interface (Termii primary / Twilio fallback / sandbox)
-    if "sms" in channels and user.phone:
+    # 4) SMS fallback via Twilio — queued alongside WhatsApp, delivered if WhatsApp fails or mode disabled
+    # If caller asked for whatsapp, we still queue SMS as fallback (WhatsApp-first strategy)
+    if ("sms" in channels or ("whatsapp" in channels and not wa_queued)) and user.phone:
         from . import sms as sms_engine
-        sms_engine.queue_sms(org_id, user.phone, wa_body_override or body, kind=wa_kind,
-                             entity_type=entity_type, entity_id=entity_id)
+        # Only queue SMS if WhatsApp mode is disabled OR caller explicitly asked for sms
+        # For WhatsApp-first: queue SMS anyway as safety net — process_queue will prioritize WhatsApp
+        try:
+            # Check config: if WHATSAPP_MODE disabled or Twilio configured, queue SMS
+            cfg = current_app.config
+            if cfg.get("WHATSAPP_MODE") == "disabled" or "sms" in channels:
+                sms_engine.queue_sms(org_id, user.phone, text, kind=wa_kind,
+                                     entity_type=entity_type, entity_id=entity_id, to_user_id=user.id)
+            elif wa_queued:
+                # WhatsApp queued — also queue SMS as fallback that will be sent only if WhatsApp fails
+                # Mark as fallback so tasks.py can decide
+                sms_engine.queue_sms(org_id, user.phone, text, kind=f"{wa_kind}_fallback",
+                                     entity_type=entity_type, entity_id=entity_id, to_user_id=user.id)
+        except Exception:
+            # Last resort: ensure SMS is queued
+            try:
+                from . import sms as sms_engine
+                sms_engine.queue_sms(org_id, user.phone, text, kind=wa_kind,
+                                     entity_type=entity_type, entity_id=entity_id, to_user_id=user.id)
+            except Exception:
+                pass
     db.session.commit()
 
 
@@ -178,7 +208,7 @@ def patient_update_text(event: str, hospital: str, ref: str, extra: str = "") ->
 
 
 def notify_complaint_patient(org, complaint, event: str, extra: str = "") -> str:
-    """Send the patient an acknowledgment / outcome on WhatsApp and SMS.
+    """Send the patient an acknowledgment / outcome — WhatsApp FIRST, Twilio SMS fallback.
 
     Patients have no login, so the same words are also stored on the complaint
     history and shown on the public status page (their in-app inbox).
@@ -198,10 +228,12 @@ def notify_complaint_patient(org, complaint, event: str, extra: str = "") -> str
     if phone and phone.lower() not in ("not provided", "n/a", "-", "anonymous", "[erased]"):
         from . import sms as sms_engine
         from . import whatsapp
-        sms_engine.queue_sms(org.id, phone, body, kind="alert",
-                             entity_type="complaint", entity_id=complaint.id)
+        # WhatsApp FIRST
         whatsapp.queue_message(org.id, phone, body, kind="alert",
                                entity_type="complaint", entity_id=complaint.id)
+        # Twilio SMS fallback — queued as fallback, sent if WhatsApp fails
+        sms_engine.queue_sms(org.id, phone, body, kind="alert_fallback",
+                             entity_type="complaint", entity_id=complaint.id)
         from .tasks import dispatch_delivery
         dispatch_delivery()
     return body

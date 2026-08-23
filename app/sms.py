@@ -82,54 +82,87 @@ class TwilioSmsProvider(SmsProvider):
 
 # ------------------------------------------------------------------ factory
 def get_provider() -> SmsProvider:
-    """Pick the configured provider with automatic fallback (§40)."""
+    """Pick the configured provider — Termii first, Twilio fallback, sandbox last (§40).
+
+    Founder request: Termii SMS to be first inline and Twilio SMS to be fallback.
+    """
     cfg = current_app.config
     mode = cfg.get("SMS_MODE", "sandbox")
-    if mode == "termii":
-        p = TermiiSmsProvider(cfg.get("TERMII_API_KEY", ""), cfg.get("TERMII_SENDER_ID", ""))
-        try:
-            if not cfg.get("TERMII_API_KEY"):
-                raise SmsProviderError("no key")
-            return p
-        except SmsProviderError:
-            pass  # fall through to twilio/sandbox
-    if mode in ("termii", "twilio"):
-        if cfg.get("TWILIO_ACCOUNT_SID"):
-            return TwilioSmsProvider(cfg.get("TWILIO_ACCOUNT_SID", ""),
-                                     cfg.get("TWILIO_AUTH_TOKEN", ""),
-                                     cfg.get("TWILIO_FROM", ""))
     if mode == "disabled":
         return None
+    # Termii first — Nigerian provider, cheaper, local
+    termii_key = cfg.get("TERMII_API_KEY", "") or cfg.get("TERMII_KEY", "")
+    termii_sender = cfg.get("TERMII_SENDER_ID", "") or cfg.get("TERMII_FROM", "") or "HospSuite"
+    if termii_key:
+        try:
+            return TermiiSmsProvider(termii_key, termii_sender)
+        except Exception:
+            pass
+    # Twilio fallback — always works internationally
+    if cfg.get("TWILIO_ACCOUNT_SID") and cfg.get("TWILIO_AUTH_TOKEN"):
+        return TwilioSmsProvider(cfg.get("TWILIO_ACCOUNT_SID", ""),
+                                 cfg.get("TWILIO_AUTH_TOKEN", ""),
+                                 cfg.get("TWILIO_FROM", ""))
+    # Last resort: sandbox logs locally, never crashes
     return SandboxSmsProvider()
 
 
 # ------------------------------------------------------------------ queue
 def queue_sms(org_id: int, to_number: str, body: str, kind: str = "alert",
-              entity_type: str = None, entity_id: int = None) -> SmsMessage:
+              entity_type: str = None, entity_id: int = None,
+              to_user_id: int = None) -> SmsMessage:
     msg = SmsMessage(org_id=org_id, to_number=to_number, body=body[:480], kind=kind,
-                     entity_type=entity_type, entity_id=entity_id)
+                     entity_type=entity_type, entity_id=entity_id,
+                     to_user_id=to_user_id)
     db.session.add(msg)
     db.session.commit()
     return msg
 
 
 def send_sms(msg: SmsMessage) -> SmsMessage:
+    """Send SMS — Termii first, Twilio fallback, sandbox last. Never crashes app."""
     msg.attempts += 1
-    provider = get_provider()
-    if provider is None:
+    cfg = current_app.config
+    mode = cfg.get("SMS_MODE", "sandbox")
+    if mode == "disabled":
         msg.status = "FAILED"
         msg.last_error = "SMS disabled in configuration"
+        msg.provider = "disabled"
         db.session.commit()
         return msg
-    msg.provider = provider.name
-    try:
-        msg.provider_id = provider.send(msg.to_number, msg.body)
-        msg.status = "SENT"
-        msg.sent_at = now_naive()
-        msg.last_error = None
-    except (SmsProviderError, requests.RequestException, OSError) as exc:
-        msg.status = "FAILED" if msg.attempts >= 3 else "QUEUED"
-        msg.last_error = str(exc)[:400]
+
+    # Try providers in order: Termii → Twilio → Sandbox
+    providers_to_try = []
+    termii_key = cfg.get("TERMII_API_KEY", "") or cfg.get("TERMII_KEY", "")
+    if termii_key:
+        providers_to_try.append(TermiiSmsProvider(termii_key,
+            cfg.get("TERMII_SENDER_ID", "") or cfg.get("TERMII_FROM", "") or "HospSuite"))
+    if cfg.get("TWILIO_ACCOUNT_SID") and cfg.get("TWILIO_AUTH_TOKEN"):
+        providers_to_try.append(TwilioSmsProvider(cfg.get("TWILIO_ACCOUNT_SID", ""),
+                                 cfg.get("TWILIO_AUTH_TOKEN", ""),
+                                 cfg.get("TWILIO_FROM", "")))
+    # Sandbox as last safety net
+    providers_to_try.append(SandboxSmsProvider())
+
+    last_err = None
+    for provider in providers_to_try:
+        if provider is None:
+            continue
+        msg.provider = provider.name
+        try:
+            msg.provider_id = provider.send(msg.to_number, msg.body)
+            msg.status = "SENT"
+            msg.sent_at = now_naive()
+            msg.last_error = None
+            db.session.commit()
+            return msg
+        except (SmsProviderError, requests.RequestException, OSError) as exc:
+            last_err = str(exc)[:400]
+            continue
+
+    # All providers failed
+    msg.status = "FAILED" if msg.attempts >= 3 else "QUEUED"
+    msg.last_error = last_err or "All SMS providers failed"
     db.session.commit()
     return msg
 

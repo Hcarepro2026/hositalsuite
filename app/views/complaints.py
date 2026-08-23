@@ -293,8 +293,8 @@ def staff_detail(cid: int):
     if not c or c.org_id != current_user.org_id:
         abort(404)
     # Typing the id of another department's complaint must not work either.
-    # Hiding it from the list is presentation; THIS is the security.
-    if not R.can_see_department(current_user, c.department_id):
+    # Hiding it from the list is presentation; THIS is the security + audit.
+    if not R.can_see_department_audit(current_user, c.department_id, action=f"VIEW_COMPLAINT_{cid}"):
         abort(403)
     hod = services.route_hod(c.department)
     may_escalate = escalation.may_escalate(current_user, c)
@@ -354,7 +354,7 @@ def staff_update(cid: int):
     c = db.session.get(Complaint, cid)
     if not c or c.org_id != current_user.org_id:
         abort(404)
-    if not R.can_see_department(current_user, c.department_id):
+    if not R.can_see_department_audit(current_user, c.department_id, action=f"UPDATE_COMPLAINT_{cid}"):
         abort(403)
     action = request.form.get("action_type")
     old_status = c.status

@@ -1,23 +1,18 @@
-"""Fast Track Desk — dedicated fast and special hospital services.
+"""Fast Track Desk — quick, calm, private premium service.
 
-NEW DEFINITION (Aug 2026 upgrade):
-FAST-TRACK is a dedicated Fast and Special Hospital Services for patients who
-have little time to spend in the hospital, RICH, Dignitaries, Politician or
-Executive Directors who are willing to Pay More to get Fast Hospital Services
-in a special, conducive and executive building dedicated for such services.
+Fast Track is our premium service. Patients who choose it are seen quickly
+in a quiet, comfortable lounge. No long queue. For anyone who values time
+and comfort and is happy to pay a little more.
 
-The service is for everybody (children/young/old) who can afford to pay for
-the Fast Track Services.
+Their registration appears at Reception and Fast Track Desk right away,
+marked gold so staff see them first.
 
-Their registration should be seen at Reception and Fast Track Desk immediately
-and should have special colour (gold) to make it special.
+This desk handles the full Fast Track journey:
+- Reception → Billing → Pay → Registration → Nurse → Doctor → Lab / Pharmacy / Billing / LAHSMA / Emergency
+- All Fast Track patients appear here and at Reception, marked gold
+- We show estimated time left and speak their name in 4 languages
 
-This desk manages ALL affairs of patients under Fast Track Services:
-- Reception → Billing → Pay → HIMS → Triage → Doctor → Onward (Lab/Pharmacy/Megalex/Billing/LAHSMA/Emergency)
-- All fast-track patients appear here + at Reception with gold colour
-- Journey time estimated, voice announcement, premium care
-
-NOT an EMR — only names, codes, places, counts, payer info (policy number for LAHSMA).
+NOT an EMR — only names, codes, places, counts, payer info.
 Per-tenant, SUPER_ADMIN + ADMIN_MANAGER + HOD can work it.
 """
 
@@ -46,16 +41,16 @@ bp = Blueprint("fasttrack", __name__)
 DESK = ("SUPER_ADMIN", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD")
 VIEWERS = DESK + ("MD_CEO", "DMD", "DCST", "APEX_NURSE")
 
-# Fast Track reasons — premium service, for everybody who can afford, not just vulnerable
+# Fast Track reasons — simple, human, premium
 FAST_TRACK_REASONS = [
-    ("PREMIUM", "Premium — Fast service, pay more, executive building"),
-    ("BUSINESS", "Business — Little time, busy executive"),
-    ("DIGNITARY", "Dignitary — VIP, special handling"),
-    ("POLITICIAN", "Politician — Protocol, fast lane"),
-    ("EXECUTIVE", "Executive Director — Corporate executive"),
-    ("VIP", "VIP — Rich, willing to pay more"),
-    ("URGENT_TIME", "Urgent — No time to wait, need fast"),
-    ("FAMILY", "Family — Whole family wants fast together"),
+    ("PREMIUM", "Premium — Quick service, comfortable lounge"),
+    ("BUSINESS", "Busy — I have little time today"),
+    ("ELDERLY", "Elderly — Please help me be seen quickly"),
+    ("PREGNANT", "Pregnant — Need quick attention"),
+    ("CHILD", "Child — Small child needs fast care"),
+    ("ASSISTANCE", "Need help — Wheelchair or mobility support"),
+    ("FAMILY", "Family — Want to stay together and be seen fast"),
+    ("VIP", "VIP — Private and fast service"),
 ]
 
 FAST_TRACK_LABELS = dict(FAST_TRACK_REASONS)
@@ -138,6 +133,8 @@ def _fast_onward(org_id: int):
 @require_role(*VIEWERS)
 def desk():
     org_id = current_user.org_id
+    from .. import services as svc
+    s = svc.org_settings_bundle(org_id)
     intakes = _fast_intakes(org_id)
     visits = _fast_visits(org_id)
     tickets = _fast_tickets(org_id)
@@ -222,6 +219,7 @@ def desk():
         stats=stats,
         reasons=FAST_TRACK_REASONS,
         all_labels=ALL_LABELS,
+        s=s,
     )
 
 

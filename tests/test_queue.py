@@ -67,7 +67,7 @@ def test_booking_checkin_creates_queue_ticket(client, seeded):
     # create a booking first
     token = csrf(client, "/book")
     day = (now_naive().date() + timedelta(days=1)).isoformat()
-    client.post("/book/submit", data={"consent": "1", "_csrf": token, "department_id": seeded["dept"],
+    client.post("/book/submit", data={"consent": "1", "fast_track_consent": "1", "is_fast_track": "1", "fast_track_reason": "PREMIUM", "_csrf": token, "department_id": seeded["dept"],
                                       "appointment_date": day, "appointment_time": "09:00",
                                       "patient_name": "Chidi Eze", "phone": "08022221111",
                                       "idem": "q-book-1"}, follow_redirects=True)

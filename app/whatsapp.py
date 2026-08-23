@@ -234,7 +234,11 @@ def process_queue(limit: int = 20) -> int:
 
 
 def apply_webhook_status(provider_id: str, status: str):
-    """Handle delivery status callbacks from Meta (sent / delivered / read / failed)."""
+    """Handle delivery status callbacks from Meta (sent / delivered / read / failed).
+    
+    Feature: WhatsApp-first, Twilio SMS fallback. If WhatsApp delivery fails (status=failed),
+    automatically queue an SMS via Twilio so patient/staff still gets the message.
+    """
     msg = db.session.query(WhatsAppMessage).filter_by(provider_id=provider_id).first()
     if not msg:
         return
@@ -243,5 +247,37 @@ def apply_webhook_status(provider_id: str, status: str):
         msg.delivered_at = msg.delivered_at or now_naive()
     elif status == "failed":
         msg.status = "FAILED" if msg.attempts >= 3 else "QUEUED"
-        msg.last_error = "Provider reported failure"
+        msg.last_error = "Provider reported failure — fallback to Twilio SMS"
+        # WhatsApp-first → Twilio SMS fallback
+        try:
+            from . import sms as sms_engine
+            sms_engine.queue_sms(msg.org_id, msg.to_number, msg.body,
+                                 kind=msg.kind or "fallback",
+                                 entity_type=msg.entity_type, entity_id=msg.entity_id,
+                                 to_user_id=msg.to_user_id)
+            current_app.logger.info("WhatsApp failed for %s — queued Twilio SMS fallback", msg.to_number)
+        except Exception:
+            pass
     db.session.commit()
+
+
+def send_with_fallback(org_id: int, to_number: str, body: str, kind: str = "notification",
+                       entity_type: str = None, entity_id: int = None, to_user_id: int = None):
+    """WhatsApp-first, Twilio SMS fallback — premium implementation.
+
+    Always queues WhatsApp first. SMS is queued in parallel as backup if WhatsApp not available,
+    or automatically on WhatsApp FAILED status via webhook + process_queue logic.
+    """
+    # Always queue WhatsApp first
+    wa_msg = queue_message(org_id, to_number, body, kind=kind,
+                           entity_type=entity_type, entity_id=entity_id, to_user_id=to_user_id)
+    # If WhatsApp mode disabled or sandbox failure simulated, also queue SMS immediately
+    try:
+        cfg = current_app.config
+        if cfg.get("WHATSAPP_MODE") in ("disabled",):
+            from . import sms as sms_engine
+            sms_engine.queue_sms(org_id, to_number, body, kind=kind,
+                                 entity_type=entity_type, entity_id=entity_id, to_user_id=to_user_id)
+    except Exception:
+        pass
+    return wa_msg

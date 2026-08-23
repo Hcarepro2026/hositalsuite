@@ -43,8 +43,9 @@ def portal():
              .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
     today = now_naive().date()
     window = int(services.get_setting(org.id, "booking_window_days") or 30)
+    s = services.org_settings_bundle(org.id)
     return render_template("booking_portal.html", org=org, depts=depts, qr_loc=qr_loc,
-                           ref_code=ref_code,
+                           ref_code=ref_code, s=s,
                            min_date=today.isoformat(),
                            max_date=(today + timedelta(days=window)).isoformat(),
                            slots=services.get_setting(org.id, "booking_slots") or [],
@@ -105,6 +106,10 @@ def portal_submit():
     if request.form.get("consent") not in ("1", "on", "true", "yes"):
         errors.append("Please tick the box to allow the hospital to store your "
                       "details for this appointment.")
+    # MUST consent for Fast Track premium service
+    is_ft_check = (request.form.get("is_fast_track") or "").strip() in ("1","on","true","yes") or True
+    if is_ft_check and request.form.get("fast_track_consent") not in ("1","on","true","yes"):
+        errors.append("To use Fast Track, you must agree that it is a premium service and you will pay a little more for quick, private care.")
     if day and dept and slot in slots and services.slot_is_full(org.id, dept.id, day, slot):
         errors.append("That time slot is full — please choose another time.")
 
@@ -115,8 +120,9 @@ def portal_submit():
         # preserve the QR location tag on re-render
         loc_code_err = (request.form.get("loc") or "").strip().upper()
         qr_loc_err = db.session.query(QrLocation).filter_by(code=loc_code_err).first() if loc_code_err else None
+        s_err = services.org_settings_bundle(org.id)
         return render_template("booking_portal.html", org=org, depts=depts, qr_loc=qr_loc_err,
-                               ref_code=(request.form.get("r") or ""),
+                               ref_code=(request.form.get("r") or ""), s=s_err,
                                min_date=now.date().isoformat(),
                                max_date=(now.date() + timedelta(days=int(
                                    services.get_setting(org.id, "booking_window_days") or 30))).isoformat(),
@@ -129,6 +135,10 @@ def portal_submit():
     # Fast Track — Booking is now Fast Track premium linked to Reception
     is_ft = (request.form.get("is_fast_track") or "").strip() in ("1","on","true","yes") or True
     ft_reason = (request.form.get("fast_track_reason") or "PREMIUM").strip().upper()[:40] or "PREMIUM"
+    ft_price = int(services.get_setting(org.id, "fast_track_price") or 15000)
+    ft_requires_pay = bool(services.get_setting(org.id, "fast_track_booking_requires_payment"))
+    # Payment status: if requires payment, start PENDING, else not needed
+    pay_status = "PENDING" if (is_ft and ft_requires_pay) else ("WAIVED" if is_ft else "PENDING")
 
     def _build_apt():
         return Appointment(
@@ -146,6 +156,9 @@ def portal_submit():
             qr_location_id=qr_loc.id if qr_loc else None,
             is_fast_track=is_ft,
             fast_track_reason=ft_reason,
+            fast_track_amount=ft_price if is_ft else None,
+            fast_track_payment_status=pay_status,
+            fast_track_paid=False,
         )
 
     try:
@@ -164,14 +177,29 @@ def portal_submit():
           {"ref": apt.ref, "dept": dept.name, "date": str(day), "slot": slot,
            "repeat": bool(apt.is_repeat), "referral_id": apt.referral_id}, org_id=org.id)
 
-    # confirmation through available channels (§5) — patient SMS first
-    confirm_body = (f"{org.name}: Your visit is booked for {day.strftime('%a %d %b')} at {slot} "
-                    f"({dept.name}). Ref: {apt.ref}. Please arrive 15 minutes early.")
+    # confirmation — WhatsApp FIRST, Twilio SMS fallback (premium)
+    s_bundle = services.org_settings_bundle(org.id)
+    ft_building = s_bundle.get("fast_track_building_name") or "Executive Building"
+    ft_price = s_bundle.get("fast_track_price") or 15000
+    ft_curr = s_bundle.get("fast_track_currency") or "NGN"
+    confirm_body = (
+        f"{org.name}: ⭐ FAST TRACK BOOKED for {day.strftime('%a %d %b')} at {slot} "
+        f"({dept.name}) — {ft_building}. Ref: {apt.ref}. "
+        f"Price: {ft_curr} {ft_price:,}. {s_bundle.get('fast_track_price_note','Pay more, get fast — gold lane')}. "
+        f"Please arrive 15 minutes early. Show ref at Reception + Fast Track Desk — gold lane."
+    )
     if services.get_setting(org.id, "booking_confirmation_sms", True):
+        # Unified WhatsApp first, Twilio fallback
+        try:
+            from .. import whatsapp as wa_engine
+            wa_engine.queue_message(org.id, phone, confirm_body, kind="confirmation",
+                                    entity_type="appointment", entity_id=apt.id)
+        except Exception:
+            pass
         sms_engine.queue_sms(org.id, phone, confirm_body, kind="confirmation",
                              entity_type="appointment", entity_id=apt.id)
         from ..tasks import dispatch_delivery
-        dispatch_delivery()   # §39 — async delivery
+        dispatch_delivery()   # §39 — async delivery, WhatsApp first then SMS
 
     # inform the Admin Manager on duty (in-app)
     duty = services.on_duty(org.id, now.date())
@@ -187,7 +215,8 @@ def portal_submit():
 def portal_thanks():
     ref = request.args.get("ref", "")
     apt = db.session.query(Appointment).filter_by(ref=ref).first()
-    return render_template("booking_thanks.html", apt=apt, ref=ref)
+    s = services.org_settings_bundle(apt.org_id) if apt else {}
+    return render_template("booking_thanks.html", apt=apt, ref=ref, s=s)
 
 
 @bp.get("/book/status")
@@ -241,9 +270,31 @@ def staff_list():
         q = q.filter(Appointment.appointment_date >= now_naive().date())
     if status in ("BOOKED", "ARRIVED", "CANCELLED", "NO_SHOW"):
         q = q.filter(Appointment.status == status)
-    items = q.order_by(Appointment.appointment_date, Appointment.appointment_time).limit(300).all()
+    items = q.order_by(Appointment.is_fast_track.desc(), Appointment.appointment_date, Appointment.appointment_time).limit(300).all()
     return render_template("bookings_staff.html", items=items, args=request.args,
                            today=now_naive().date())
+
+
+@bp.post("/bookings/<int:aid>/mark-paid-fasttrack")
+@require_login
+def mark_paid_fasttrack(aid: int):
+    """Mark Fast Track booking as paid upfront — premium."""
+    apt = db.session.get(Appointment, aid)
+    if not apt or apt.org_id != current_user.org_id:
+        abort(404)
+    if not apt.is_fast_track:
+        flash("Only Fast Track bookings have premium payment.", "error")
+        return redirect(url_for("bookings.staff_list"))
+    ref = (request.form.get("payment_ref") or "").strip()[:80] or f"FT-PAY-{apt.ref}"
+    apt.fast_track_paid = True
+    apt.fast_track_payment_status = "PAID"
+    apt.fast_track_payment_ref = ref
+    apt.fast_track_paid_at = now_naive()
+    audit("FASTTRACK_BOOKING_PAID", "appointment", apt.id,
+          {"ref": apt.ref, "payment_ref": ref, "amount": apt.fast_track_amount}, org_id=apt.org_id)
+    db.session.commit()
+    flash(f"⭐ {apt.patient_name} Fast Track marked PAID — {ref} — gold lane ready.", "success")
+    return redirect(url_for("bookings.staff_list"))
 
 
 # Note: appointment check-in is handled by /bookings/<id>/checkin-queue

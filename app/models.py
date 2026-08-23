@@ -500,6 +500,12 @@ class Appointment(db.Model):
     # Fast Track — premium service, pay more, executive building, linked to Reception
     is_fast_track = db.Column(db.Boolean, default=False, nullable=False, index=True)
     fast_track_reason = db.Column(db.String(40))
+    # Fast Track payment upfront — pay before arrival, premium
+    fast_track_paid = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    fast_track_payment_ref = db.Column(db.String(80))
+    fast_track_amount = db.Column(db.Integer)  # kobo/NGN amount paid, per-tenant price
+    fast_track_payment_status = db.Column(db.String(20), default="PENDING", index=True)  # PENDING | PAID | FAILED | WAIVED
+    fast_track_paid_at = db.Column(db.DateTime)
     consent_at = db.Column(db.DateTime)
     anonymized_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=now_naive)
@@ -625,9 +631,10 @@ class SmsMessage(db.Model):
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
     to_number = db.Column(db.String(32), nullable=False)
     body = db.Column(db.String(480), nullable=False)
-    kind = db.Column(db.String(30), nullable=False)          # confirmation | reminder | alert
+    kind = db.Column(db.String(30), nullable=False)          # confirmation | reminder | alert | alert_fallback
     entity_type = db.Column(db.String(20))
     entity_id = db.Column(db.Integer)
+    to_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     provider = db.Column(db.String(16))                      # sandbox | termii | twilio
     status = db.Column(db.String(12), default="QUEUED", index=True)  # QUEUED|SENT|FAILED
     provider_id = db.Column(db.String(80))
@@ -1495,7 +1502,7 @@ class TvScreen(db.Model):
     name = db.Column(db.String(120), nullable=False)  # Waiting Area Main TV
     location = db.Column(db.String(120))  # e.g. General Waiting Hall
     # What to show
-    screen_type = db.Column(db.String(20), default="WAITING_MAIN", nullable=False)  # WAITING_MAIN | CLINIC | DEPARTMENT | WARD
+    screen_type = db.Column(db.String(20), default="WAITING_MAIN", nullable=False)  # WAITING_MAIN | CLINIC | DEPARTMENT | WARD | EXECUTIVE
     clinic_code = db.Column(db.String(20))  # filter: only show this clinic (DENTAL) - null = all
     department_id = db.Column(db.Integer, db.ForeignKey("department.id"))  # filter: only this department
     # Display options
@@ -1505,6 +1512,9 @@ class TvScreen(db.Model):
     show_triage = db.Column(db.Boolean, default=True, nullable=False)
     show_consulting = db.Column(db.Boolean, default=True, nullable=False)
     show_onward = db.Column(db.Boolean, default=True, nullable=False)
+    # Fast Track filter — executive TV shows only Fast Track gold lane
+    show_fast_track_only = db.Column(db.Boolean, default=False, nullable=False)
+    is_executive = db.Column(db.Boolean, default=False, nullable=False)  # True = executive building TV, gold theme
     # Voice options - Nigeria native voices, 2 male 2 female recycled daily
     voice_enabled = db.Column(db.Boolean, default=True, nullable=False)
     voice_rotate_daily = db.Column(db.Boolean, default=True, nullable=False)  # True = 2M2F recycled daily

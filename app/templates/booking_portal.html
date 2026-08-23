@@ -4,23 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#b8860b">
-<title>Fast Track Booking — Executive Premium — {{ org.name }}</title>
+<title>Book a Visit — {{ org.name }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 <style>
-  .hero-gold{background: linear-gradient(135deg,#FFD700 0%,#FFA500 50%,#FF8C00 100%);color:#000;padding:18px 20px 16px;border-radius:18px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,165,0,0.3)}
-  .hero-gold h1{margin:0;font-size:1.25rem;font-weight:900}
-  .hero-gold p{margin:6px 0 0;font-size:.85rem;line-height:1.4;opacity:0.9}
-  .badge-gold{background:#000;color:#FFD700;padding:3px 10px;border-radius:999px;font-size:.7rem;font-weight:900}
+  .hero-gold{background: linear-gradient(135deg,#FFD700 0%,#FFC400 40%,#FFA500 100%);color:#000;padding:18px 20px 16px;border-radius:18px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,165,0,0.3);border:1px solid rgba(0,0,0,0.06)}
+  .hero-gold h1{margin:0;font-size:1.25rem;font-weight:900;letter-spacing:-0.01em}
+  .hero-gold p{margin:8px 0 0;font-size:.88rem;line-height:1.5;font-weight:500}
+  .badge-gold{background:#000;color:#FFD700;padding:4px 10px;border-radius:999px;font-size:.7rem;font-weight:900}
   .card{border-radius:16px}
-  .input-big{font-size:1rem;padding:12px 14px;border-radius:10px;border:2px solid #e6edf3}
+  .input-big{font-size:1rem;padding:12px 14px;border-radius:10px;border:2px solid #e6edf3;width:100%}
   .input-big:focus{border-color:#FFD700;outline:none}
-  .gold-box{padding:14px;background: linear-gradient(135deg,#FFFEF0,#FFF8DC);border:3px solid #FFD700;border-radius:14px;margin-top:12px}
+  .gold-box{padding:14px;background: linear-gradient(135deg,#FFFEF0,#FFF8DC);border:2px solid #FFD700;border-radius:14px;margin-top:12px}
+  .step-label{font-size:.75rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#6b7d90;margin:16px 0 6px}
+  .step-label:first-of-type{margin-top:4px}
+  .hint{font-size:.8rem;color:#6b7d90;margin-top:6px;line-height:1.4}
 </style>
 </head>
 <body>
 <div class="portal-head" style="background: linear-gradient(135deg,#000 0%,#b8860b 100%)">
   {% include "_brand_mark.html" %}
-  <div>⭐ Fast Track Booking — Executive Premium</div>
+  <div>Book a Hospital Visit</div>
   {% include "_langbar.html" %}
   {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}
   {% if ref_code %}<div class="mt"><span class="pill green">💌 {{ _('refer_welcome') }}</span></div>{% endif %}
@@ -32,20 +35,12 @@
   {% endwith %}
 
   <div class="hero-gold">
-    <h1>⭐ Fast Track Booking — Pay More, Get Fast, Executive Building <span class="badge-gold">Linked to Reception</span></h1>
-    <p>My opinion: Booking should NOT be removed — it should become <b>Fast Track Booking</b> linked directly to Reception. Regular walk-in works for general, but busy executives, RICH, Dignitaries, Politicians want to pre-book fast service, pay more, come at exact time, be seen immediately in executive building. This is premium revenue. Booking → Reception → Fast Track Desk immediately with gold colour.</p>
+    <h1>Book a Hospital Visit — Fast Track Available <span class="badge-gold">PREMIUM</span></h1>
+    <p>Choose a day and time that suits you. Want to be seen faster? Pick Fast Track — our quiet executive lounge where you are seen quickly, with care and privacy. Regular visit is also fine — just walk in.</p>
   </div>
 
-  <div style="background:#fff;border-radius:12px;padding:12px 14px;border:2px solid #FFD700;margin-bottom:12px;font-size:.85rem;line-height:1.45">
-    🔒 <b>Linked to Reception + Fast Track Desk:</b> When you book Fast Track, you get reference number. On arrival, staff check you in → you appear immediately at Reception + Fast Track Desk with <span style="background:#FFD700;padding:2px 8px;border-radius:999px;font-weight:900">Gold</span> — executive fast. No waiting behind regular. Journey time shorter.
-  </div>
-
-  <div style="background:#000;color:#FFD700;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:.85rem;line-height:1.45">
-    <b>💛 Why keep Booking as Fast Track?</b><br>
-    • Regular patients walk in via Reception — simple, no booking needed<br>
-    • Fast Track patients are busy/rich/dignitary — they want to book ahead, pay more, guarantee fast executive building<br>
-    • Booking linked to Reception = when they arrive, Reception sees them immediately gold, Fast Track Desk handles all<br>
-    • This is innovative, premium++++, best patient care smart — my opinion implemented
+  <div style="background:#fff;border-radius:12px;padding:12px 14px;border:1px solid #e6edf3;margin-bottom:12px;font-size:.85rem;line-height:1.5">
+    <b>How it works:</b> Book here, get a reference number by SMS and WhatsApp. Come 15 minutes early. Show your reference at reception. If you chose Fast Track, you will be guided to the executive lounge — no long queue.
   </div>
 
   <form class="card pad-lg" method="post" action="/book/submit">
@@ -56,60 +51,84 @@
     <input type="hidden" name="is_fast_track" value="1">
     <input type="hidden" name="fast_track_reason" value="PREMIUM">
 
-    <label>1 · Service — Fast Track Executive <span class="req">*</span></label>
+    <div class="step-label">1 · Which service do you need?</div>
     <select name="department_id" required class="input-big">
-      <option value="">— Select service — Fast Track —</option>
+      <option value="">— Select service —</option>
       {% for d in depts %}
-      <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>{{ d.name }} — Fast Track Gold</option>
+      <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>{{ d.name }}</option>
       {% endfor %}
     </select>
 
-    <label>2 · Date — When you want fast service <span class="req">*</span></label>
+    <div class="step-label">2 · Which day?</div>
     <input type="date" name="appointment_date" min="{{ min_date }}" max="{{ max_date }}"
            value="{{ form.get('appointment_date','') if form else '' }}" required class="input-big">
 
-    <label>3 · Time — Exact time, seen immediately <span class="req">*</span></label>
+    <div class="step-label">3 · What time?</div>
     <select name="appointment_time" required class="input-big">
-      <option value="">— Select time — Executive —</option>
+      <option value="">— Select time —</option>
       {% for s in slots %}
-      <option {{ 'selected' if form and form.get('appointment_time')==s }}>{{ s }} — Fast Track</option>
+      <option {{ 'selected' if form and form.get('appointment_time')==s }}>{{ s }}</option>
       {% endfor %}
     </select>
-    <div class="hint">Opening hours — Fast Track executive building — hospital confirms, seen immediately on arrival.</div>
+    <div class="hint">We will do our best to see you at your chosen time.</div>
 
-    <label>4 · Your name — Executive <span class="req">*</span></label>
+    <div class="step-label">4 · Your full name</div>
     <input type="text" name="patient_name" required autocomplete="name" class="input-big"
-           value="{{ form.get('patient_name','') if form else '' }}" placeholder="e.g. Chief Emeka — Fast Track">
+           value="{{ form.get('patient_name','') if form else '' }}" placeholder="e.g. Aisha Bello">
 
-    <label>5 · Phone — Fast updates <span class="req">*</span></label>
-    <input type="tel" name="phone" required inputmode="tel" placeholder="e.g. 08012345678 — executive SMS" class="input-big"
+    <div class="step-label">5 · Phone number</div>
+    <input type="tel" name="phone" required inputmode="tel" placeholder="e.g. 08012345678" class="input-big"
            value="{{ form.get('phone','') if form else '' }}">
+    <div class="hint">We send your booking reference and updates here.</div>
 
+    {% if s and s.fast_track_enabled %}
     <div class="gold-box">
-      <b>⭐ Fast Track Booking — Executive Premium</b>
-      <p style="font-size:.85rem;margin:6px 0 0;line-height:1.45">You are booking <b>Fast Track</b> — pay more, get fast, special conducive executive building. Seen immediately at Reception + Fast Track Desk with gold colour. For busy executives, RICH, Dignitaries, Politicians, everybody who can afford. Linked directly to Reception — my opinion implemented.</p>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <div style="font-size:1.6rem">👑</div>
+        <div>
+          <b style="color:#000">Fast Track — Be Seen Fast</b>
+          <p style="font-size:.85rem;margin:6px 0 0;line-height:1.5;color:#3a2a00">
+            Fast Track is our premium service. You pay a little more and you are seen quickly in a quiet, comfortable lounge.
+            {% if s.fast_track_building_name %}Location: <b>{{ s.fast_track_building_name }}</b>.{% endif %}
+            {% if s.fast_track_price %}Price: <b>{{ s.fast_track_currency }} {{ '{:,}'.format(s.fast_track_price) }}</b>.{% endif %}
+            {{ s.fast_track_price_note or '' }}
+          </p>
+          {% if s.fast_track_booking_requires_payment %}
+          <p style="font-size:.8rem;margin:8px 0 0;background:#000;color:#FFD700;padding:6px 10px;border-radius:8px;display:inline-block">
+            Please pay before you arrive. {{ s.fast_track_payment_instructions or '' }}
+          </p>
+          {% endif %}
+        </div>
+      </div>
     </div>
+    {% endif %}
 
-    <label class="checkline" style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-weight:400">
+    <label class="checkline" style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;font-weight:400;font-size:.88rem;line-height:1.4">
       <input type="checkbox" name="consent" value="1" required style="width:auto;margin-top:3px">
-      <span>I agree that the hospital may store my name and phone number to manage this Fast Track appointment and send me reminders. See <a href="/privacy" target="_blank">Privacy Notice</a>. I understand Fast Track is premium — pay more, get fast, executive building.</span>
+      <span>I agree the hospital can save my name and phone to manage this booking and send me reminders. See <a href="/privacy" target="_blank">Privacy Notice</a>.</span>
     </label>
 
-    <button class="btn big mt" type="submit" style="width:100%;background:#000;color:#FFD700;border:none;font-weight:900">⭐ Book Fast Track — Executive Gold — Linked to Reception</button>
+    <label class="checkline" style="display:flex;gap:10px;align-items:flex-start;margin-top:12px;font-weight:700;font-size:.9rem;line-height:1.4;background:#FFFEF0;border:2px solid #FFD700;border-radius:10px;padding:10px 12px">
+      <input type="checkbox" name="fast_track_consent" value="1" required style="width:20px;height:20px;margin-top:2px">
+      <span>👑 I choose Fast Track. I understand it is a premium service — I pay a little more and I am seen quickly in a quiet, private lounge. I agree to the extra fee.</span>
+    </label>
+
+    <button class="btn big mt" type="submit" style="width:100%;background:#000;color:#FFD700;border:none;font-weight:900;padding:14px;border-radius:999px;font-size:1.05rem;box-shadow:0 6px 16px rgba(0,0,0,0.2)">👑 Book Now — Fast Track Ready</button>
+    <p class="hint" style="text-align:center;margin-top:10px">You will get your reference by WhatsApp first, then SMS if WhatsApp is not available.</p>
   </form>
 
-  <div class="card mt center">
-    <a href="/book/status">Already booked Fast Track? Check or cancel with your reference →</a><br>
-    <small class="muted">Prefer regular walk-in? Go to <a href="/queue/join">Fast Track Queue</a> or Reception</small>
+  <div class="card mt center" style="padding:14px">
+    <a href="/book/status" style="font-weight:700">Already booked? Check or cancel with your reference →</a><br>
+    <small class="muted" style="margin-top:6px;display:inline-block">Prefer to walk in? <a href="/queue/join">Join the queue</a> at the hospital.</small>
   </div>
 
-  <div class="card mt" style="border-left:5px solid #FFD700">
-    <h3>Trouble booking Fast Track?</h3>
-    <p class="muted">Call hospital: <b>{{ org.name }}</b> — or visit Reception + Fast Track Desk directly. Staff will book Fast Track for you with gold lane.</p>
+  <div class="card mt" style="border-left:5px solid #FFD700;padding:14px">
+    <b>Need help booking?</b>
+    <p class="muted" style="margin:6px 0 0;font-size:.88rem;line-height:1.4">Call us or visit reception. Our staff will help you book and guide you to the right place.</p>
   </div>
   {% include "_help_desk.html" %}
 </main>
-<div class="footer">Fast Track Booking — Linked to Reception + Fast Track Desk — Gold lane — Executive building — Pay more, get fast — <a href="/privacy">Privacy</a></div>
+<div class="footer">Book a visit — Fast Track available — <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

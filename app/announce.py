@@ -79,6 +79,10 @@ PATIENT_ALERTS: dict[str, tuple[str, str]] = {
     "dept_falling_behind": (URGENT, "Your department is falling behind"),
     "complaint_for_you":   (URGENT, "A complaint for your department"),
     "complaint_running_out": (URGENT, "A complaint is about to run out of time"),
+    # --- Complaints SLA escalation — WhatsApp voice (feature 6)
+    "complaint_escalated": (EMERGENCY, "Complaint escalated — SLA breached"),
+    "complaint_sla_warning_voice": (URGENT, "Complaint SLA warning — voice"),
+    "complaint_escalated_voice": (EMERGENCY, "Complaint escalated — voice call"),
 }
 
 _TITLES = ("dr", "mr", "mrs", "miss", "ms", "prof", "pharm", "engr", "cno",
@@ -229,6 +233,15 @@ def phrase(kind: str, *, name: str = "", count: int = 0, place: str = "",
     if kind == "complaint_running_out":
         return (f"{who}, a complaint for {place or 'your department'} is about "
                 f"to run out of time. {detail or 'Answer it or escalate it now.'}")
+    if kind == "complaint_escalated":
+        return (f"Attention {who}. A complaint for {place or 'your department'} has been escalated. "
+                f"{detail or 'SLA breached — immediate action needed.'} Please act now.")
+    if kind == "complaint_sla_warning_voice":
+        return (f"{who}, warning. A complaint {detail or 'is about to breach SLA'} in {place or 'your department'}. "
+                f"This is your voice reminder. Please respond now or escalate.")
+    if kind == "complaint_escalated_voice":
+        return (f"Emergency. {who}. A complaint for {place or 'your department'} has breached its SLA and been escalated. "
+                f"{detail or 'The patient is still waiting.'} You must attend to it immediately. This is a voice alert.")
     return detail or f"{who}, please check the system."
 
 
@@ -238,7 +251,9 @@ def to_user(org_id: int, user: User, kind: str, **kw) -> AppNotification | None:
     if user is None or kind not in PATIENT_ALERTS:
         return None
     urgency, subject = PATIENT_ALERTS[kind]
-    spoken = phrase(kind, name=user.name, **kw)
+    # Filter out DB fields that phrase() doesn't understand — otherwise TypeError kills voice
+    phrase_kw = {k: v for k, v in kw.items() if k not in ("entity_type", "entity_id")}
+    spoken = phrase(kind, name=user.name, **phrase_kw)
     row = AppNotification(
         org_id=org_id, user_id=user.id, channel="inapp",
         template_key=kind, subject=subject, body=spoken,

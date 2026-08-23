@@ -97,7 +97,7 @@ def join_submit():
     name = (request.form.get("patient_name") or "").strip()
     phone = (request.form.get("phone") or "").strip().replace(" ", "")
     if not dept or dept.org_id != org.id or len(name) < 2:
-        flash("Please choose a department and enter the patient's name.", "error")
+        flash("Please choose a department and enter your name.", "error")
         return redirect(url_for("queue.join_page"))
     if phone and not PHONE_RE.match(phone):
         flash("Please enter a valid phone number or leave it empty.", "error")
@@ -105,6 +105,11 @@ def join_submit():
 
     is_fast = bool(request.form.get("is_fast_track"))
     fast_reason = (request.form.get("fast_track_reason") or "").strip().upper()[:40] or None
+    # MUST consent for Fast Track — premium service
+    if is_fast:
+        if not request.form.get("fast_track_consent"):
+            flash("To join Fast Track, you must tick the box that says you understand it is a premium service and you agree to pay a little more for quick service.", "error")
+            return redirect(url_for("queue.join_page"))
     n = next_ticket(org.id, dept, now.date())
     t = QueueTicket(
         org_id=org.id,
@@ -387,13 +392,20 @@ def to_reception(tid: int):
 @bp.post("/bookings/<int:aid>/checkin-queue")
 @require_login
 def booking_checkin_queue(aid: int):
-    """Check a booking in and give the patient a queue ticket automatically."""
+    """Check a booking in and give the patient a queue ticket — gates on Fast Track payment upfront."""
+    from .. import services
     apt = db.session.get(Appointment, aid)
     if not apt or apt.org_id != current_user.org_id:
         abort(404)
     if apt.status != "BOOKED":
         flash("Only a booked appointment can be checked in.", "error")
         return redirect(url_for("bookings.staff_list"))
+    # Payment gate: if Fast Track booking requires payment upfront, block until PAID or WAIVED
+    requires_pay = bool(services.get_setting(apt.org_id, "fast_track_booking_requires_payment"))
+    if apt.is_fast_track and requires_pay:
+        if apt.fast_track_payment_status not in ("PAID", "WAIVED"):
+            flash(f"⭐ Payment required before check-in for {apt.patient_name} — Fast Track amount {apt.fast_track_amount or ''}. Mark as PAID first.", "error")
+            return redirect(url_for("bookings.staff_list"))
     now = now_naive()
     apt.status = "ARRIVED"
     apt.arrived_at = now
@@ -408,7 +420,7 @@ def booking_checkin_queue(aid: int):
                     is_fast_track=ft, fast_track_reason=ft_reason if ft else None)
     db.session.add(t)
     db.session.flush()
-    audit("BOOKING_ARRIVED", "appointment", apt.id, {"ref": apt.ref, "queue": t.code})
+    audit("BOOKING_ARRIVED", "appointment", apt.id, {"ref": apt.ref, "queue": t.code, "fast_track": ft, "paid": apt.fast_track_payment_status})
     db.session.commit()
-    flash(f"{apt.patient_name} checked in — queue ticket {t.code}.", "success")
+    flash(f"⭐ {apt.patient_name} checked in — queue ticket {t.code} gold lane.", "success")
     return redirect(url_for("queue.staff_queue", dept=apt.department_id))

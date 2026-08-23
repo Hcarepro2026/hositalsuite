@@ -36,6 +36,15 @@ DEFAULT_SETTINGS = {
     "ai_fallback_enabled": True,      # per-hospital switch
     "ai_daily_cap": 400,              # protects the free tier
     "ai_usage_today": "",             # "YYYY-MM-DD|count"
+    # ---- Fast Track premium (Aug 2026) — simple, human, premium ----
+    "fast_track_enabled": True,
+    "fast_track_price": 15000,              # NGN — premium price per tenant
+    "fast_track_currency": "NGN",
+    "fast_track_building_name": "Executive Lounge",
+    "fast_track_description": "Fast Track is our premium service. You are seen quickly in a quiet, comfortable lounge. No long queue. For anyone who values time and comfort.",
+    "fast_track_booking_requires_payment": False,  # when True, booking must be paid upfront
+    "fast_track_payment_instructions": "You can pay at reception or by transfer. Please show your receipt at the Fast Track Desk.",
+    "fast_track_price_note": "Pay a little more and be seen quickly in our quiet executive lounge.",
 }
 
 
