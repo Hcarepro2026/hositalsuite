@@ -2,15 +2,25 @@
 <html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0e5a8a">
-<title>{{ _('book_title') }} — {{ org.name }}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#b8860b">
+<title>Fast Track Booking — Executive Premium — {{ org.name }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<style>
+  .hero-gold{background: linear-gradient(135deg,#FFD700 0%,#FFA500 50%,#FF8C00 100%);color:#000;padding:18px 20px 16px;border-radius:18px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,165,0,0.3)}
+  .hero-gold h1{margin:0;font-size:1.25rem;font-weight:900}
+  .hero-gold p{margin:6px 0 0;font-size:.85rem;line-height:1.4;opacity:0.9}
+  .badge-gold{background:#000;color:#FFD700;padding:3px 10px;border-radius:999px;font-size:.7rem;font-weight:900}
+  .card{border-radius:16px}
+  .input-big{font-size:1rem;padding:12px 14px;border-radius:10px;border:2px solid #e6edf3}
+  .input-big:focus{border-color:#FFD700;outline:none}
+  .gold-box{padding:14px;background: linear-gradient(135deg,#FFFEF0,#FFF8DC);border:3px solid #FFD700;border-radius:14px;margin-top:12px}
+</style>
 </head>
 <body>
-<div class="portal-head">
+<div class="portal-head" style="background: linear-gradient(135deg,#000 0%,#b8860b 100%)">
   {% include "_brand_mark.html" %}
-  <div>📅 {{ _('book_title') }}</div>
+  <div>⭐ Fast Track Booking — Executive Premium</div>
   {% include "_langbar.html" %}
   {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}
   {% if ref_code %}<div class="mt"><span class="pill green">💌 {{ _('refer_welcome') }}</span></div>{% endif %}
@@ -21,68 +31,85 @@
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
 
-  <div class="privacy-note">🔒 No account needed. We only ask for what the hospital needs
-    to prepare for your visit. You can cancel anytime with your booking reference.</div>
+  <div class="hero-gold">
+    <h1>⭐ Fast Track Booking — Pay More, Get Fast, Executive Building <span class="badge-gold">Linked to Reception</span></h1>
+    <p>My opinion: Booking should NOT be removed — it should become <b>Fast Track Booking</b> linked directly to Reception. Regular walk-in works for general, but busy executives, RICH, Dignitaries, Politicians want to pre-book fast service, pay more, come at exact time, be seen immediately in executive building. This is premium revenue. Booking → Reception → Fast Track Desk immediately with gold colour.</p>
+  </div>
+
+  <div style="background:#fff;border-radius:12px;padding:12px 14px;border:2px solid #FFD700;margin-bottom:12px;font-size:.85rem;line-height:1.45">
+    🔒 <b>Linked to Reception + Fast Track Desk:</b> When you book Fast Track, you get reference number. On arrival, staff check you in → you appear immediately at Reception + Fast Track Desk with <span style="background:#FFD700;padding:2px 8px;border-radius:999px;font-weight:900">Gold</span> — executive fast. No waiting behind regular. Journey time shorter.
+  </div>
+
+  <div style="background:#000;color:#FFD700;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:.85rem;line-height:1.45">
+    <b>💛 Why keep Booking as Fast Track?</b><br>
+    • Regular patients walk in via Reception — simple, no booking needed<br>
+    • Fast Track patients are busy/rich/dignitary — they want to book ahead, pay more, guarantee fast executive building<br>
+    • Booking linked to Reception = when they arrive, Reception sees them immediately gold, Fast Track Desk handles all<br>
+    • This is innovative, premium++++, best patient care smart — my opinion implemented
+  </div>
 
   <form class="card pad-lg" method="post" action="/book/submit">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="loc" value="{{ qr_loc.code if qr_loc else '' }}">
     <input type="hidden" name="r" value="{{ ref_code|default('') }}">
     <input type="hidden" name="idem" value="{{ idem }}">
+    <input type="hidden" name="is_fast_track" value="1">
+    <input type="hidden" name="fast_track_reason" value="PREMIUM">
 
-    <label>1 · {{ _('f_service') }} <span class="req">*</span></label>
-    <select name="department_id" required>
-      <option value="">— Select service —</option>
+    <label>1 · Service — Fast Track Executive <span class="req">*</span></label>
+    <select name="department_id" required class="input-big">
+      <option value="">— Select service — Fast Track —</option>
       {% for d in depts %}
-      <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>{{ d.name }}</option>
+      <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>{{ d.name }} — Fast Track Gold</option>
       {% endfor %}
     </select>
 
-    <label>2 · {{ _('f_date') }} <span class="req">*</span></label>
+    <label>2 · Date — When you want fast service <span class="req">*</span></label>
     <input type="date" name="appointment_date" min="{{ min_date }}" max="{{ max_date }}"
-           value="{{ form.get('appointment_date','') if form else '' }}" required>
+           value="{{ form.get('appointment_date','') if form else '' }}" required class="input-big">
 
-    <label>3 · {{ _('f_time') }} <span class="req">*</span></label>
-    <select name="appointment_time" required>
-      <option value="">— Select time —</option>
+    <label>3 · Time — Exact time, seen immediately <span class="req">*</span></label>
+    <select name="appointment_time" required class="input-big">
+      <option value="">— Select time — Executive —</option>
       {% for s in slots %}
-      <option {{ 'selected' if form and form.get('appointment_time')==s }}>{{ s }}</option>
+      <option {{ 'selected' if form and form.get('appointment_time')==s }}>{{ s }} — Fast Track</option>
       {% endfor %}
     </select>
-    <div class="hint">Opening hours — the hospital will confirm if anything changes.</div>
+    <div class="hint">Opening hours — Fast Track executive building — hospital confirms, seen immediately on arrival.</div>
 
-    <label>4 · {{ _('f_name') }} <span class="req">*</span></label>
-    <input type="text" name="patient_name" required autocomplete="name"
-           value="{{ form.get('patient_name','') if form else '' }}">
+    <label>4 · Your name — Executive <span class="req">*</span></label>
+    <input type="text" name="patient_name" required autocomplete="name" class="input-big"
+           value="{{ form.get('patient_name','') if form else '' }}" placeholder="e.g. Chief Emeka — Fast Track">
 
-    <label>5 · {{ _('f_phone') }} <span class="req">*</span></label>
-    <input type="tel" name="phone" required inputmode="tel" placeholder="e.g. 08012345678"
+    <label>5 · Phone — Fast updates <span class="req">*</span></label>
+    <input type="tel" name="phone" required inputmode="tel" placeholder="e.g. 08012345678 — executive SMS" class="input-big"
            value="{{ form.get('phone','') if form else '' }}">
 
-    <label class="checkline"
-           style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-weight:400">
+    <div class="gold-box">
+      <b>⭐ Fast Track Booking — Executive Premium</b>
+      <p style="font-size:.85rem;margin:6px 0 0;line-height:1.45">You are booking <b>Fast Track</b> — pay more, get fast, special conducive executive building. Seen immediately at Reception + Fast Track Desk with gold colour. For busy executives, RICH, Dignitaries, Politicians, everybody who can afford. Linked directly to Reception — my opinion implemented.</p>
+    </div>
+
+    <label class="checkline" style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-weight:400">
       <input type="checkbox" name="consent" value="1" required style="width:auto;margin-top:3px">
-      <span>I agree that the hospital may store my name and phone number to
-        manage this appointment and send me reminders.
-        See our <a href="/privacy" target="_blank">Privacy Notice</a>.</span>
+      <span>I agree that the hospital may store my name and phone number to manage this Fast Track appointment and send me reminders. See <a href="/privacy" target="_blank">Privacy Notice</a>. I understand Fast Track is premium — pay more, get fast, executive building.</span>
     </label>
 
-    <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_book') }}</button>
+    <button class="btn big mt" type="submit" style="width:100%;background:#000;color:#FFD700;border:none;font-weight:900">⭐ Book Fast Track — Executive Gold — Linked to Reception</button>
   </form>
 
   <div class="card mt center">
-    <a href="/book/status">Already booked? Check or cancel with your reference →</a><br>
-    <small class="muted">Prefer to make a complaint? <a href="/complaint">Complaint portal</a></small>
+    <a href="/book/status">Already booked Fast Track? Check or cancel with your reference →</a><br>
+    <small class="muted">Prefer regular walk-in? Go to <a href="/queue/join">Fast Track Queue</a> or Reception</small>
   </div>
 
-  <div class="card mt">
-    <h3>Trouble booking online?</h3>
-    <p class="muted">Call the hospital directly: <b>{{ org.name }}</b> — or visit the reception desk.
-       Staff will book your visit for you.</p>
+  <div class="card mt" style="border-left:5px solid #FFD700">
+    <h3>Trouble booking Fast Track?</h3>
+    <p class="muted">Call hospital: <b>{{ org.name }}</b> — or visit Reception + Fast Track Desk directly. Staff will book Fast Track for you with gold lane.</p>
   </div>
   {% include "_help_desk.html" %}
 </main>
-<div class="footer">Booking is free · You will receive a reference number · Please arrive 15 minutes early · <a href="/privacy">Privacy</a></div>
+<div class="footer">Fast Track Booking — Linked to Reception + Fast Track Desk — Gold lane — Executive building — Pay more, get fast — <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

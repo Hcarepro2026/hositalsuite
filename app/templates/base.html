@@ -79,6 +79,9 @@
   {% if can.reception %}
   <a href="/reception/" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>
   {% endif %}
+  {% if can.reception or can.bookings %}
+  <a href="/fasttrack" class="{{ 'active' if request.path.startswith('/fasttrack') }}" style="{% if request.path.startswith('/fasttrack') %}background:#000;color:#FFD700{% else %}background:linear-gradient(135deg,#FFD700,#FFA500);color:#000;font-weight:900{% endif %}">⭐ Fast Track</a>
+  {% endif %}
   {% if can.cashdesk %}
   <a href="/billing" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a>
   <a href="/paypoint" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>

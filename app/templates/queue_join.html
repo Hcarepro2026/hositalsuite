@@ -3,24 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0e5a8a">
-<title>Join Queue — {{ org.name }}</title>
+<meta name="theme-color" content="#b8860b">
+<title>Fast Track — Executive Premium — {{ org.name }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 <style>
-  .hero{background: linear-gradient(135deg,#0e5a8a 0%,#0f8a6a 100%);color:#fff;padding:18px 20px 16px;border-radius:16px;margin-bottom:14px}
-  .hero h1{margin:0;font-size:1.25rem;font-weight:900}
-  .hero p{margin:6px 0 0;opacity:0.9;font-size:.85rem;line-height:1.4}
+  .hero-gold{background: linear-gradient(135deg,#FFD700 0%,#FFA500 50%,#FF8C00 100%);color:#000;padding:20px 22px 18px;border-radius:18px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,165,0,0.3)}
+  .hero-gold h1{margin:0;font-size:1.35rem;font-weight:900;letter-spacing:-0.02em}
+  .hero-gold p{margin:8px 0 0;font-size:.88rem;line-height:1.45;opacity:0.9}
   .step-label{font-size:.72rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:800;color:#6b7d90;margin:14px 0 4px}
   .card{border-radius:16px}
-  .input-big{font-size:1rem;padding:12px 14px;border-radius:10px}
-  .priority-box{margin-top:14px;padding:14px;background: linear-gradient(135deg,#f3e8ff,#fdf2f8);border:2px solid #8b5cf6;border-radius:12px}
-  .btn.big{padding:14px;font-size:1.05rem;border-radius:999px}
+  .input-big{font-size:1rem;padding:12px 14px;border-radius:10px;border:2px solid #e6edf3}
+  .input-big:focus{border-color:#FFD700;outline:none}
+  .gold-box{margin-top:14px;padding:16px;background: linear-gradient(135deg,#FFFEF0,#FFF8DC);border:3px solid #FFD700;border-radius:14px;box-shadow:0 4px 16px rgba(255,215,0,0.2)}
+  .btn.gold{padding:14px;font-size:1.05rem;border-radius:999px;background: linear-gradient(135deg,#000,#333);color:#FFD700;border:none;font-weight:900;box-shadow:0 4px 12px rgba(0,0,0,0.2)}
+  .badge-gold{background:#000;color:#FFD700;padding:4px 12px;border-radius:999px;font-size:.75rem;font-weight:900}
 </style>
 </head>
 <body>
-<div class="portal-head">
+<div class="portal-head" style="background: linear-gradient(135deg,#000 0%,#b8860b 100%)">
   {% include "_brand_mark.html" %}
-  <div>🧍 {{ _('q_title') }} — {{ _('no_account') }}</div>
+  <div>⭐ FAST TRACK — Executive Premium</div>
   {% include "_langbar.html" %}
 </div>
 <main class="wrap" style="max-width:560px">
@@ -29,64 +31,77 @@
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
 
-  <div class="hero">
-    <h1>🎟️ Get your queue number in 30 seconds</h1>
-    <p>Scan → Enter name → Get number → Watch TV for your turn. Your name will be called in 4 languages. Priority lane for elderly, pregnant, child &lt;5, wheelchair — seen first.</p>
+  <div class="hero-gold">
+    <h1>⭐ FAST TRACK — Pay More, Get Fast, Executive Building</h1>
+    <p>Dedicated fast and special hospital services for patients who have little time to spend in hospital, RICH, Dignitaries, Politicians, Executive Directors willing to pay more for fast service in a special, conducive and executive building. For everybody — child, young, old — who can afford Fast Track. <span class="badge-gold">Gold Lane = Special</span></p>
   </div>
 
-  <div class="privacy-note" style="background:#fff;border-radius:12px;padding:12px 14px;border:1px solid #dbe4ec;margin-bottom:12px;font-size:.85rem;line-height:1.45">
-    🔒 <b>Private & linked to TV:</b> Only your number — never your name — shows on public screens. Your private page shows exactly where you are and what is next. Journey time estimated from real hospital speed.
+  <div style="background:#fff;border-radius:12px;padding:12px 14px;border:2px solid #FFD700;margin-bottom:12px;font-size:.85rem;line-height:1.45">
+    🔒 <b>Private & Premium:</b> Only your number shows on public TV — never your name. Your private tracker shows exactly where you are, estimated time, what is next. Appears immediately at <b>Reception + Fast Track Desk</b> with <span style="background:#FFD700;padding:2px 8px;border-radius:999px;font-weight:900">Gold colour</span> — special handling. Journey time shorter, voice calls your name in 4 languages.
+  </div>
+
+  <div style="background:#000;color:#FFD700;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:.85rem;line-height:1.45">
+    <b>💛 What you get with Fast Track (pay more):</b><br>
+    • Special executive building — conducive, air-conditioned, comfortable<br>
+    • Fast — no waiting behind regular queue, seen immediately at every desk<br>
+    • Dedicated Fast Track Desk manages all your affairs<br>
+    • Gold lane on TV — your name highlighted<br>
+    • For busy executives, business people, dignitaries, politicians, rich, families who value time<br>
+    • For everybody — child, young, old — who can afford
   </div>
 
   <form class="card pad-lg" method="post" action="/queue/join">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="loc" value="{{ loc or '' }}">
-    <div class="step-label">1 · Department you need</div>
+    <div class="step-label">1 · Department you need (Fast Track)</div>
     <select name="department_id" required class="input-big">
-      <option value="">— Select department —</option>
+      <option value="">— Select department — Fast Track —</option>
       {% for d in depts %}
-      <option value="{{ d.id }}" {{ 'selected' if pre == d.id }}>{{ d.name }}</option>
+      <option value="{{ d.id }}" {{ 'selected' if pre == d.id }}>{{ d.name }} — Fast Track</option>
       {% endfor %}
     </select>
 
-    <div class="step-label">2 · Your name (as you want to be called)</div>
-    <input type="text" name="patient_name" required class="input-big" placeholder="e.g. Folake Abatan">
+    <div class="step-label">2 · Your name (as you want to be called — executive)</div>
+    <input type="text" name="patient_name" required class="input-big" placeholder="e.g. Chief Emeka Okafor — Fast Track">
 
-    <div class="step-label">3 · Phone for SMS (optional)</div>
-    <input type="tel" name="phone" inputmode="tel" class="input-big" placeholder="e.g. 08012345678 — we send you when it's your turn">
+    <div class="step-label">3 · Phone for SMS (executive updates)</div>
+    <input type="tel" name="phone" inputmode="tel" class="input-big" placeholder="e.g. 08012345678 — we send you fast updates">
 
-    <div class="priority-box">
-      <label style="font-weight:900;color:#6b21a8;margin:0;display:flex;gap:8px;align-items:center">
-        <input type="checkbox" name="is_fast_track" value="1" style="width:18px;height:18px"> ⭐ Priority Lane — Elderly 60+ / Pregnant / Child under 5 / Wheelchair
+    <div class="gold-box">
+      <label style="font-weight:900;color:#000;margin:0;display:flex;gap:8px;align-items:center;font-size:1rem">
+        <input type="checkbox" name="is_fast_track" value="1" checked style="width:20px;height:20px"> ⭐ FAST TRACK — Executive Premium Service — Pay More, Get Fast
       </label>
-      <p style="font-size:.82rem;margin:8px 0 0;color:#5b4a6b;line-height:1.4">Tick if this applies to you. You will be seen first at every desk — Reception, Billing, Doctor, Lab, Pharmacy. TV shows ⭐ and your journey time is shorter.</p>
-      <select name="fast_track_reason" style="margin-top:10px" class="input-big">
-        <option value="">— Reason for priority —</option>
-        <option value="ELDERLY">Elderly 60+</option>
-        <option value="PREGNANT">Pregnant / Antenatal</option>
-        <option value="CHILD">Child under 5</option>
-        <option value="WHEELCHAIR">Wheelchair / Mobility</option>
+      <p style="font-size:.85rem;margin:8px 0 0;color:#5a4a00;line-height:1.45">You are joining <b>Fast Track</b> — dedicated fast service for those who have little time, RICH, Dignitaries, Politicians, Executive Directors willing to pay more for special executive building. Gold colour, seen immediately at Reception + Fast Track Desk. For everybody who can afford.</p>
+      <select name="fast_track_reason" style="margin-top:12px" class="input-big">
+        <option value="PREMIUM" selected>⭐ Premium — Fast service, pay more, executive building</option>
+        <option value="BUSINESS">Business — Little time, busy executive</option>
+        <option value="DIGNITARY">Dignitary — VIP, special handling</option>
+        <option value="POLITICIAN">Politician — Protocol, fast lane</option>
+        <option value="EXECUTIVE">Executive Director — Corporate executive</option>
+        <option value="VIP">VIP — Rich, willing to pay more</option>
+        <option value="URGENT_TIME">Urgent — No time to wait, need fast</option>
+        <option value="FAMILY">Family — Whole family wants fast together</option>
       </select>
     </div>
 
-    <button class="btn big mt" type="submit" style="width:100%;background: linear-gradient(135deg,#0e5a8a,#0f8a6a);color:#fff;border:none">🎟️ Get my number — track my journey</button>
-    <p style="font-size:.78rem;color:#6b7d90;margin-top:10px;text-align:center;line-height:1.4">After you get your number, you will see a premium tracker page linked to the live TV. It shows your position, estimated wait, and exactly what to do next — no medical details, only your journey.</p>
+    <button class="btn gold mt" type="submit" style="width:100%">⭐ Join Fast Track — Executive Gold Lane</button>
+    <p style="font-size:.78rem;color:#6b7d90;margin-top:10px;text-align:center;line-height:1.4">After you join Fast Track, you get gold number + private tracker linked to live TV. Shows your position, estimated wait (shorter), and exactly what to do next — executive building, special colour, seen immediately at Reception + Fast Track Desk.</p>
   </form>
 
-  <div style="margin-top:14px;background:#fff;border-radius:12px;padding:14px;border:1px solid #dbe4ec">
-    <div style="font-weight:800;font-size:.9rem">What happens after you join?</div>
+  <div style="margin-top:14px;background:#fff;border-radius:12px;padding:14px;border:2px solid #FFD700">
+    <div style="font-weight:900;font-size:.9rem">💛 What happens after you join Fast Track?</div>
     <div style="font-size:.82rem;color:#5a6b7b;margin-top:6px;line-height:1.5">
-      1. You get <b>Q-001</b> style number + private link<br>
-      2. Staff send you to Reception — your journey starts<br>
-      3. Watch the TV — your number appears + voice calls your name in English, Yorùbá, Hausa, Igbo<br>
-      4. Follow: Billing → Pay → HIMS → Triage → Doctor → Lab/Pharmacy → Home<br>
-      5. Your private page shows estimated time at every step
+      1. You get <b style="background:#FFD700;padding:2px 6px;border-radius:4px">FT-001</b> style gold number + private link<br>
+      2. Appears immediately at <b>Reception + Fast Track Desk</b> with gold colour — special<br>
+      3. Staff in executive building take you fast: Billing → Pay → HIMS → Triage → Doctor → Lab/Pharmacy → Home<br>
+      4. Watch TV — your number appears gold ⭐ + voice calls your name in English, Yorùbá, Hausa, Igbo<br>
+      5. Journey time shorter — pay more, get fast, premium experience
     </div>
   </div>
 
   {% include "_help_desk.html" %}
 </main>
-<div class="footer">Your queue number works all day · Priority lane active · Linked to live TV · <a href="/privacy">Privacy</a></div>
+<div class="footer">Fast Track — Pay more, get fast — Executive building — Gold lane — Seen immediately at Reception + Fast Track Desk — <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

@@ -126,6 +126,10 @@ def portal_submit():
     loc_code = (request.form.get("loc") or "").strip().upper()
     qr_loc = db.session.query(QrLocation).filter_by(code=loc_code).first() if loc_code else None
 
+    # Fast Track — Booking is now Fast Track premium linked to Reception
+    is_ft = (request.form.get("is_fast_track") or "").strip() in ("1","on","true","yes") or True
+    ft_reason = (request.form.get("fast_track_reason") or "PREMIUM").strip().upper()[:40] or "PREMIUM"
+
     def _build_apt():
         return Appointment(
             org_id=org.id,
@@ -140,6 +144,8 @@ def portal_submit():
             status="BOOKED",
             source="qr" if qr_loc else "link",
             qr_location_id=qr_loc.id if qr_loc else None,
+            is_fast_track=is_ft,
+            fast_track_reason=ft_reason,
         )
 
     try:

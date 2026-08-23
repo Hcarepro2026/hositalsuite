@@ -497,6 +497,9 @@ class Appointment(db.Model):
     qr_location_id = db.Column(db.Integer, db.ForeignKey("qr_location.id"))
     referral_id = db.Column(db.Integer, index=True)         # inbound: which share-link brought this booking
     is_repeat = db.Column(db.Boolean, default=False, nullable=False)  # same phone booked before
+    # Fast Track — premium service, pay more, executive building, linked to Reception
+    is_fast_track = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    fast_track_reason = db.Column(db.String(40))
     consent_at = db.Column(db.DateTime)
     anonymized_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=now_naive)

@@ -398,10 +398,14 @@ def booking_checkin_queue(aid: int):
     apt.status = "ARRIVED"
     apt.arrived_at = now
     n = next_ticket(apt.org_id, apt.department, apt.appointment_date)
+    # Fast Track Booking linked to Reception — preserve gold flag
+    ft = bool(getattr(apt, 'is_fast_track', False))
+    ft_reason = getattr(apt, 'fast_track_reason', None) or "PREMIUM"
     t = QueueTicket(org_id=apt.org_id, code=f"{_dept_letter(apt.department)}-{n:03d}",
                     access_key=secrets.token_urlsafe(12), department_id=apt.department_id,
                     queue_date=apt.appointment_date, patient_name=apt.patient_name,
-                    phone=apt.phone, status="WAITING", source="booking", appointment_id=apt.id)
+                    phone=apt.phone, status="WAITING", source="booking", appointment_id=apt.id,
+                    is_fast_track=ft, fast_track_reason=ft_reason if ft else None)
     db.session.add(t)
     db.session.flush()
     audit("BOOKING_ARRIVED", "appointment", apt.id, {"ref": apt.ref, "queue": t.code})
