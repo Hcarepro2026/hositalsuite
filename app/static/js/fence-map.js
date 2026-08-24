@@ -1,4 +1,5 @@
-/* Drag the pin, stretch the circle. Free OpenStreetMap — no Google bill. */
+/* Drag the pin, stretch the circle. Free OpenStreetMap — no Google bill.
+   As soon as Location is on, the pin jumps to the phone. Save is still a tap. */
 (function () {
   function num(id, fallback) {
     var el = document.getElementById(id);
@@ -8,6 +9,10 @@
   function write(id, value) {
     var el = document.getElementById(id);
     if (el) el.value = value;
+  }
+  function setLabel(id, text) {
+    var el = document.getElementById(id || "");
+    if (el) el.textContent = text;
   }
   function boot(opts) {
     if (!window.L) return;
@@ -23,6 +28,10 @@
     var startLat = num(latId, LAGOS[0]);
     var startLng = num(lngId, LAGOS[1]);
     var startR = Math.max(50, Math.min(2000, num(radId, 200) || 200));
+    var userMoved = false;
+    var watchId = null;
+    var located = false;
+    var auto = opts.autoLocate !== false;
 
     var map = L.map(mapId, { scrollWheelZoom: true }).setView([startLat, startLng], 16);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -40,21 +49,53 @@
       write(latId, p.lat.toFixed(6));
       write(lngId, p.lng.toFixed(6));
       write(radId, String(Math.round(circle.getRadius())));
-      var label = document.getElementById(opts.labelId || "");
-      if (label) {
-        label.textContent = "Circle is " + Math.round(circle.getRadius()) + " metres. Drag the pin or the edge.";
+      if (!located) {
+        setLabel(opts.labelId, "Circle is " + Math.round(circle.getRadius()) +
+          " metres. Drag the pin or the edge.");
       }
     }
-    function moveBoth(ll) {
+    function moveBoth(ll, fromGps) {
       marker.setLatLng(ll);
       circle.setLatLng(ll);
+      if (fromGps) located = true;
       syncFields();
+      if (fromGps) {
+        setLabel(opts.labelId, "Pin is where you are standing. Stretch the circle, then tap Save.");
+      }
+    }
+    function stopWatch() {
+      if (watchId != null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+    }
+    function applyGps(pos) {
+      if (userMoved || !pos || !pos.coords) return;
+      var ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      moveBoth(ll, true);
+      map.setView(ll, 17);
+      stopWatch();
+      if (window.hmsVoice && window.hmsVoice.speak) {
+        window.hmsVoice.speak("Pin dropped where you are standing. Stretch the circle, then tap save.");
+      }
+    }
+    function waiting() {
+      setLabel(opts.labelId, "Turn on Location. The pin will drop by itself.");
     }
 
-    marker.on("drag", function (ev) { moveBoth(ev.latlng); });
-    map.on("click", function (ev) { moveBoth(ev.latlng); });
+    marker.on("drag", function (ev) {
+      userMoved = true;
+      stopWatch();
+      located = false;
+      moveBoth(ev.latlng, false);
+    });
+    map.on("click", function (ev) {
+      userMoved = true;
+      stopWatch();
+      located = false;
+      moveBoth(ev.latlng, false);
+    });
 
-    // Stretch the circle by dragging its edge.
     var stretching = false;
     circle.on("mousedown", function (ev) {
       L.DomEvent.stop(ev);
@@ -88,31 +129,52 @@
       el.addEventListener("change", function () {
         var la = num(latId, startLat);
         var ln = num(lngId, startLng);
-        moveBoth(L.latLng(la, ln));
+        userMoved = true;
+        stopWatch();
+        moveBoth(L.latLng(la, ln), false);
         map.panTo([la, ln]);
       });
     });
+
+    function askOnce() {
+      if (!navigator.geolocation || userMoved) return;
+      navigator.geolocation.getCurrentPosition(applyGps, function () {
+        if (!located && !userMoved) waiting();
+      }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 });
+    }
+    function startWatch() {
+      if (!auto || !navigator.geolocation || userMoved) return;
+      waiting();
+      askOnce();
+      if (watchId != null) return;
+      watchId = navigator.geolocation.watchPosition(applyGps, function () {
+        if (!located && !userMoved) waiting();
+      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 });
+      setTimeout(stopWatch, 120000);
+    }
 
     if (opts.locateBtn) {
       var btn = document.getElementById(opts.locateBtn);
       if (btn && navigator.geolocation) {
         btn.addEventListener("click", function () {
-          navigator.geolocation.getCurrentPosition(function (pos) {
-            var ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
-            moveBoth(ll);
-            map.setView(ll, 17);
-            if (window.hmsVoice && window.hmsVoice.speak) {
-              window.hmsVoice.speak("Pin dropped where you are standing. Stretch the circle, then tap save.");
-            }
-          }, function () {
-            alert("Could not read your place. Stand in the open and try again.");
-          }, { enableHighAccuracy: true, timeout: 8000 });
+          userMoved = false;
+          located = false;
+          startWatch();
         });
       }
     }
+
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: "geolocation" }).then(function (p) {
+        p.onchange = function () {
+          if (p.state === "granted" && !userMoved) startWatch();
+        };
+      }).catch(function () {});
+    }
+
     setTimeout(function () { map.invalidateSize(); }, 200);
-    // Do not write a city-centre pin until a person taps, drags, or stands here.
     if (hadPin) syncFields();
+    if (auto) startWatch();
   }
   window.hmsFenceMap = { boot: boot };
 })();

@@ -109,6 +109,44 @@
   }
   bind("in-form", "in", "in", "Signing you in.");
   bind("out-form", "out", "out", "Signing you out. Thank you.");
+
+  /* Find the phone as soon as Location is on — do not wait for the tap. */
+  (function prefetch() {
+    var hint = document.getElementById("gps-hint");
+    var prefix = document.getElementById("in-form") ? "in"
+               : (document.getElementById("out-form") ? "out" : null);
+    if (!prefix || !navigator.geolocation) return;
+    if (hint) hint.textContent = "Turn on Location. This page will find you by itself.";
+    var watchId = null;
+    function ok(pos) {
+      fill(prefix, pos);
+      if (hint) hint.textContent = "Place found. Tap the big button when you are ready.";
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    }
+    function wait() {
+      if (hint && !(document.getElementById(prefix + "-lat") || {}).value) {
+        hint.textContent = "Turn on Location. This page will find you by itself.";
+      }
+    }
+    navigator.geolocation.getCurrentPosition(ok, wait,
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 });
+    watchId = navigator.geolocation.watchPosition(ok, wait,
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 });
+    setTimeout(function () {
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    }, 120000);
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: "geolocation" }).then(function (p) {
+        p.onchange = function () {
+          if (p.state === "granted") {
+            navigator.geolocation.getCurrentPosition(ok, wait,
+              { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+          }
+        };
+      }).catch(function () {});
+    }
+  })();
+
   window.addEventListener("online", flush);
   if (document.readyState === "complete") flush();
   else window.addEventListener("load", flush);

@@ -59,13 +59,12 @@
       <div class="hint">Late after this, counted from that person's own shift start.</div>
     </div>
   </div>
-  <div class="grid cols2 mt">
-    <div><label>Hospital pin latitude (optional fallback)</label>
-      <input type="text" name="attendance_lat" value="{{ s.attendance_lat or '' }}" placeholder="6.5244"></div>
-    <div><label>Hospital pin longitude</label>
-      <input type="text" name="attendance_lng" value="{{ s.attendance_lng or '' }}" placeholder="3.3792"></div>
-  </div>
-  <p class="hint">Prefer pinning each site on <a href="/admin/branches">Admin → Sites</a> while standing at the gate.</p>
+  <input type="hidden" name="attendance_lat" id="cfg-lat" value="{{ s.attendance_lat or '' }}">
+  <input type="hidden" name="attendance_lng" id="cfg-lng" value="{{ s.attendance_lng or '' }}">
+  <p class="hint" id="cfg-map-label">Turn on Location. The pin will drop where you are standing.</p>
+  <div id="cfg-map" class="fence-map" role="img" aria-label="Map to drop the hospital gate pin"></div>
+  <button class="btn ghost small" type="button" id="cfg-here">Find me again</button>
+  <p class="hint">Each site can also have its own pin on <a href="/admin/branches">Admin → Sites</a>.</p>
 
   <h2 class="mt">📡 WhatsApp report delivery</h2>
   <div class="grid cols2">

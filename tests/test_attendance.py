@@ -301,6 +301,17 @@ def test_site_pin_saves(client, seeded):
     assert main.fence_meters == 180
 
 
+def test_map_asks_for_place_by_itself(client, seeded):
+    login(client, "admin")
+    page = client.get("/attendance")
+    assert b"Turn on Location" in page.data
+    js = open("app/static/js/fence-map.js", encoding="utf-8").read()
+    assert "watchPosition" in js
+    assert "startWatch" in js
+    clock = open("app/static/js/attendance.js", encoding="utf-8").read()
+    assert "watchPosition" in clock
+
+
 def test_menu_has_i_am_here(client, seeded):
     login(client, "hod1")
     page = client.get("/")

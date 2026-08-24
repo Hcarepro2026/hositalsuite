@@ -69,7 +69,7 @@
     <input type="hidden" name="client_at" id="in-when">
     <button class="btn big" type="submit" id="in-btn">I am here</button>
   </form>
-  <p class="hint mt" id="gps-hint">When you tap, the phone will ask to use your place.</p>
+  <p class="hint mt" id="gps-hint">Turn on Location. This page will find you by itself.</p>
 </div>
 {% endif %}
 
@@ -94,9 +94,9 @@
     <label>Grace after roster start (minutes)</label>
     <input type="number" name="attendance_grace_minutes" min="0" max="240"
            value="{{ settings.attendance_grace_minutes or 60 }}">
-    <p class="hint" id="gate-map-label">Tap the map or drag the pin. Drag the edge of the circle to stretch it.</p>
+    <p class="hint" id="gate-map-label">Turn on Location. The pin will drop where you are standing.</p>
     <div id="gate-map" class="fence-map" role="img" aria-label="Map to drop the gate pin"></div>
-    <button class="btn ghost small" type="button" id="gate-here">Stand at the gate — drop the pin here</button>
+    <button class="btn ghost small" type="button" id="gate-here">Find me again</button>
     <button class="btn mt">Save gate pin</button>
   </form>
 </div>
