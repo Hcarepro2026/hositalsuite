@@ -70,10 +70,8 @@
     <input type="tel" name="phone" placeholder="0801…">
     <label>Email (optional)</label>
     <input type="email" name="email">
-    <label>Gate latitude</label>
-    <input type="text" name="lat" id="add-lat" placeholder="Drag the pin on the map">
-    <label>Gate longitude</label>
-    <input type="text" name="lng" id="add-lng">
+    <input type="hidden" name="lat" id="add-lat">
+    <input type="hidden" name="lng" id="add-lng">
     <label>Circle (metres, blank = hospital default)</label>
     <input type="number" name="fence_meters" id="add-rad" min="50" max="2000" placeholder="200">
     <p class="hint" id="add-map-label">Drag the pin. Drag the edge of the circle to stretch it.</p>
@@ -100,29 +98,33 @@
     <input type="tel" name="phone">
     <label>Email</label>
     <input type="email" name="email">
-    <label>Gate latitude</label>
-    <input type="text" name="lat" id="edit-lat" placeholder="6.5244">
-    <label>Gate longitude</label>
-    <input type="text" name="lng" id="edit-lng" placeholder="3.3792">
+    <input type="hidden" name="lat" id="edit-lat">
+    <input type="hidden" name="lng" id="edit-lng">
     <label>Circle (metres)</label>
-    <input type="number" name="fence_meters" min="50" max="2000" placeholder="200">
-    <button class="btn ghost small" type="button" onclick="pinHere('edit')">Use this phone to mark the gate</button>
+    <input type="number" name="fence_meters" id="edit-rad" min="50" max="2000" placeholder="200">
+    <p class="hint" id="edit-map-label">Pick the site above, then drop the pin on the map.</p>
+    <div id="edit-map" class="fence-map" role="img" aria-label="Map to move this site's gate pin"></div>
+    <button class="btn ghost small" type="button" id="edit-here">Stand at the gate — drop the pin here</button>
     <button class="btn mt">Save changes</button>
   </form>
 </div>
 <p class="mt"><a href="/admin/hospital">← Hospital name, logo and colours</a>
-  · <a href="/admin/settings">Clock-in strictness →</a>
+  · <a href="/attendance">Pin the gate on I am here →</a>
   · <a href="/attendance/today">Who is at work →</a></p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/fence-map.js') }}"></script>
 <script>
-function pinHere(prefix) {
-  if (!navigator.geolocation) { alert('This phone cannot share its place.'); return; }
-  navigator.geolocation.getCurrentPosition(function (pos) {
-    document.getElementById(prefix + '-lat').value = pos.coords.latitude.toFixed(6);
-    document.getElementById(prefix + '-lng').value = pos.coords.longitude.toFixed(6);
-    if (window.hmsVoice && window.hmsVoice.speak) window.hmsVoice.speak('Gate pin saved on this form. Tap save.');
-  }, function () {
-    alert('Could not read your place. Stand in the open and try again.');
-  }, { enableHighAccuracy: true, timeout: 8000 });
+if (window.hmsFenceMap) {
+  window.hmsFenceMap.boot({
+    latId: "add-lat", lngId: "add-lng", radId: "add-rad",
+    mapId: "add-map", locateBtn: "add-here", labelId: "add-map-label"
+  });
+  window.hmsFenceMap.boot({
+    latId: "edit-lat", lngId: "edit-lng", radId: "edit-rad",
+    mapId: "edit-map", locateBtn: "edit-here", labelId: "edit-map-label"
+  });
 }
 </script>
 {% endblock %}

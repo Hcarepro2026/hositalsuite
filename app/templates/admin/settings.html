@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Configuration{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<style>
+  .fence-map{height:280px;border-radius:12px;border:1px solid #d7e3ec;margin:10px 0}
+  .leaflet-container{font-family:inherit}
+</style>
+{% endblock %}
 {% block content %}
 <h1>Inspection &amp; Complaint Configuration</h1>
 
@@ -29,7 +36,7 @@
   </select>
 
   <h2 class="mt">🚪 Staff clock-in (gate check)</h2>
-  <p class="hint">This is <b>per hospital</b>, not a server switch. Leave it Off until you have pinned the gate on Admin → Sites. Voice reminders stay on.</p>
+  <p class="hint">This is <b>per hospital</b>, not a server switch. Drop the pin on the map (or do it on <a href="/attendance">I am here</a>). Voice reminders stay on.</p>
   <div class="grid cols3">
     <div>
       <label>How strict</label>
@@ -41,7 +48,7 @@
     </div>
     <div>
       <label>Default circle (metres)</label>
-      <input type="number" name="attendance_radius_m" min="50" max="2000"
+      <input type="number" name="attendance_radius_m" id="cfg-rad" min="50" max="2000"
              value="{{ s.attendance_radius_m or 200 }}">
       <div class="hint">200 m covers a typical compound. Each site can set its own.</div>
     </div>
@@ -174,4 +181,16 @@
     </form>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/fence-map.js') }}"></script>
+<script>
+if (window.hmsFenceMap) {
+  window.hmsFenceMap.boot({
+    latId: "cfg-lat", lngId: "cfg-lng", radId: "cfg-rad",
+    mapId: "cfg-map", locateBtn: "cfg-here", labelId: "cfg-map-label"
+  });
+}
+</script>
 {% endblock %}

@@ -123,6 +123,9 @@ COLUMNS = [
     ("staff_attendance", "in_grace", _bool_sql),
     ("staff_attendance", "help_reason", "VARCHAR(20)"),
     ("staff_attendance", "evidence_path", "VARCHAR(300)"),
+    ("staff_attendance", "reviewed_at", "TIMESTAMP"),
+    ("staff_attendance", "reviewed_by_id", "INTEGER"),
+    ("staff_attendance", "review_note", "VARCHAR(200)"),
     # --- Assistant conversation thread (web + WhatsApp)
     ("chat_session", "phone", "VARCHAR(32)"),
     ("chat_session", "last_intent", "VARCHAR(60)"),

@@ -2036,10 +2036,14 @@ class StaffAttendance(db.Model):
     in_grace = db.Column(db.Boolean, default=False)
     help_reason = db.Column(db.String(20))
     evidence_path = db.Column(db.String(300))
+    reviewed_at = db.Column(db.DateTime)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    review_note = db.Column(db.String(200))
 
     user = db.relationship("User", foreign_keys=[user_id])
     branch = db.relationship("Branch", foreign_keys=[branch_id])
     override_by = db.relationship("User", foreign_keys=[override_by_id])
+    reviewed_by = db.relationship("User", foreign_keys=[reviewed_by_id])
 
     __table_args__ = (
         db.Index("ix_staff_att_org_date", "org_id", "duty_date"),

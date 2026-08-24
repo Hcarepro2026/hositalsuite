@@ -2,7 +2,8 @@
 {% block title %}Who is at work{% endblock %}
 {% block content %}
 <h1>👥 Who is at work</h1>
-<p class="muted">{{ day.strftime('%A %d %b %Y') }} · {{ in_now }} still here · {{ total }} signed in today</p>
+<p class="muted">{{ day.strftime('%A %d %b %Y') }} · {{ in_now }} still here · {{ total }} signed in today
+  · {{ scope_note }}</p>
 
 <form class="card mb row" method="get" action="/attendance/today" style="gap:10px;flex-wrap:wrap">
   <label>Day
@@ -19,6 +20,29 @@
   <button class="btn">Show</button>
   <a class="btn ghost" href="/attendance/week?date={{ day.isoformat() }}">Week ratings</a>
 </form>
+
+{% if reviews %}
+<div class="card mb" style="border:2px solid #b45309">
+  <h2>Needs your sign-off</h2>
+  {% for r in reviews %}
+  <div class="row spread mb" style="border-bottom:1px solid #eef4f9;padding-bottom:8px">
+    <div>
+      <b>{{ r.user.name if r.user else 'Staff' }}</b>
+      · {{ r.clock_in_at.strftime('%H:%M') }}
+      {% if r.flag_note %}<div class="hint">{{ r.flag_note }}</div>{% endif %}
+    </div>
+    <form method="post" action="/attendance/review" class="row" style="gap:6px;align-items:center">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="row_id" value="{{ r.id }}">
+      <input type="hidden" name="next" value="/attendance/today">
+      <input type="text" name="note" maxlength="200" placeholder="I saw them at the gate"
+             style="min-width:160px">
+      <button class="btn small">Accept</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <div class="card mb">
   <div class="table-wrap">
@@ -55,7 +79,10 @@
         {% endif %}
       </td>
       <td>
-        {% if r.flagged or r.mocked %}
+        {% if r.reviewed_at %}
+          <span class="pill green">Signed off</span>
+          {% if r.review_note %}<div class="hint">{{ r.review_note }}</div>{% endif %}
+        {% elif r.flagged or r.mocked %}
           <span class="pill red">Review</span>
           {% if r.flag_note %}<div class="hint">{{ r.flag_note }}</div>{% endif %}
         {% else %}
@@ -72,33 +99,9 @@
 
 <div class="card">
   <h2>Help a clock-in (photo + reason)</h2>
-  <p class="hint">Lost phone, spoilt phone, no internet, or official errand.
-    A photo of the person at the gate is required. Free text alone is refused.</p>
-  <form method="post" action="/attendance/override" enctype="multipart/form-data">
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <input type="hidden" name="next" value="/attendance/today">
-    <label>Who</label>
-    <select name="user_id" required>
-      <option value="">— pick —</option>
-      {% for u in staff %}
-        {% if u.id not in open_ids %}
-        <option value="{{ u.id }}">{{ u.name }}</option>
-        {% endif %}
-      {% endfor %}
-    </select>
-    <label>Why</label>
-    <select name="help_reason" required>
-      <option value="">— pick —</option>
-      {% for code, label in help_reasons %}
-      <option value="{{ code }}">{{ label }}</option>
-      {% endfor %}
-    </select>
-    <label>Photo of the person at the gate</label>
-    <input type="file" name="evidence" accept="image/*" capture="environment" required>
-    <label>Short note (optional)</label>
-    <input type="text" name="reason" maxlength="120" placeholder="e.g. screen cracked">
-    <button class="btn mt">Accept and sign them in</button>
-  </form>
+  {% with staff=staff, next_url="/attendance/today" %}
+    {% include "_help_clockin.html" %}
+  {% endwith %}
 </div>
 <p class="mt"><a href="/attendance">← Back to I am here</a></p>
 {% endblock %}

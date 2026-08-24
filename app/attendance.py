@@ -293,43 +293,121 @@ def grace_for(user: User, now: datetime | None = None) -> dict:
             "grace_minutes": minutes}
 
 
-def can_help(helper: User, target: User) -> bool:
-    """May this person sign a colleague in? Admin/HR yes; HOD only own department."""
-    if helper is None or target is None:
-        return False
-    if helper.org_id != target.org_id:
-        return False
+def supervise_dept_ids(helper: User) -> set[int] | None:
+    """Departments this person may sign for. None = the whole hospital."""
+    if helper is None:
+        return set()
     from .navigation import permissions_for
-    if permissions_for(helper).get("attendance_admin"):
-        return True
-    if helper.role != "HOD":
-        return False
-    if helper.department_id and target.department_id == helper.department_id:
-        return True
-    headed = (db.session.query(Department)
-              .filter_by(org_id=helper.org_id, hod_user_id=helper.id).all())
-    headed_ids = {d.id for d in headed}
-    return bool(target.department_id and target.department_id in headed_ids)
-
-
-def helpable_staff(helper: User) -> list[User]:
-    q = (db.session.query(User)
-         .filter_by(org_id=helper.org_id, active=True, approved=True)
-         .order_by(User.name))
-    from .navigation import permissions_for
-    if permissions_for(helper).get("attendance_admin"):
-        return q.all()
-    if helper.role != "HOD":
-        return []
+    from .roles import sees_whole_hospital, visible_department_ids
+    can = permissions_for(helper)
+    if can.get("attendance_admin") or sees_whole_hospital(helper):
+        return None
     ids = set()
     if helper.department_id:
         ids.add(helper.department_id)
     for d in (db.session.query(Department)
               .filter_by(org_id=helper.org_id, hod_user_id=helper.id).all()):
         ids.add(d.id)
+    extra = visible_department_ids(helper)
+    if extra:
+        ids.update(extra)
+    if can.get("dept_manage") or helper.role == "HOD":
+        return ids
+    return set()
+
+
+def can_supervise(helper: User) -> bool:
+    """HOD, named head, department manager, or hospital admin."""
+    ids = supervise_dept_ids(helper)
+    return ids is None or bool(ids)
+
+
+def can_help(helper: User, target: User) -> bool:
+    """May this person sign a colleague in? Admin yes; HOD only own department."""
+    if helper is None or target is None:
+        return False
+    if helper.org_id != target.org_id:
+        return False
+    if helper.id == target.id:
+        return False
+    ids = supervise_dept_ids(helper)
+    if ids is None:
+        return True
+    return bool(target.department_id and target.department_id in ids)
+
+
+def helpable_staff(helper: User) -> list[User]:
+    q = (db.session.query(User)
+         .filter_by(org_id=helper.org_id, active=True, approved=True)
+         .order_by(User.name))
+    ids = supervise_dept_ids(helper)
+    if ids is None:
+        return [u for u in q.all() if u.id != helper.id]
     if not ids:
         return []
-    return q.filter(User.department_id.in_(ids)).all()
+    return [u for u in q.filter(User.department_id.in_(ids)).all()
+            if u.id != helper.id]
+
+
+def save_gate(org_id: int, *, mode: str, lat, lng, radius_m, grace_minutes=None,
+              branch: Branch | None = None) -> Fence:
+    """Pin the circle. Per hospital (and the site you are standing at)."""
+    mode = mode if mode in MODES else "off"
+    radius = parse_radius(radius_m)
+    pin_lat = parse_coord(lat, kind="lat")
+    pin_lng = parse_coord(lng, kind="lng")
+    services.set_setting(org_id, "attendance_mode", mode)
+    services.set_setting(org_id, "attendance_radius_m", radius)
+    services.set_setting(org_id, "attendance_lat", pin_lat)
+    services.set_setting(org_id, "attendance_lng", pin_lng)
+    if grace_minutes is not None:
+        services.set_setting(org_id, "attendance_grace_minutes",
+                             parse_grace(grace_minutes))
+    if branch is None:
+        from .branches import ensure_main_branch
+        branch = ensure_main_branch(org_id)
+    if branch is not None and branch.org_id == org_id:
+        branch.lat = pin_lat
+        branch.lng = pin_lng
+        branch.fence_meters = radius
+    return fence_for(org_id, branch)
+
+
+def pending_reviews(viewer: User, day=None) -> list[StaffAttendance]:
+    """Flagged punches this HOD / admin has not yet signed."""
+    day = day or now_naive().date()
+    q = (db.session.query(StaffAttendance)
+         .filter_by(org_id=viewer.org_id, duty_date=day, flagged=True)
+         .filter(StaffAttendance.reviewed_at.is_(None))
+         .order_by(StaffAttendance.clock_in_at.asc()))
+    rows = q.all()
+    ids = supervise_dept_ids(viewer)
+    if ids is None:
+        return rows
+    out = []
+    for r in rows:
+        person = r.user if getattr(r, "user", None) else db.session.get(User, r.user_id)
+        if person and (person.department_id in ids or person.id == viewer.id):
+            out.append(r)
+    return out
+
+
+def accept_review(viewer: User, row: StaffAttendance, note: str = "") -> bool:
+    if row is None or row.org_id != viewer.org_id:
+        return False
+    if not can_supervise(viewer):
+        return False
+    person = row.user if getattr(row, "user", None) else db.session.get(User, row.user_id)
+    ids = supervise_dept_ids(viewer)
+    if ids is not None:
+        if person is None:
+            return False
+        if person.department_id not in ids and person.id != viewer.id:
+            return False
+    row.reviewed_at = now_naive()
+    row.reviewed_by_id = viewer.id
+    row.review_note = (note or "Accepted by supervisor.")[:200]
+    return True
 
 
 def open_row(org_id: int, user_id: int) -> StaffAttendance | None:

@@ -90,9 +90,154 @@ def test_clock_out_closes_the_row(client, seeded):
     assert engine.open_row(seeded["org"], hod.id) is None
 
 
-def test_hod_cannot_see_the_board(client, seeded):
+def _staff(org_id, username, name, role, department_id=None):
+    u = User(org_id=org_id, username=username, name=name, role=role,
+             department_id=department_id, approved=True, active=True)
+    u.set_password("Passw0rd!x")
+    u.must_change_password = False
+    db.session.add(u)
+    db.session.flush()
+    return u
+
+
+def test_hod_sees_own_department_board(client, seeded):
+    from app.models import Department
+    hod = db.session.get(User, seeded["hod"])
+    hod.department_id = seeded["dept"]
+    nurse = _staff(seeded["org"], "nurse1", "Nkechi Nurse", "STAFF", seeded["dept"])
+    other_dept = Department(org_id=seeded["org"], name="Pharmacy")
+    db.session.add(other_dept)
+    db.session.flush()
+    outsider = _staff(seeded["org"], "pharm1", "Paul Pharmacy", "STAFF", other_dept.id)
+    engine.clock_in(nurse)
+    engine.clock_in(outsider)
+    db.session.commit()
     login(client, "hod1")
-    assert client.get("/attendance/today").status_code == 403
+    page = client.get("/attendance/today")
+    assert page.status_code == 200
+    body = page.data
+    assert b"Who is at work" in body
+    assert b"Nkechi Nurse" in body
+    assert b"Paul Pharmacy" not in body
+    assert b"Your department only" in body
+
+
+def test_hod_cannot_help_other_department(client, seeded):
+    from app.models import Department
+    other = Department(org_id=seeded["org"], name="Theatre")
+    db.session.add(other)
+    db.session.flush()
+    outsider = _staff(seeded["org"], "th1", "Tunde Theatre", "STAFF", other.id)
+    db.session.commit()
+    login(client, "hod1")
+    token = csrf(client, "/attendance")
+    r = client.post("/attendance/override", data={
+        "_csrf": token, "user_id": outsider.id, "help_reason": "LOST_PHONE",
+        "evidence": _png(), "next": "/attendance",
+    }, content_type="multipart/form-data", follow_redirects=True)
+    assert r.status_code == 200
+    assert engine.open_row(seeded["org"], outsider.id) is None
+    assert b"own department" in r.data.lower()
+
+
+def test_hod_can_help_own_staff(client, seeded):
+    hod = db.session.get(User, seeded["hod"])
+    hod.department_id = seeded["dept"]
+    nurse = _staff(seeded["org"], "nurse2", "Bisi Nurse", "STAFF", seeded["dept"])
+    db.session.commit()
+    login(client, "hod1")
+    token = csrf(client, "/attendance")
+    assert b"Bisi Nurse" in client.get("/attendance").data
+    r = client.post("/attendance/override", data={
+        "_csrf": token, "user_id": nurse.id, "help_reason": "SPOILT_PHONE",
+        "reason": "screen cracked",
+        "evidence": _png(), "next": "/attendance",
+    }, content_type="multipart/form-data", follow_redirects=True)
+    assert r.status_code == 200
+    row = engine.open_row(seeded["org"], nurse.id)
+    assert row is not None
+    assert row.help_reason == "SPOILT_PHONE"
+    assert row.evidence_path
+    assert row.override_by_id == hod.id
+
+
+def test_admin_saves_gate_from_i_am_here(client, seeded):
+    login(client, "admin")
+    page = client.get("/attendance")
+    assert b"Gate pin" in page.data
+    assert b"gate-map" in page.data
+    token = csrf(client, "/attendance")
+    r = client.post("/attendance/gate", data={
+        "_csrf": token,
+        "attendance_mode": "required",
+        "attendance_lat": "6.524400",
+        "attendance_lng": "3.379200",
+        "attendance_radius_m": "180",
+        "attendance_grace_minutes": "45",
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    assert services.get_setting(seeded["org"], "attendance_mode") == "required"
+    assert services.get_setting(seeded["org"], "attendance_radius_m") == 180
+    assert abs(float(services.get_setting(seeded["org"], "attendance_lat")) - 6.5244) < 0.0001
+    assert services.get_setting(seeded["org"], "attendance_grace_minutes") == 45
+    from app.branches import ensure_main_branch
+    main = ensure_main_branch(seeded["org"])
+    assert main.lat is not None
+    assert abs(main.lat - 6.5244) < 0.0001
+    assert main.fence_meters == 180
+
+
+def test_hod_cannot_save_the_gate(client, seeded):
+    login(client, "hod1")
+    token = csrf(client, "/attendance")
+    r = client.post("/attendance/gate", data={
+        "_csrf": token, "attendance_mode": "required",
+        "attendance_lat": "6.5", "attendance_lng": "3.3",
+        "attendance_radius_m": "100",
+    })
+    assert r.status_code == 403
+    assert (services.get_setting(seeded["org"], "attendance_mode") or "off") == "off"
+
+
+def test_supervisor_signs_flagged_punch(client, seeded):
+    hod = db.session.get(User, seeded["hod"])
+    hod.department_id = seeded["dept"]
+    nurse = _staff(seeded["org"], "nurse3", "Chika Nurse", "STAFF", seeded["dept"])
+    row, verdict = engine.clock_in(nurse, mocked=True, lat=GATE[0], lng=GATE[1])
+    assert row is not None and row.flagged
+    db.session.commit()
+    login(client, "hod1")
+    page = client.get("/attendance")
+    assert b"Needs your sign-off" in page.data
+    assert b"Chika Nurse" in page.data
+    token = csrf(client, "/attendance")
+    r = client.post("/attendance/review", data={
+        "_csrf": token, "row_id": row.id, "note": "I saw her at the gate",
+        "next": "/attendance",
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    db.session.refresh(row)
+    assert row.reviewed_at is not None
+    assert row.reviewed_by_id == hod.id
+    assert "gate" in (row.review_note or "").lower()
+
+
+def test_hod_cannot_review_other_department(client, seeded):
+    from app.models import Department
+    other = Department(org_id=seeded["org"], name="Lab")
+    db.session.add(other)
+    db.session.flush()
+    outsider = _staff(seeded["org"], "lab1", "Lara Lab", "STAFF", other.id)
+    row, _ = engine.clock_in(outsider, mocked=True)
+    db.session.commit()
+    login(client, "hod1")
+    token = csrf(client, "/attendance")
+    r = client.post("/attendance/review", data={
+        "_csrf": token, "row_id": row.id, "note": "ok", "next": "/attendance",
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    db.session.refresh(row)
+    assert row.reviewed_at is None
 
 
 def _png():

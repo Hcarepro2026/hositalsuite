@@ -19,6 +19,7 @@
     if (!host) return;
 
     var LAGOS = [6.5244, 3.3792];
+    var hadPin = isFinite(num(latId, NaN)) && isFinite(num(lngId, NaN));
     var startLat = num(latId, LAGOS[0]);
     var startLng = num(lngId, LAGOS[1]);
     var startR = Math.max(50, Math.min(2000, num(radId, 200) || 200));
@@ -110,7 +111,8 @@
       }
     }
     setTimeout(function () { map.invalidateSize(); }, 200);
-    syncFields();
+    // Do not write a city-centre pin until a person taps, drags, or stands here.
+    if (hadPin) syncFields();
   }
   window.hmsFenceMap = { boot: boot };
 })();
