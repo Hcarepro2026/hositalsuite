@@ -38,7 +38,7 @@
   </div>
   <div class="grid cols4 mt">
     <div style="text-align:center">
-      <div style="font-size:1.5rem;font-weight:800">{{ flow.head.median_journey }}m</div>
+      <div style="font-size:1.5rem;font-weight:800">{{ (flow.head.median_journey)|hm }}</div>
       <div class="muted" style="font-size:.75rem">Typical visit</div></div>
     <div style="text-align:center">
       <div style="font-size:1.5rem;font-weight:800">{{ flow.head.patients_completed }}</div>
@@ -121,9 +121,9 @@
   <div class="kpi info"><div class="v">{{ kpi.bookings_today }}</div><div class="l">Bookings today</div></div>
   <div class="kpi {{ 'warn' if kpi.queue_waiting > 10 else 'info' }}">
     <div class="v">{{ kpi.queue_waiting }}</div><div class="l">In queue now</div></div>
-  <div class="kpi {{ 'good' if kpi.satisfaction_avg and kpi.satisfaction_avg >= 4 else ('warn' if kpi.satisfaction_avg else 'gray') }}">
+  <a class="kpi {{ 'good' if kpi.satisfaction_avg and kpi.satisfaction_avg >= 4 else ('warn' if kpi.satisfaction_avg else 'gray') }}" href="/feedbacks" style="text-decoration:none;color:inherit">
     <div class="v">{{ kpi.satisfaction_avg if kpi.satisfaction_avg else '—' }}</div>
-    <div class="l">Satisfaction /5 ({{ kpi.feedback_count }})</div></div>
+    <div class="l">Satisfaction /5 ({{ kpi.feedback_count }}) →</div></a>
   <div class="kpi {{ 'good' if kpi.referral_books_30d else 'info' }}">
     <div class="v">{{ kpi.referral_books_30d }}</div>
     <div class="l">Referred bookings (30d)</div></div>

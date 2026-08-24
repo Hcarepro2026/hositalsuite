@@ -108,6 +108,7 @@ body{display:flex;flex-direction:column;background:var(--bg,#eef2f6);
 
 <div class="quick" id="chips">
   <button class="chip" data-q="Book an appointment">📅 Book</button>
+  <button class="chip" data-q="I want Fast Track">⭐ Fast Track</button>
   <button class="chip" data-q="What are your opening hours?">🕐 Hours</button>
   <button class="chip" data-q="How much is my bill?">🧾 Bills</button>
   <button class="chip" data-q="I want to make a complaint">📣 Complaint</button>
@@ -204,28 +205,38 @@ body{display:flex;flex-direction:column;background:var(--bg,#eef2f6);
         bubble(d.reply || 'Sorry, I did not catch that.', 'bot');
         rateButtons(d.msg_id);
 
-        // Offer the real page when the assistant recognised an actionable intent.
-        var links = { book: ['/book', '📅 Open booking'],
-                      complaint: ['/complaint', '📣 Make a complaint'],
-                      emergency: ['tel:' + {{ (hospital.phone if hospital and hospital.phone else '') | tojson }},
-                                  '🚑 Call the hospital'] };
-        var l = links[d.action];
-        if (l && l[0] && l[0] !== 'tel:') {
+        // Live addresses from the server — they follow this host / domain.
+        var pageLinks = d.links || [];
+        pageLinks.forEach(function (item) {
+          if (!item || !item.href) return;
           var a = document.createElement('a');
-          a.href = l[0]; a.className = 'chip'; a.style.display = 'inline-block';
+          a.href = item.href; a.className = 'chip'; a.style.display = 'inline-block';
           a.style.margin = '0 0 0 6px'; a.style.textDecoration = 'none';
-          a.textContent = l[1];
+          a.textContent = item.label || 'Open';
           msgs.appendChild(a);
-          scrollDown();
+        });
+        if (d.action === 'emergency') {
+          var tel = {{ (hospital.phone if hospital and hospital.phone else '') | tojson }};
+          if (tel) {
+            var c = document.createElement('a');
+            c.href = 'tel:' + String(tel).replace(/\s/g, '');
+            c.className = 'chip'; c.style.display = 'inline-block';
+            c.style.margin = '0 0 0 6px'; c.style.textDecoration = 'none';
+            c.textContent = '🚑 Call the hospital';
+            msgs.appendChild(c);
+          }
         }
+        if (pageLinks.length) scrollDown();
 
-        if (d.action === 'handoff' || text.toLowerCase().indexOf('human') >= 0) {
+        if (d.handoff || d.action === 'handoff' || text.toLowerCase().indexOf('human') >= 0) {
           fetch('/chat/handoff', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session: sessionId })
           })
             .then(function (r) { return r.json(); })
-            .then(function (h) { if (h && h.message) bubble(h.message, 'bot'); })
+            .then(function (h) {
+              if (h && h.message && !h.already) bubble(h.message, 'bot');
+            })
             .catch(function () {});
         }
       })

@@ -12,7 +12,7 @@
         {{ patient.hospital_number if patient }} · visit {{ visit.visit_no }}</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:1.7rem;font-weight:800">{{ total }}m</div>
+      <div style="font-size:1.7rem;font-weight:800">{{ (total)|hm }}</div>
       <div class="muted" style="font-size:.75rem">door to door</div>
     </div>
   </div>
@@ -34,13 +34,13 @@
     </td>
     <td>{{ s.entered_at.strftime('%H:%M') }}</td>
     <td>{{ s.ended_at.strftime('%H:%M') if s.ended_at else '—' }}</td>
-    <td>{% if s.ended_at %}<b>{{ s.minutes }}m</b>{% else %}
+    <td>{% if s.ended_at %}<b>{{ (s.minutes)|hm }}</b>{% else %}
         <span class="muted">still there</span>{% endif %}</td>
     <td>
       {% set target = targets.get(s.stage) %}
       {% if s.ended_at and target and s.minutes > target %}
         <span class="pill" style="background:#c0262c;color:#fff">
-          {{ s.minutes - target }}m over</span>
+          {{ (s.minutes - target)|hm }} over</span>
       {% elif s.ended_at and target %}
         <span class="pill green">on time</span>
       {% endif %}

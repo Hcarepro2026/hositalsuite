@@ -29,8 +29,8 @@ from __future__ import annotations
 # --------------------------------------------------------------------------
 # Shared closing lines, so every department sounds like the same hospital.
 # --------------------------------------------------------------------------
-_CTA_BOOK = "Say 'book' and I'll open the booking page for you."
-_CTA_DESK = "Tell me what you need and I'll point you to the right desk."
+_CTA_BOOK = "Open Book a visit — the address is on this reply."
+_CTA_DESK = "Ask the front desk, or say talk to a human."
 _CTA_HELP = "Anything else I can make easier for you?"
 
 # --------------------------------------------------------------------------
@@ -54,9 +54,9 @@ _d("Internal Medicine", [
      "sugar, chest and breathing wahala, plus follow-up. Na dem dey know you well well over time.",
      _CTA_BOOK),
     ("book", ["book internal medicine", "see a physician", "appointment with internal medicine"],
-     "Absolutely — I can get you booked. Internal Medicine runs clinic on weekday mornings, and "
+     "Absolutely — You can book. Internal Medicine runs clinic on weekday mornings, and "
      "mornings are usually calmest. Bring any old results or medicine packets you have; it helps "
-     "the doctor enormously.", "No wahala, I fit book you. Internal Medicine dey run clinic weekday "
+     "the doctor enormously.", "No wahala, You fit book. Internal Medicine dey run clinic weekday "
      "morning, and morning dey calm pass. Carry your old result and medicine pack come — e go help doctor.",
      _CTA_BOOK),
     ("bring", ["what should i bring to internal medicine", "what to bring physician"],
@@ -91,7 +91,7 @@ _d("Internal Medicine", [
      "Mornings move fastest — arrive early and you'll usually be seen sooner. You can also take a "
      "queue number from your phone before you arrive, so you're not standing in line.",
      "Morning dey fast pass — come early, dem go see you quick. You fit even take queue number from "
-     "your phone before you reach here, so you no go stand for line.", "Say 'queue' and I'll get you a number."),
+     "your phone before you reach here, so you no go stand for line.", "Say 'queue' or open Get a number."),
     ("referral", ["do i need a referral internal medicine", "referral to physician"],
      "You don't need a referral to be seen — you're welcome to book directly. If another clinic has "
      "written you a referral note, bring it along; it saves repeating your story.",
@@ -155,7 +155,7 @@ _d("Internal Medicine", [
      "You can file it here in under a minute and you'll get a reference number to track what happens next.",
      "Sorry o — your experience no suppose be like that, and management really wan hear am. You fit file "
      "am here for less than one minute, and you go get reference number to track am.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
     ("hours", ["internal medicine opening hours", "when is the physician clinic"],
      "Internal Medicine clinic runs on weekday mornings, and the ward team is on duty around the clock "
      "for anyone already admitted. Mornings are the calmest time to come.",
@@ -172,9 +172,9 @@ _d("Surgery", [
      "Our Surgery team dey handle operation wey dem plan and emergency one — hernia, appendix, wound "
      "care and after-operation follow-up. Dem get clinic too for people wey need check first.", _CTA_BOOK),
     ("book", ["book surgery clinic", "see a surgeon", "surgical appointment"],
-     "I can book you into the surgical outpatient clinic. Bring any scans or reports you already have "
+     "You can book into the surgical outpatient clinic. Bring any scans or reports you already have "
      "— a surgeon can advise far better with the pictures in front of them.",
-     "I fit book you for surgical outpatient clinic. Bring any scan or report wey you get — surgeon go "
+     "You fit book for surgical outpatient clinic. Bring any scan or report wey you get — surgeon go "
      "advise you better when e see the picture.", _CTA_BOOK),
     ("prepare", ["how do i prepare for surgery", "before my operation"],
      "The team will give you written instructions specific to your operation, and please follow those "
@@ -205,10 +205,10 @@ _d("Surgery", [
      "follow-up date before you comot. Abeg keep that follow-up — na so we dey catch small problem early.",
      _CTA_HELP),
     ("wound", ["wound dressing", "change my dressing", "wound care"],
-     "Wound dressing is done in the dressing room beside the surgical clinic. Come at your scheduled "
+     "Wound dressing is done in the dressing room. Ask reception if you are not sure where. Come at your scheduled "
      "time if you have one; if the wound looks angry, is smelling, or you're worried, come sooner rather "
      "than later. We'd always rather see you.",
-     "Dressing dey the dressing room near surgical clinic. Come for your appointment time; but if the wound "
+     "Dressing dey the dressing room. Ask reception if you no sure where. Come for your appointment time; but if the wound "
      "don red, dey smell, or you dey worry, come quick quick. We prefer make you come.", _CTA_DESK),
     ("stitches", ["remove stitches", "when do stitches come out"],
      "Your discharge note will say when — it varies by where the wound is. Come to the dressing room on "
@@ -216,9 +216,9 @@ _d("Surgery", [
      "Your discharge note go talk when — e dey depend on where the wound dey. Come dressing room that day, "
      "e no dey take time.", _CTA_DESK),
     ("theatre", ["where is the theatre", "operating theatre location"],
-     "The theatre complex is in the surgical block, and there's a waiting area for families right there. "
+     "Ask reception for the theatre. There is a waiting area for families nearby. "
      "Reception will walk you across if you're not sure.",
-     "Theatre complex dey the surgical block, and family waiting area dey there. Reception go waka with you "
+     "Ask reception for the theatre. Family waiting area dey there. Reception go waka with you "
      "if you no sure.", _CTA_DESK),
     ("family_wait", ["where can my family wait", "waiting during operation"],
      "There's a family waiting area right by the theatre complex. Please keep one phone reachable — the "
@@ -270,7 +270,7 @@ _d("Surgery", [
      "I'm genuinely sorry. Please tell us — surgical concerns are taken very seriously and go straight to "
      "management. You'll get a reference number and a real response.",
      "I sorry well well. Abeg tell us — surgical matter dey serious and e dey go straight to management. You "
-     "go get reference number and real response.", "Tap 'Make a Complaint' and I'll take you there."),
+     "go get reference number and real response.", "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ OBSTETRICS & GYNAECOLOGY
@@ -381,7 +381,7 @@ _d("Obstetrics & Gynaecology", [
      "straight to management and you'll get a reference number.",
      "I sorry well well — maternity care especially suppose make you feel safe and respected. Abeg tell us; e "
      "dey go straight to management and you go get reference number.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ LABORATORY
@@ -488,7 +488,7 @@ _d("Laboratory", [
      "I'm sorry the lab kept you waiting — please tell us so management can see it and fix the cause. "
      "You'll get a reference number to follow it up.",
      "Sorry say lab make you wait — abeg tell us make management see am and fix the cause. You go get reference "
-     "number to follow am up.", "Tap 'Make a Complaint' and I'll take you there."),
+     "number to follow am up.", "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ ORTHOPAEDICS
@@ -499,9 +499,9 @@ _d("Orthopaedics", [
      "Orthopaedics na our bone, joint and muscle team — fracture, back and knee pain, sport injury, and "
      "the follow-up wey follow am.", _CTA_BOOK),
     ("book", ["book orthopaedic clinic", "see a bone doctor"],
-     "I can book you in. If you've had an X-ray anywhere before, bring the film or report — it saves "
+     "You can book in. If you've had an X-ray anywhere before, bring the film or report — it saves "
      "time and often saves you a repeat scan.",
-     "I fit book you. If you don do X-ray anywhere before, bring the film or report — e go save time and "
+     "You fit book. If you don do X-ray anywhere before, bring the film or report — e go save time and "
      "sometimes save you from repeating scan.", _CTA_BOOK),
     ("fracture", ["broken bone", "i think i fractured", "suspected fracture"],
      "A suspected break needs looking at today, not next week — please go to Accident & Emergency so "
@@ -509,9 +509,9 @@ _d("Orthopaedics", [
      "If you suspect say bone break, e need attention today, no be next week — abeg go Accident & Emergency "
      "make dem X-ray am and set am well. To wait fit make am hard to fix.", "🚑 Please go to A&E today."),
     ("plaster", ["plaster of paris", "cast care", "my cast"],
-     "The plaster room is beside the orthopaedic clinic. Keep the cast dry, don't push anything down "
+     "Ask reception for the plaster room. Keep the cast dry, don't push anything down "
      "inside it, and come in straight away if your fingers or toes go numb, cold or blue.",
-     "Plaster room dey beside orthopaedic clinic. Keep the cast dry, no push anything enter inside, and come "
+     "Ask reception for the plaster room. Keep the cast dry, no push anything enter inside, and come "
      "sharp sharp if your finger or toe go numb, cold or blue.", _CTA_DESK),
     ("cast_remove", ["remove my cast", "when does the cast come off"],
      "Your clinic note has the date — it depends on the bone and how you're healing. Please don't remove "
@@ -591,7 +591,7 @@ _d("Orthopaedics", [
      "I'm sorry to hear that. Please file it — it goes straight to management and you'll get a reference "
      "number to track the response.",
      "Sorry to hear that. Abeg file am — e dey go straight to management and you go get reference number to "
-     "track the response.", "Tap 'Make a Complaint' and I'll take you there."),
+     "track the response.", "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ PUBLIC HEALTH
@@ -692,7 +692,7 @@ _d("Public Health", [
     ("complaint", ["complain about public health"],
      "Please tell us — it goes to management with a reference number so you can follow it up.",
      "Abeg tell us — e dey go management with reference number so you fit follow am up.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ HIMS / MEDICAL RECORDS
@@ -794,7 +794,7 @@ _d("Health Information Management (HIMS)", [
     ("complaint", ["complain about records"],
      "Please tell us — it reaches management with a reference number.",
      "Abeg tell us — e dey reach management with reference number.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ FINANCE & ACCOUNTS
@@ -894,7 +894,7 @@ _d("Finance & Accounts", [
     ("complaint", ["complain about billing"],
      "Please do — billing complaints matter and go straight to management with a reference number.",
      "Abeg do — billing complaint dey matter and e dey go straight to management with reference number.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ ADMINISTRATION & HR
@@ -986,7 +986,7 @@ _d("Administration & Human Resources", [
     ("complaint", ["complain to administration"],
      "Please file it — it reaches management directly and you'll get a reference number to track it.",
      "Abeg file am — e dey reach management direct and you go get reference number to track am.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ ENVIRONMENTAL HEALTH
@@ -1083,7 +1083,7 @@ _d("Environmental Health", [
     ("complaint", ["complain about cleanliness"],
      "Please do — cleanliness complaints are taken seriously and go straight to management.",
      "Abeg do — cleanliness complaint dey serious and e dey go straight to management.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ ICT
@@ -1177,7 +1177,7 @@ _d("ICT", [
     ("complaint", ["complain about the system"],
      "Please do — technical complaints help us fix things for everyone.",
      "Abeg do — technical complaint dey help us fix thing for everybody.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ ENGINEERING & MAINTENANCE
@@ -1259,7 +1259,7 @@ _d("Engineering & Maintenance", [
     ("complaint", ["complain about facilities"],
      "Please do — facility complaints go to management and help us prioritise repairs.",
      "Abeg do — facility complaint dey go management and e dey help us prioritise repair.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ SECURITY
@@ -1340,7 +1340,7 @@ _d("Security", [
      "I'm sorry — that's not the standard expected. Please report it; it goes to management with a reference "
      "number.",
      "Sorry — that no be the standard wey we expect. Abeg report am; e dey go management with reference number.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
     ("emergency_number", ["emergency contact", "who do i call"],
      "In an emergency, come straight to Accident & Emergency or call the hospital help desk number shown at "
      "the bottom of this page.",
@@ -1355,7 +1355,7 @@ _d("Security", [
      "Please file it — security concerns reach management directly, and you'll get a reference "
      "number so you can follow up on what was done.",
      "Abeg file am — security matter dey reach management direct, and you go get reference number "
-     "so you fit follow up wetin dem do.", "Tap 'Make a Complaint' and I'll take you there."),
+     "so you fit follow up wetin dem do.", "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ SMALLER SUPPORT UNITS
@@ -1401,7 +1401,7 @@ _d("Internal Audit", [
     ("complaint", ["complain to audit"],
      "Use the complaint form — it reaches management and Audit with a reference number.",
      "Use the complaint form — e dey reach management and Audit with reference number.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 _d("Planning, Research & Statistics", [
@@ -1437,7 +1437,7 @@ _d("Planning, Research & Statistics", [
      "this team see patterns and fix the underlying cause, not just your case.",
      "Use the complaint form — e dey reach management with reference number, and the data dey help "
      "this team see pattern and fix the root cause, no be only your own case.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 _d("Public Affairs", [
@@ -1473,7 +1473,7 @@ _d("Public Affairs", [
     ("complaint", ["complain to public affairs"],
      "Please file it through the complaint form so it's tracked properly with a reference number.",
      "Abeg file am through complaint form make dem track am well with reference number.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 _d("Laundry", [
@@ -1501,7 +1501,7 @@ _d("Laundry", [
     ("complaint", ["complain about linen"],
      "Please tell us — linen and cleanliness complaints go straight to management.",
      "Abeg tell us — linen and cleanliness complaint dey go straight to management.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 _d("Nursing Services", [
@@ -1554,7 +1554,7 @@ _d("Nursing Services", [
      "I'm sorry — that isn't the standard we hold. Please report it; management take nursing conduct "
      "seriously, and you can submit anonymously if you'd rather.",
      "Sorry — that no be the standard wey we hold. Abeg report am; management dey take nursing conduct serious, "
-     "and you fit submit anonymous if you prefer.", "Tap 'Make a Complaint' and I'll take you there."),
+     "and you fit submit anonymous if you prefer.", "Tap 'Make a Complaint' and open Make a complaint."),
     ("ipc", ["infection control", "why must i wash hands"],
      "Our Infection Prevention & Control team sits within Nursing Services. Hand hygiene is the single most "
      "effective thing any of us can do to protect patients here.",
@@ -1620,7 +1620,7 @@ _d("Radiology / Imaging", [
     ("complaint", ["complain about imaging"],
      "Please tell us — it reaches management with a reference number so it can be followed up properly.",
      "Abeg tell us — e dey reach management with reference number make dem fit follow am up well.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ FAMILY MEDICINE / GOPD
@@ -1631,15 +1631,15 @@ _d("Family Medicine / General Outpatient", [
      "General Outpatient Department — GOPD — na where most visit dey start. If you no sure which specialist "
      "you need, start from here and doctor go treat you or show you the right way.", _CTA_BOOK),
     ("book", ["book gopd", "see a general doctor"],
-     "I can book you into GOPD. Mornings are calmest. Bring your hospital card and any medicines you "
+     "You can book into GOPD. Mornings are calmest. Bring your hospital card and any medicines you "
      "are taking.",
-     "I fit book you for GOPD. Morning dey calm pass. Bring your hospital card and any medicine wey you dey "
+     "You fit book for GOPD. Morning dey calm pass. Bring your hospital card and any medicine wey you dey "
      "take.", _CTA_BOOK),
     ("walk_in", ["can i just walk in", "without appointment"],
      "Yes, you can walk in — though booking or taking a queue number from your phone first means less "
      "standing around.",
      "Yes, you fit waka come — but if you book or take queue number from your phone first, you no go stand "
-     "for line.", "Say 'queue' and I'll get you a number."),
+     "for line.", "Say 'queue' or open Get a number."),
     ("which_clinic", ["which department should i see", "i don't know who to see"],
      "Then GOPD is exactly the right place — that's what it's for. The doctor will see you and refer you "
      "on if you need a specialist.",
@@ -1681,7 +1681,7 @@ _d("Family Medicine / General Outpatient", [
     ("complaint", ["complain about gopd"],
      "Please do — it goes to management with a reference number and someone will look into it.",
      "Abeg do — e dey go management with reference number and person go look into am.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 # ============================================================ CATERING SERVICES
@@ -1734,7 +1734,7 @@ _d("Catering Services", [
     ("complaint", ["complain about the food"],
      "Please tell us — food complaints reach management with a reference number.",
      "Abeg tell us — food complaint dey reach management with reference number.",
-     "Tap 'Make a Complaint' and I'll take you there."),
+     "Tap 'Make a Complaint' and open Make a complaint."),
 ])
 
 

@@ -54,6 +54,15 @@ DEFAULT_SETTINGS = {
     "onboarding_complete": False,
     "onboard_guide": False,
     "voice_lang": "en",
+    # ---- Staff clock-in geo-fence (per hospital, never per-deploy) ----
+    # off = anyone signed in can clock in. optional = record GPS, still allow.
+    # required = must be inside the site circle. Default OFF so a new hospital
+    # is never locked out before somebody pins the gate.
+    "attendance_mode": "off",
+    "attendance_radius_m": 200,
+    "attendance_lat": None,
+    "attendance_lng": None,
+    "attendance_grace_minutes": 60,
 }
 
 

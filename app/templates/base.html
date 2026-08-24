@@ -6,6 +6,7 @@
 <meta name="theme-color" content="{{ settings.brand_primary or '#0e5a8a' }}">
 <title>{% block title %}Hospital Admin Manager Suite{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+{% block extra_head %}{% endblock %}
 <style>
   /* Per-hospital colours (never per-deploy). Saved under Admin → Hospital. */
   :root{
@@ -117,7 +118,7 @@
   {% endif %}
   {% if can.complaints %}
   <a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a>
-  <a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Feedback</a>
+  <a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Satisfaction</a>
   {% endif %}
   {% if can.referrals %}
   <a href="/referrals" class="{{ 'active' if request.path.startswith('/referrals') }}">Referrals</a>
@@ -127,6 +128,9 @@
   {% endif %}
   {% if can.roster %}
   <a href="/roster" class="{{ 'active' if request.path.startswith('/roster') or request.path.startswith('/dept-roster') }}">Roster</a>
+  {% endif %}
+  {% if can.attendance %}
+  <a href="/attendance" class="{{ 'active' if request.path.startswith('/attendance') }}">I am here</a>
   {% endif %}
   {% if can.reports %}
   <a href="/reports" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>

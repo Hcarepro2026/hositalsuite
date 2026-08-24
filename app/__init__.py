@@ -88,13 +88,18 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.twilio_diag import bp as twilio_diag_bp
     from .views.fasttrack import bp as fasttrack_bp
     from .views.onboard import bp as onboard_bp
+    from .views.attendance import bp as attendance_bp
 
     for blueprint in (auth_bp, mfa_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
                       chat_bp, ref_bp, roster_bp, hims_bp, reception_bp, triage_bp, consulting_bp, tracking_bp, cashdesk_bp,
                       lahsma_bp,
                       admin_bp, rolesadmin_bp, deptdesk_bp, svcpts_bp, tv_bp, hospstruct_bp,
-                      reports_bp, api_bp, twilio_diag_bp, fasttrack_bp, onboard_bp):
+                      reports_bp, api_bp, twilio_diag_bp, fasttrack_bp, onboard_bp, attendance_bp):
         app.register_blueprint(blueprint)
+
+    from .timefmt import fmt_hm, say_hm
+    app.jinja_env.filters["hm"] = fmt_hm
+    app.jinja_env.filters["sayhm"] = say_hm
 
     register_security_hooks(app)
 
@@ -242,7 +247,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                 branch = db.session.get(Branch, u.branch_id)
         except Exception:
             branch = None
-        return dict(csrf_token=csrf_token, settings=bundle, app_version="1.4.0",
+        return dict(csrf_token=csrf_token, settings=bundle, app_version="1.7.3",
                     _=i18n.translate, lang=lang, langs=i18n.LANGS,
                     speech_lang=i18n.speech_tag(lang), hospital=hospital,
                     current_branch=branch,

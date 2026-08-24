@@ -17,7 +17,7 @@
 {# ---------------- the headline ---------------- #}
 <div class="grid cols4 mb">
   <div class="card pad-lg" style="text-align:center">
-    <div style="font-size:1.9rem;font-weight:800">{{ head.median_journey }}m</div>
+    <div style="font-size:1.9rem;font-weight:800">{{ (head.median_journey)|hm }}</div>
     <div class="muted" style="font-size:.8rem">Typical whole visit</div></div>
   <div class="card pad-lg" style="text-align:center">
     <div style="font-size:1.9rem;font-weight:800">{{ head.patients_completed }}</div>
@@ -60,10 +60,10 @@
   {% if s.count %}
   <tr>
     <td><b>{{ s.label }}</b></td>
-    <td>{{ s.median }}m</td>
-    <td>{{ s.average }}m</td>
-    <td>{{ s.longest }}m</td>
-    <td class="muted">{{ targets.get(s.stage, '—') }}m</td>
+    <td>{{ (s.median)|hm }}</td>
+    <td>{{ (s.average)|hm }}</td>
+    <td>{{ (s.longest)|hm }}</td>
+    <td class="muted">{{ (targets.get(s.stage, '—'))|hm }}</td>
     <td>{{ s.count }}</td>
     <td><span class="pill" style="background:{{ colours.get(s.rating, '#6b7280') }};color:#fff">
       {{ s.rating }}</span></td>
@@ -89,7 +89,7 @@
   <tr {% if x.stuck %}style="background:#fff6f6"{% endif %}>
     <td>{{ x.name }}</td>
     <td>{{ x.label }}</td>
-    <td><b>{{ x.waited }}m</b></td>
+    <td><b>{{ (x.waited)|hm }}</b></td>
     <td>
       {% if x.abandoned %}
         <span class="pill" style="background:#6b7280;color:#fff">probably gone home</span>
@@ -111,8 +111,8 @@
   <tr><th>Department</th><th>Typical</th><th>Longest</th><th>Patients</th><th>Verdict</th></tr>
   {% for d in departments %}
   <tr>
-    <td><b>{{ d.label }}</b></td><td>{{ d.median }}m</td>
-    <td>{{ d.longest }}m</td><td>{{ d.count }}</td>
+    <td><b>{{ d.label }}</b></td><td>{{ (d.median)|hm }}</td>
+    <td>{{ (d.longest)|hm }}</td><td>{{ d.count }}</td>
     <td><span class="pill" style="background:{{ colours.get(d.rating, '#6b7280') }};color:#fff">
       {{ d.rating }}</span></td>
   </tr>
@@ -130,12 +130,12 @@
   <tr>
     <td>{{ w.week_ending.strftime('%d %b') }}</td>
     <td>{{ w.patients }}</td>
-    <td>{{ w.median }}m{% if not w.reliable and w.patients %} <span class="muted">(few)</span>{% endif %}</td>
+    <td>{{ (w.median)|hm }}{% if not w.reliable and w.patients %} <span class="muted">(few)</span>{% endif %}</td>
     <td>
       {% if not loop.first and weeks[loop.index0 - 1].median and w.median %}
         {% set diff = w.median - weeks[loop.index0 - 1].median %}
-        {% if diff < 0 %}<span style="color:#1a7f37">▼ {{ -diff }}m faster</span>
-        {% elif diff > 0 %}<span style="color:#c0262c">▲ {{ diff }}m slower</span>
+        {% if diff < 0 %}<span style="color:#1a7f37">▼ {{ (-diff)|hm }} faster</span>
+        {% elif diff > 0 %}<span style="color:#c0262c">▲ {{ (diff)|hm }} slower</span>
         {% else %}<span class="muted">no change</span>{% endif %}
       {% else %}<span class="muted">—</span>{% endif %}
     </td>
@@ -167,7 +167,7 @@
 <table>
   <tr><th>Staff</th><th>Patients handled</th><th>Typical time each</th></tr>
   {% for s in staff %}
-  <tr><td>{{ s.label }}</td><td>{{ s.count }}</td><td>{{ s.median }}m</td></tr>
+  <tr><td>{{ s.label }}</td><td>{{ s.count }}</td><td>{{ (s.median)|hm }}</td></tr>
   {% endfor %}
 </table>
 </div>

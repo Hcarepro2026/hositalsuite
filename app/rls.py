@@ -74,7 +74,7 @@ PROTECTED_TABLES = (
     "sms_message", "whatsapp_message", "report_file", "stored_file",
     "chat_session", "data_request", "qr_location",
     "service_clinic", "consulting_room", "service_destination", "clinic_destination",
-    "tv_screen",
+    "tv_screen", "staff_attendance", "branch",
 )
 
 # The PostgreSQL session variable holding "which hospital is this request for".

@@ -65,6 +65,7 @@ BUILTIN_ROLES: dict[str, dict] = {
             "bookings", "complaints", "escalate", "corrective", "inspections",
             "tracking", "reports", "referrals", "roster",
             "dept_desk", "dept_staff", "dept_manage",
+            "attendance", "attendance_admin",
         },
     },
     "DMD": {
@@ -76,6 +77,7 @@ BUILTIN_ROLES: dict[str, dict] = {
             "bookings", "complaints", "escalate", "corrective",
             "tracking", "reports", "referrals", "roster",
             "dept_desk", "dept_staff", "dept_manage",
+            "attendance", "attendance_admin",
         },
     },
     "DCST": {
@@ -87,6 +89,7 @@ BUILTIN_ROLES: dict[str, dict] = {
             "bookings", "complaints", "escalate", "corrective",
             "tracking", "reports", "referrals", "roster",
             "dept_desk", "dept_staff", "dept_manage",
+            "attendance", "attendance_admin",
         },
     },
     "APEX_NURSE": {
@@ -102,6 +105,7 @@ BUILTIN_ROLES: dict[str, dict] = {
         "permissions": {
             "triage", "consulting", "onward", "bookings", "tracking", "roster",
             "dept_desk", "dept_claim", "dept_staff", "dept_manage",
+            "attendance",
         },
     },
     "HEAD_ADMIN_HR": {
@@ -113,6 +117,7 @@ BUILTIN_ROLES: dict[str, dict] = {
             "bookings", "complaints", "escalate", "corrective",
             "tracking", "reports", "referrals", "roster",
             "dept_desk", "dept_staff", "dept_manage",
+            "attendance", "attendance_admin",
         },
     },
     "ADMIN_MANAGER": {
@@ -124,6 +129,7 @@ BUILTIN_ROLES: dict[str, dict] = {
             "bookings", "complaints", "escalate", "corrective", "inspections",
             "tracking", "roster", "referrals",
             "dept_desk", "dept_claim", "dept_staff", "dept_manage",
+            "attendance", "attendance_admin",
         },
     },
     "HOD": {
@@ -139,6 +145,7 @@ BUILTIN_ROLES: dict[str, dict] = {
             "reception", "cashdesk", "hims", "lahsma",
             "consulting", "onward", "complaints", "escalate", "corrective",
             "tracking", "roster", "dept_desk", "dept_claim", "dept_staff", "dept_manage",
+            "attendance",
         },
     },
     # ------------------------------------------------------------------ NEW
@@ -153,7 +160,7 @@ BUILTIN_ROLES: dict[str, dict] = {
         # Deliberately NO dept_manage: an ordinary member of staff may step
         # THEMSELVES off a task, but not wipe a colleague's record of the work
         # they did. That belongs to whoever runs the department.
-        "permissions": {"dept_desk", "dept_claim", "dept_staff", "roster"},
+        "permissions": {"dept_desk", "dept_claim", "dept_staff", "roster", "attendance"},
     },
 }
 

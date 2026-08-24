@@ -21,14 +21,14 @@ CLINICAL_SEEK = [
 
 SAFE_CLINICAL = (
     "I'd love to help, but I'm not able to diagnose conditions or recommend medicines — that needs a "
-    "clinician who can examine you properly, and you deserve nothing less. I can book you into the right "
-    "clinic right now, or if it's urgent please head to our 24/7 A&E. Shall I book you in?"
+    "clinician who can examine you properly, and you deserve nothing less. If it is urgent, go straight "
+    "to our 24/7 Accident & Emergency. If you want a clinic visit, open the booking page."
 )
 
 SAFE_CLINICAL_PCM = (
     "I go love to help, but I no fit diagnose or recommend medicine o — na doctor wey go examine you properly "
-    "suppo do am, and you deserve the best. I fit book you into the right clinic now now, or if e urgent abeg "
-    "go our A&E wey dey open 24/7. Make I book you?"
+    "suppo do am, and you deserve the best. If e urgent, go our A&E wey dey open 24/7. If you wan clinic visit, "
+    "open the booking page."
 )
 
 
@@ -188,8 +188,8 @@ def is_teaching(text: str) -> bool:
 TEACHING_REPLY = (
     "Thank you — that is exactly the kind of correction that makes me better, "
     "and I have saved it for the team to review. I should be honest with you "
-    "though: I cannot change my own answers from this chat. A person has to "
-    "update my answer book, and your note is now in the list for them."
+    "though: I cannot change my own answers from this chat. A person on the "
+    "team has to update them, and your note is now in the list for them."
 )
 
 
@@ -262,19 +262,6 @@ def answer(text: str, lang: str = "en", org_id=None):
         out += "  " + best.cta.strip()
     best.hit_count = (best.hit_count or 0) + 1
     db.session.commit()
-    action = None
-    intent = best.intent or ""
-    # Department intents are named "<dept>_<suffix>" (see kb_departments_full),
-    # so match on the suffix too — otherwise a department-specific complaint
-    # answer would lose its "Make a complaint" shortcut button.
-    if intent in ("book_appointment", "followup_book", "anc_book") or intent.endswith("_book"):
-        action = "book"
-    elif (intent in ("complaint_start", "bill_dispute")
-          or intent.endswith("_complaint") or intent.endswith("_report_fraud")):
-        action = "complaint"
-    elif best.intent in ("emergency_general", "emergency_chest", "anc_danger",
-                         "labour_signs", "newborn_jaundice"):
-        action = "emergency"
-    elif best.intent == "human_handoff":
-        action = "handoff"
+    from .links import action_for_intent
+    action = action_for_intent(best.intent)
     return {"text": out, "article": best, "confidence": float(best_score), "action": action}

@@ -118,7 +118,7 @@
               title="Placed in your clinic but not assigned to anyone — call them in to take them">
           for the clinic</span>
         {% endif %}
-        <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }} {% if r.visit.is_fast_track %}purple{% endif %}">waiting {{ r.waited }}m {% if r.visit.is_fast_track %}⭐{% endif %}</span>
+        <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }} {% if r.visit.is_fast_track %}purple{% endif %}">waiting {{ (r.waited)|hm }} {% if r.visit.is_fast_track %}⭐{% endif %}</span>
       </span>
     </div>
     {% if r.patient and r.patient.care_flags %}
@@ -127,7 +127,7 @@
     {% endif %}
     {% if r.journey_estimate %}
     <div class="notice mt" style="text-align:left;background:#f0f9ff;border-left:3px solid #0e5a8a">
-      <b>⏱ Estimated journey:</b> {{ r.journey_estimate.total }} min total — {% for st in r.journey_estimate.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %} {% if r.journey_estimate.fast_track %}<span style="color:#8b5cf6;font-weight:800">· Priority (half time)</span>{% endif %}
+      <b>⏱ Estimated journey:</b> {{ (r.journey_estimate.total)|hm }} total — {% for st in r.journey_estimate.stages %}{{ st.label }} {{ (st.minutes)|hm }}{% if not loop.last %} → {% endif %}{% endfor %} {% if r.journey_estimate.fast_track %}<span style="color:#8b5cf6;font-weight:800">· Priority (half time)</span>{% endif %}
     </div>
     {% endif %}
     <form method="post" action="/consulting-room/{{ r.visit.id }}/call-in" class="mt">

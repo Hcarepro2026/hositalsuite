@@ -314,6 +314,8 @@ _USER_REFERENCES = [
     ("AppNotification", "user_id", "alerts in their inbox"),
     ("WhatsAppMessage", "to_user_id", "WhatsApp messages sent to them"),
     ("AuditLog", "user_id", "entries in the audit trail"),
+    ("StaffAttendance", "user_id", "clock-in records"),
+    ("StaffAttendance", "override_by_id", "clock-ins they accepted"),
     # NOTE: UserPref and PasswordReset are deliberately NOT here. They belong
     # to the account itself, not to the hospital's records, so they should go
     # WITH the account rather than prevent it being removed.
@@ -826,6 +828,20 @@ def settings_save():
     services.set_setting(org_id, "fast_track_price_note", (f.get("fast_track_price_note") or "").strip()[:300])
     services.set_setting(org_id, "fast_track_enabled", bool(f.get("fast_track_enabled")))
     services.set_setting(org_id, "fast_track_booking_requires_payment", bool(f.get("fast_track_booking_requires_payment")))
+    # ---- Staff clock-in fence (per hospital)
+    from .. import attendance as att
+    mode = (f.get("attendance_mode") or "off").strip()
+    if mode not in att.MODES:
+        mode = "off"
+    services.set_setting(org_id, "attendance_mode", mode)
+    services.set_setting(org_id, "attendance_radius_m",
+                         att.parse_radius(f.get("attendance_radius_m")))
+    services.set_setting(org_id, "attendance_lat",
+                         att.parse_coord(f.get("attendance_lat"), kind="lat"))
+    services.set_setting(org_id, "attendance_lng",
+                         att.parse_coord(f.get("attendance_lng"), kind="lng"))
+    services.set_setting(org_id, "attendance_grace_minutes",
+                         att.parse_grace(f.get("attendance_grace_minutes")))
     audit("SETTINGS_UPDATED", "settings", org_id,
           {"sla_hours": sla, "gps_mode": services.get_setting(org_id, "gps_mode"),
            "fast_track_price": services.get_setting(org_id, "fast_track_price")})
@@ -1562,17 +1578,28 @@ def branch_save():
         b.address = (request.form.get("address") or "").strip() or None
         b.phone = (request.form.get("phone") or "").strip() or None
         b.email = (request.form.get("email") or "").strip() or None
-        audit("BRANCH_UPDATED", "branch", b.id, {"name": name, "code": code})
+        from .. import attendance as att
+        b.lat = att.parse_coord(request.form.get("lat"), kind="lat")
+        b.lng = att.parse_coord(request.form.get("lng"), kind="lng")
+        raw_r = (request.form.get("fence_meters") or "").strip()
+        b.fence_meters = att.parse_radius(raw_r) if raw_r else None
+        audit("BRANCH_UPDATED", "branch", b.id, {"name": name, "code": code,
+                                                "lat": b.lat, "lng": b.lng})
     else:
         clash = (db.session.query(Branch)
                  .filter_by(org_id=current_user.org_id, code=code).first())
         if clash:
             flash("Another site already uses that code.", "error")
             return redirect(url_for("admin.branches"))
+        from .. import attendance as att
         b = Branch(org_id=current_user.org_id, code=code, name=name,
                    address=(request.form.get("address") or "").strip() or None,
                    phone=(request.form.get("phone") or "").strip() or None,
                    email=(request.form.get("email") or "").strip() or None,
+                   lat=att.parse_coord(request.form.get("lat"), kind="lat"),
+                   lng=att.parse_coord(request.form.get("lng"), kind="lng"),
+                   fence_meters=(att.parse_radius(request.form.get("fence_meters"))
+                                 if (request.form.get("fence_meters") or "").strip() else None),
                    is_main=False, active=True)
         db.session.add(b)
         db.session.flush()

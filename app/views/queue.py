@@ -79,8 +79,9 @@ def join_page():
     org = _default_org()
     if not org:
         abort(503)
-    depts = (db.session.query(Department)
-             .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
+    from ..patient_places import public_departments
+    depts = public_departments(org.id)
+    db.session.commit()
     pre = request.args.get("dept", type=int)
     loc = (request.args.get("loc") or "").strip().upper()
     return render_template("queue_join.html", org=org, depts=depts, pre=pre, loc=loc)
@@ -103,7 +104,8 @@ def join_submit():
         flash("Please enter a valid phone number or leave it empty.", "error")
         return redirect(url_for("queue.join_page"))
 
-    is_fast = bool(request.form.get("is_fast_track"))
+    from ..patient_places import is_fast_track_dept
+    is_fast = bool(request.form.get("is_fast_track")) or is_fast_track_dept(dept)
     fast_reason = (request.form.get("fast_track_reason") or "").strip().upper()[:40] or None
     # MUST consent for Fast Track — premium service
     if is_fast:

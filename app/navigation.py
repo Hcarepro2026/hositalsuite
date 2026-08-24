@@ -77,7 +77,8 @@ def legacy_permissions_for(user) -> dict:
         return {k: False for k in (
             "inspections", "reception", "cashdesk", "hims", "lahsma", "triage",
             "consulting", "onward", "tracking", "bookings", "complaints",
-            "referrals", "corrective", "roster", "reports", "admin")}
+            "referrals", "corrective", "roster", "reports", "admin",
+            "attendance", "attendance_admin")}
 
     role = getattr(user, "role", "") or ""
     is_super = role == "SUPER_ADMIN"
@@ -133,6 +134,10 @@ def legacy_permissions_for(user) -> dict:
         "corrective":  is_super or is_am or is_hod or is_mgmt,
         "roster":      True,                       # everyone checks their duty
         "reports":     is_super or role == "MD_CEO" or is_mgmt,
+        # Clock-in is for every signed-in person. The board is for people
+        # who already run the hospital or HR.
+        "attendance":       True,
+        "attendance_admin": is_super or is_mgmt or is_am,
 
         # The administrator's settings. Nobody else, ever.
         "admin":       is_super,
@@ -148,7 +153,7 @@ MENU_KEYS = ("inspections", "reception", "cashdesk", "hims", "lahsma", "triage",
              "consulting", "onward", "tracking", "bookings", "complaints",
              "referrals", "corrective", "roster", "reports", "admin",
              "dept_desk", "dept_claim", "dept_staff", "dept_manage", "escalate",
-             "roster_edit", "roles_admin")
+             "roster_edit", "roles_admin", "attendance", "attendance_admin")
 
 
 def permissions_for(user) -> dict:

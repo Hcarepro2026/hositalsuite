@@ -36,8 +36,9 @@ def portal():
         return render_template("error.html", code=503, message="System not configured yet."), 503
     loc_code = (request.args.get("loc") or "").strip().upper()
     qr_loc = db.session.query(QrLocation).filter_by(code=loc_code).first() if loc_code else None
-    depts = (db.session.query(Department)
-             .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
+    from ..patient_places import public_departments
+    depts = public_departments(org.id)
+    db.session.commit()
     categories = (db.session.query(ComplaintCategory)
                   .filter_by(org_id=org.id, active=True).order_by(ComplaintCategory.name).all())
     return render_template("complaint_portal.html", org=org, depts=depts, categories=categories,

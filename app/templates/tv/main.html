@@ -101,7 +101,7 @@
         <div class="journey">
           <div class="jt">Estimated time left</div>
           <div class="total">{{ first.journey_estimate.total }} min {% if first.journey_estimate.fast_track %}· priority{% endif %}</div>
-          <div class="steps">{% for st in first.journey_estimate.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %}</div>
+          <div class="steps">{% for st in first.journey_estimate.stages %}{{ st.label }} {{ (st.minutes)|hm }}{% if not loop.last %} → {% endif %}{% endfor %}</div>
         </div>
         {% endif %}
       </div>
@@ -126,8 +126,8 @@
             <div style="font-size:.78rem;opacity:0.7;margin-top:2px">{{ item.code }} {% if item.clinic %}· {{ item.clinic }}{% endif %} {% if item.room %}→ {{ item.room }}{% endif %}</div>
             {% if item.estimated_wait is defined %}
             <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
-              <span class="wait-mini">⏱ ~{{ item.estimated_wait }}m wait</span>
-              {% if item.journey_estimate and item.journey_estimate.total %}<span class="wait-mini">🛣 {{ item.journey_estimate.total }}m total</span>{% endif %}
+              <span class="wait-mini">⏱ ~{{ (item.estimated_wait)|hm }} wait</span>
+              {% if item.journey_estimate and item.journey_estimate.total %}<span class="wait-mini">🛣 {{ (item.journey_estimate.total)|hm }} total</span>{% endif %}
             </div>
             {% endif %}
           </div>
@@ -146,7 +146,7 @@
       {% set r = enriched.row %}
       <div class="row" style="{% if enriched.is_fast_track %}border-left:5px solid #FFD700;padding-left:10px;background:linear-gradient(135deg,rgba(255,215,0,0.15),transparent){% endif %}">
         <span class="left">{% if enriched.is_fast_track %}⭐ {% endif %}{{ r.full_name }}<br><small style="opacity:0.6;font-weight:400">{{ r.ref }} · {{ r.stage }}</small></span>
-        <span class="right"><span class="wait-mini">~{{ enriched.estimated_wait }}m</span></span>
+        <span class="right"><span class="wait-mini">~{{ (enriched.estimated_wait)|hm }}</span></span>
       </div>
       {% endfor %}
     </div>
@@ -190,7 +190,7 @@
       {% for item in feed.onward_enriched[:6] %}
       <div class="row" style="{% if item.is_fast_track %}border-left:5px solid #FFD700;padding-left:10px;background:linear-gradient(135deg,rgba(255,215,0,0.15),transparent){% endif %}">
         <span class="left">{% if item.is_fast_track %}⭐ {% endif %}{{ item.patient.full_name if item.patient else 'Patient' }}<br><small style="opacity:0.6;font-weight:400">{{ item.step.destination }} · {{ item.patient.hospital_number if item.patient else '' }}{% if item.is_fast_track %} · FAST TRACK{% endif %}</small></span>
-        <span class="right">{{ item.waited }}m ago</span>
+        <span class="right">{{ (item.waited)|hm }} ago</span>
       </div>
       {% endfor %}
     </div>

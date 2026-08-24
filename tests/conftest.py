@@ -50,7 +50,7 @@ def client(app):
 def seeded(app):
     """Minimal hospital: org, 4 users, 1 department tree, roster, categories."""
     with app.app_context():
-        org = Organization(code="TEST", name="Test Hospital")
+        org = Organization(code="TEST", name="Test Hospital", phone="08030001111")
         db.session.add(org)
         db.session.flush()
 

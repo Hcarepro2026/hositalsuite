@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}I am here{% endblock %}
+{% block content %}
+<h1>📍 I am here</h1>
+<p class="muted">Tap once when you arrive. Tap again when you leave.
+  Voice reminders stay on after you sign in.</p>
+
+<div class="card mb">
+  <p>
+    {% if site %}<b>Your site:</b> {{ site.name }}<br>{% endif %}
+    {% if fence.mode == 'off' %}
+      The gate check is <b>off</b> at this hospital. You can still sign in so
+      the board knows you are at work.
+    {% elif fence.mode == 'optional' %}
+      The phone will try to mark your place. You can still sign in if it fails.
+    {% else %}
+      You must be inside {{ fence.radius_m }} metres of
+      <b>{{ fence.place }}</b> to sign in.
+      {% if not fence.pinned %}
+        <br><span class="pill red">No gate pin yet</span> — Admin must pin the
+        gate on Admin → Sites. Until then, sign-in is not blocked.
+      {% endif %}
+    {% endif %}
+  </p>
+  <p class="hint">If there is no internet, the tap is saved on this phone and
+    sent when you are back online. A fake-place app will be refused when the
+    gate check is required.</p>
+</div>
+
+{% if open_row %}
+<div class="card mb" style="border:2px solid #1a7f37">
+  <h2>You are signed in</h2>
+  <p>Since {{ open_row.clock_in_at.strftime('%H:%M') }}
+    {% if open_row.in_inside is sameas true %} · inside the gate{% endif %}
+    {% if open_row.in_inside is sameas false %} · recorded outside the circle{% endif %}
+    {% if open_row.in_grace %} · within the grace hour{% endif %}
+    {% if open_row.late_minutes and not open_row.in_grace %} · late {{ open_row.late_minutes }} min{% endif %}
+    {% if open_row.flagged %} · <span class="pill red">Needs review</span>{% endif %}
+  </p>
+  <form method="post" action="/attendance/out" id="out-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="lat" id="out-lat">
+    <input type="hidden" name="lng" id="out-lng">
+    <input type="hidden" name="accuracy" id="out-acc">
+    <input type="hidden" name="mocked" id="out-mocked" value="0">
+    <input type="hidden" name="client_at" id="out-when">
+    <button class="btn big" type="submit">I am leaving</button>
+  </form>
+</div>
+{% else %}
+<div class="card mb">
+  <h2>Not signed in yet</h2>
+  <form method="post" action="/attendance/in" id="in-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="lat" id="in-lat">
+    <input type="hidden" name="lng" id="in-lng">
+    <input type="hidden" name="accuracy" id="in-acc">
+    <input type="hidden" name="mocked" id="in-mocked" value="0">
+    <input type="hidden" name="client_at" id="in-when">
+    <button class="btn big" type="submit" id="in-btn">I am here</button>
+  </form>
+  <p class="hint mt" id="gps-hint">When you tap, the phone will ask to use your place.</p>
+</div>
+{% endif %}
+
+{% if can_help %}
+<div class="card mb">
+  <h2>Help a colleague (photo required)</h2>
+  <p class="hint">Use this when a phone is lost, spoilt, or has no internet.
+    You must take a photo of the person at the gate. The reason is a fixed
+    list — writing a story is not enough. This stops friends covering for
+    each other.</p>
+  <form method="post" action="/attendance/override" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="/attendance">
+    <label>Who</label>
+    <select name="user_id" required>
+      <option value="">— pick —</option>
+      {% for u in help_staff %}
+      <option value="{{ u.id }}">{{ u.name }}</option>
+      {% endfor %}
+    </select>
+    <label>Why</label>
+    <select name="help_reason" required>
+      <option value="">— pick —</option>
+      {% for code, label in help_reasons %}
+      <option value="{{ code }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+    <label>Photo of the person at the gate</label>
+    <input type="file" name="evidence" accept="image/*" capture="environment" required>
+    <label>Short note (optional)</label>
+    <input type="text" name="reason" maxlength="120" placeholder="e.g. screen cracked this morning">
+    <button class="btn mt">Sign them in</button>
+  </form>
+</div>
+{% endif %}
+
+{% if can_admin %}
+<p class="mt">
+  <a class="btn secondary" href="/attendance/today">Who is at work today →</a>
+  <a class="btn ghost" href="/attendance/week">This week's ratings →</a>
+</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/attendance.js') }}"></script>
+{% endblock %}

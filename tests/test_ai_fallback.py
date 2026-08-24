@@ -49,24 +49,34 @@ def test_knowledge_base_is_used_before_ai(client, kb, monkeypatch):
     assert "open" in body["reply"].lower()
 
 
-def test_ai_is_used_when_the_kb_has_nothing(client, kb, monkeypatch):
+def test_a_miss_does_not_ask_the_language_model(client, kb, monkeypatch):
+    """The founder: do not suggest anything that is not in the answer book."""
+    called = {"n": 0}
+
+    def spy(*a, **kw):
+        called["n"] += 1
+        return {"text": "Invented offer", "provider": "test", "ms": 1}
+
     monkeypatch.setenv("GROQ_API_KEY", "k")
-    monkeypatch.setattr(ai, "_PROVIDERS", {"groq": lambda *a, **kw: "A helpful answer."})
+    monkeypatch.setattr(ai, "answer", spy)
     body = client.post("/api/chat", json={
         "text": "zzqq wobble frobnicate xyzzy", "lang": "en"}).get_json()
-    assert body["answered"] is True
-    assert body["reply"] == "A helpful answer."
-    assert body["source"] == "groq"
+    assert called["n"] == 0, "the language model was asked to invent an answer"
+    assert body["answered"] is False
+    assert "answer book" not in body["reply"].lower()
+    assert any(w in body["reply"].lower() for w in ("person", "staff", "desk", "call"))
+    assert "invented" not in body["reply"].lower()
 
 
-def test_ai_reply_is_saved_to_the_database(client, kb, monkeypatch):
-    monkeypatch.setenv("GROQ_API_KEY", "k")
-    monkeypatch.setattr(ai, "_PROVIDERS", {"groq": lambda *a, **kw: "Saved reply."})
+def test_a_miss_is_saved_as_unanswered(client, kb):
     body = client.post("/api/chat", json={
         "text": "zzqq wobble frobnicate plover", "lang": "en"}).get_json()
     rows = db.session.query(ChatMessage).filter_by(session_id=body["session"]).all()
-    assert any(m.role == "bot" and m.text == "Saved reply." for m in rows)
-    assert any(m.intent == "ai_fallback" for m in rows)
+    assert any(m.role == "user" and m.unanswered for m in rows)
+    assert any(m.role == "bot" and "answer book" not in (m.text or "").lower()
+               and any(w in (m.text or "").lower()
+                       for w in ("person", "staff", "desk", "call"))
+               for m in rows)
 
 
 # ================================================================ clinical safety

@@ -31,7 +31,7 @@
     <div class="muted" style="font-size:.8rem">Still waiting here</div></div>
   <div class="card pad-lg" style="text-align:center">
     <div style="font-size:1.9rem;font-weight:800">
-      {% if flow.reliable %}{{ flow.median_minutes }}m{% else %}—{% endif %}</div>
+      {% if flow.reliable %}{{ (flow.median_minutes)|hm }}{% else %}—{% endif %}</div>
     <div class="muted" style="font-size:.8rem">Typical time here</div></div>
 </div>
 
@@ -43,9 +43,9 @@
     A percentage from three patients is an anecdote, not a measurement, so we
     are not showing one.</p>
   {% elif flow.reliable %}
-  <p class="hint" style="margin:0">Average {{ flow.average_minutes }} minutes,
-    typical (median) {{ flow.median_minutes }} minutes, longest
-    {{ flow.longest_minutes }} minutes. The typical figure is the honest one —
+  <p class="hint" style="margin:0">Average {{ flow.average_minutes|sayhm }},
+    typical (median) {{ flow.median_minutes|sayhm }}, longest
+    {{ flow.longest_minutes|sayhm }}. The typical figure is the honest one —
     one forgotten patient drags an average to nonsense.</p>
   {% endif %}
 </div>
@@ -75,7 +75,7 @@
         {% endif %}
       </td>
       <td>{{ t.workers[0].started_at.strftime('%H:%M') }}
-        <span class="muted">({{ t.workers[0].minutes }}m)</span></td>
+        <span class="muted">({{ (t.workers[0].minutes)|hm }})</span></td>
       <td class="right">
         {% for w in t.workers %}
           {% if w.user_id == current_user.id %}
@@ -124,7 +124,7 @@
       <td>{{ e.name }}</td>
       <td>{{ e.patients }}</td>
       <td>{{ e.tasks }}</td>
-      <td>{% if e.reliable %}{{ e.average_minutes }}m
+      <td>{% if e.reliable %}{{ (e.average_minutes)|hm }}
           {% else %}<span class="muted">too few to say</span>{% endif %}</td>
     </tr>
     {% endfor %}

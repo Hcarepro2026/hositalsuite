@@ -46,6 +46,7 @@ from datetime import date, datetime, timedelta
 from . import announce
 from .models import (JOURNEY_STAGE_CODES, JOURNEY_STAGE_LABELS, JourneySegment,
                      db, now_naive)
+from .timefmt import say_hm
 
 log = logging.getLogger(__name__)
 
@@ -560,7 +561,7 @@ def suggest_allocation(org_id) -> list[str]:
     if stuck:
         worst = stuck[0]
         tips.append(
-            f"{worst['name']} has been waiting {worst['waited']} minutes at "
+            f"{worst['name']} has been waiting {say_hm(worst['waited'])} at "
             f"{worst['label']}. Somebody should go and see why.")
 
     abandoned = [x for x in live if x["abandoned"]]
@@ -586,7 +587,7 @@ def suggest_allocation(org_id) -> list[str]:
         slow.sort(key=lambda s: -s["median"])
         worst = slow[0]
         tips.append(
-            f"{worst['label']} takes {worst['median']} minutes for a typical "
+            f"{worst['label']} takes {say_hm(worst['median'])} for a typical "
             f"patient this week — the slowest step in the journey. Adding one "
             f"person there would shorten every patient's visit.")
 
@@ -759,7 +760,7 @@ def announce_forgotten(org_id) -> int:
         announce.to_station(org_id, "patient_forgotten",
                             patient=announce.speech_name(row["spoken"]),
                             place=row["label"],
-                            detail=f"{row['waited']} minutes")
+                            detail=say_hm(row["waited"]))
         said += 1
     return said
 
@@ -774,9 +775,9 @@ def announce_bottleneck(org_id, days: int = 1) -> int:
     worst = slow[0]
     announce.to_station(
         org_id, "flow_bottleneck", place=worst["label"],
-        detail=f"A typical patient waits {worst['median']} minutes there, "
+        detail=f"A typical patient waits {say_hm(worst['median'])} there, "
                f"against a target of "
-               f"{STAGE_TARGET_MINUTES.get(worst['stage'], 20)}.")
+               f"{say_hm(STAGE_TARGET_MINUTES.get(worst['stage'], 20))}.")
     return 1
 
 

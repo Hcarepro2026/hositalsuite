@@ -38,8 +38,9 @@ def portal():
     org = _default_org()
     if not org:
         abort(503)
-    depts = (db.session.query(Department)
-             .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
+    from ..patient_places import public_departments
+    depts = public_departments(org.id)
+    db.session.commit()
     return render_template("feedback_portal.html", org=org, depts=depts)
 
 
@@ -148,13 +149,45 @@ def portal_thanks():
 @bp.get("/feedbacks")
 @require_login
 def staff_list():
-    q = db.session.query(PatientFeedback).filter(PatientFeedback.org_id == current_user.org_id)
+    """Satisfaction board — how patients rated the visit."""
+    from .. import satisfaction as sat
+    from ..navigation import permissions_for
+    from ..roles import can_see_department
+
+    if not permissions_for(current_user).get("complaints"):
+        abort(403)
+    days = sat.parse_days(request.args.get("days"))
     dept = request.args.get("dept", type=int)
+    if dept and not can_see_department(current_user, dept):
+        abort(403)
+
+    board = sat.dashboard(current_user, days=days)
+    items = board["recent"]
     if dept:
-        q = q.filter(PatientFeedback.department_id == dept)
-    items = q.order_by(PatientFeedback.created_at.desc()).limit(200).all()
-    depts = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True).all()
-    all_items = db.session.query(PatientFeedback).filter_by(org_id=current_user.org_id).all()
-    avg = round(sum(f.rating for f in all_items) / len(all_items), 1) if all_items else None
-    return render_template("feedbacks_staff.html", items=items, depts=depts, avg=avg,
-                           dept=dept, total=len(all_items))
+        items = [f for f in items if f.department_id == dept]
+        picked = next((d for d in board["departments"] if d["id"] == dept), None)
+        if picked:
+            board = {**board, "avg": picked["avg"], "total": picked["n"],
+                     "word": picked["word"], "recent": items}
+
+    depts = db.session.query(Department).filter_by(
+        org_id=current_user.org_id, active=True).order_by(Department.name).all()
+    depts = [d for d in depts if can_see_department(current_user, d.id)]
+    return render_template(
+        "feedbacks_staff.html", board=board, items=items, depts=depts,
+        avg=board["avg"], dept=dept, total=board["total"], days=days,
+    )
+
+
+@bp.get("/feedbacks.csv")
+@require_login
+def staff_csv():
+    from .. import satisfaction as sat
+    from ..navigation import permissions_for
+    from ..views.reports import _csv_response
+
+    if not permissions_for(current_user).get("complaints"):
+        abort(403)
+    days = sat.parse_days(request.args.get("days"))
+    header, rows = sat.csv_rows(current_user, days=days)
+    return _csv_response(header, rows, f"satisfaction-{days}d.csv")

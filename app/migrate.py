@@ -111,6 +111,22 @@ COLUMNS = [
     ("patient", "branch_id", "INTEGER"),
     ("patient_visit", "branch_id", "INTEGER"),
     ("reception_intake", "branch_id", "INTEGER"),
+    # --- Attendance geo-fence (per site pin)
+    ("branch", "lat", "FLOAT"),
+    ("branch", "lng", "FLOAT"),
+    ("branch", "fence_meters", "INTEGER"),
+    ("staff_attendance", "flagged", _bool_sql),
+    ("staff_attendance", "flag_note", "VARCHAR(240)"),
+    ("staff_attendance", "mocked", _bool_sql),
+    ("staff_attendance", "client_punched_at", "TIMESTAMP"),
+    ("staff_attendance", "late_minutes", "INTEGER"),
+    ("staff_attendance", "in_grace", _bool_sql),
+    ("staff_attendance", "help_reason", "VARCHAR(20)"),
+    ("staff_attendance", "evidence_path", "VARCHAR(300)"),
+    # --- Assistant conversation thread (web + WhatsApp)
+    ("chat_session", "phone", "VARCHAR(32)"),
+    ("chat_session", "last_intent", "VARCHAR(60)"),
+    ("chat_session", "last_action", "VARCHAR(20)"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

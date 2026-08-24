@@ -240,6 +240,20 @@ def whatsapp_webhook():
             value = change.get("value", {})
             for status in value.get("statuses", []):
                 whatsapp.apply_webhook_status(status.get("id", ""), status.get("status", ""))
+            for message in value.get("messages", []):
+                if (message.get("type") or "") != "text":
+                    continue
+                body = ((message.get("text") or {}).get("body") or "").strip()
+                frm = (message.get("from") or "").strip()
+                if not body or not frm:
+                    continue
+                try:
+                    from ..chatbot.serve import handle_whatsapp
+                    from ..services import current_org
+                    handle_whatsapp(current_org(), frm, body)
+                except Exception:                        # noqa: BLE001
+                    current_app.logger.exception("whatsapp inbound chat failed")
+                    db.session.rollback()
     return "ok", 200
 
 

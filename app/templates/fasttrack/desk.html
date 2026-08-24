@@ -69,9 +69,9 @@
     <div style="flex:1">
       <div class="name">👑 {{ r.intake.full_name }} <span class="badge-gold">{{ r.intake.ref }}</span> <span class="badge-fast">{{ r.label }}</span></div>
       <div class="muted" style="font-size:.82rem;margin-top:3px">{{ r.intake.stage_label }}</div>
-      {% if r.journey and r.journey.total %}<div style="margin-top:6px;background:#FFFEF0;border-radius:8px;padding:6px 10px;font-size:.78rem;border:1px solid #f0e6c0">⏱ About {{ r.journey.total }}m total left</div>{% endif %}
+      {% if r.journey and r.journey.total %}<div style="margin-top:6px;background:#FFFEF0;border-radius:8px;padding:6px 10px;font-size:.78rem;border:1px solid #f0e6c0">⏱ About {{ (r.journey.total)|hm }} total left</div>{% endif %}
     </div>
-    <div style="text-align:right"><span class="pill" style="background:#000;color:#FFD700">{{ r.waited }}m</span></div>
+    <div style="text-align:right"><span class="pill" style="background:#000;color:#FFD700">{{ (r.waited)|hm }}</span></div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
     {% if r.intake.stage == 'RECEPTION' %}
@@ -99,7 +99,7 @@
       <div class="name">👑 {{ r.patient.full_name if r.patient else 'Patient #' ~ r.visit.patient_id }} <span class="badge-gold">{{ r.patient.hospital_number if r.patient else '' }}</span></div>
       <div class="muted" style="font-size:.82rem;margin-top:3px">{{ r.visit.clinic }} {% if r.visit.consulting_room %}· {{ r.visit.consulting_room }}{% endif %} · {{ r.visit.status }}</div>
     </div>
-    <div style="text-align:right"><span class="pill" style="background:#000;color:#FFD700">{{ r.waited }}m</span></div>
+    <div style="text-align:right"><span class="pill" style="background:#000;color:#FFD700">{{ (r.waited)|hm }}</span></div>
   </div>
 </div>
 {% endfor %}
@@ -114,9 +114,9 @@
   <div style="display:flex;justify-content:space-between;gap:10px">
     <div style="flex:1">
       <div class="name">👑 {{ r.patient.full_name if r.patient else '—' }} <span class="badge-gold">{{ r.step.destination }}</span></div>
-      <div class="muted" style="font-size:.82rem;margin-top:3px">{{ r.patient.hospital_number if r.patient else '' }} · Sent {{ r.waited }}m ago</div>
+      <div class="muted" style="font-size:.82rem;margin-top:3px">{{ r.patient.hospital_number if r.patient else '' }} · Sent {{ (r.waited)|hm }} ago</div>
     </div>
-    <span class="pill" style="background:#000;color:#FFD700">{{ r.waited }}m</span>
+    <span class="pill" style="background:#000;color:#FFD700">{{ (r.waited)|hm }}</span>
   </div>
   <form method="post" action="/onward/{{ r.step.id }}/done" class="mt"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn small" style="background:#000;color:#FFD700;width:100%;border-radius:999px">✅ Done — {{ r.step.destination }}</button></form>
 </div>

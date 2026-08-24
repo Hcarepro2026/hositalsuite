@@ -444,7 +444,7 @@ def test_the_dashboard_shows_real_figures(app, client, seeded):
     _login(client, app, seeded)
     body = client.get("/tracking").get_data(as_text=True)
     assert "Pharmacy" in body
-    assert "45m" in body
+    assert "0:45m" in body
 
 
 def test_one_patients_journey_page_works(app, client, seeded):
@@ -645,7 +645,7 @@ def test_a_forgotten_patient_is_spoken_about(app, seeded):
         rows = db.session.query(AppNotification).filter_by(
             template_key="patient_forgotten").all()
         assert rows, "nobody was told about the forgotten patient"
-        assert "90 minutes" in rows[0].body
+        assert "1 hour 30 minutes" in rows[0].body
         # ...and by the name she is actually CALLED, not register order.
         assert "folake" in rows[0].body.lower(), rows[0].body
         assert "abatan" not in rows[0].body.lower(), \

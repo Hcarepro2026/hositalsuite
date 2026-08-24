@@ -40,10 +40,12 @@
     </div>
     <div class="hint center">1 = very poor · 5 = excellent</div>
 
-    <label>2 · Department (optional)</label>
+    <label>2 · Where were you? (optional)</label>
     <select name="department_id">
       <option value="">— Whole hospital —</option>
-      {% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+      {% for d in depts %}
+      <option value="{{ d.id }}">{% if 'fast track' in d.name|lower %}⭐ {% endif %}{{ d.name }}</option>
+      {% endfor %}
     </select>
 
     <label>3 · {{ _('fb_improve') }}</label>

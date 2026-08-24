@@ -21,12 +21,44 @@
     <div><label>Overdue alert to management</label><input type="time" name="overdue_notify_time" value="{{ s.overdue_notify_time }}"></div>
   </div>
 
-  <h2 class="mt">📍 GPS verification</h2>
+  <h2 class="mt">📍 GPS verification (walk-round)</h2>
   <select name="gps_mode">
     <option value="mandatory" {{ 'selected' if s.gps_mode=='mandatory' }}>Mandatory — inspection blocked without GPS</option>
     <option value="optional" {{ 'selected' if s.gps_mode=='optional' }}>Optional — captured when available</option>
     <option value="disabled" {{ 'selected' if s.gps_mode=='disabled' }}>Disabled</option>
   </select>
+
+  <h2 class="mt">🚪 Staff clock-in (gate check)</h2>
+  <p class="hint">This is <b>per hospital</b>, not a server switch. Leave it Off until you have pinned the gate on Admin → Sites. Voice reminders stay on.</p>
+  <div class="grid cols3">
+    <div>
+      <label>How strict</label>
+      <select name="attendance_mode">
+        <option value="off" {{ 'selected' if s.attendance_mode=='off' }}>Off — sign in without a place check</option>
+        <option value="optional" {{ 'selected' if s.attendance_mode=='optional' }}>Record place, still allow if outside</option>
+        <option value="required" {{ 'selected' if s.attendance_mode=='required' }}>Must be inside the circle</option>
+      </select>
+    </div>
+    <div>
+      <label>Default circle (metres)</label>
+      <input type="number" name="attendance_radius_m" min="50" max="2000"
+             value="{{ s.attendance_radius_m or 200 }}">
+      <div class="hint">200 m covers a typical compound. Each site can set its own.</div>
+    </div>
+    <div>
+      <label>Grace after roster start (minutes)</label>
+      <input type="number" name="attendance_grace_minutes" min="0" max="240"
+             value="{{ s.attendance_grace_minutes or 60 }}">
+      <div class="hint">Late after this, counted from that person's own shift start.</div>
+    </div>
+  </div>
+  <div class="grid cols2 mt">
+    <div><label>Hospital pin latitude (optional fallback)</label>
+      <input type="text" name="attendance_lat" value="{{ s.attendance_lat or '' }}" placeholder="6.5244"></div>
+    <div><label>Hospital pin longitude</label>
+      <input type="text" name="attendance_lng" value="{{ s.attendance_lng or '' }}" placeholder="3.3792"></div>
+  </div>
+  <p class="hint">Prefer pinning each site on <a href="/admin/branches">Admin → Sites</a> while standing at the gate.</p>
 
   <h2 class="mt">📡 WhatsApp report delivery</h2>
   <div class="grid cols2">

@@ -14,6 +14,10 @@ Each entry: (department, [(section, [units...]), ...])
 from __future__ import annotations
 
 STANDARD_DEPARTMENTS: list[tuple[str, list[tuple[str, list[str]]]]] = [
+    # Premium lane — a real department patients can pick, not a hidden flag.
+    ("Fast Track", [
+        ("Executive Lounge", ["Gold Lane", "Fast Track Desk"]),
+    ]),
     # ---------------------------------------------------------------- clinical
     ("Accident & Emergency", [
         ("Emergency Room", ["Triage", "Resuscitation Room", "Observation Bay"]),

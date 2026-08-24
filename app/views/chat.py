@@ -94,81 +94,28 @@ def chat_api():
                        reply=engine.TEACHING_REPLY, msg_id=bot.id,
                        intent="teaching_note")
 
-    # ---- FOLLOW-UP FIRST. "Yes" is not a question, it is an answer to the
-    # offer we just made. Scored on its own it matches nothing, so it used to
-    # fall through to the AI, which saw only the word "yes" and invented a
-    # plausible reply — that is how "yes, book me a morning slot" came back as
-    # a phone number instead of the booking page.
-    res = None
-    if engine.is_agreement(text) or engine.is_refusal(text):
-        last = (db.session.query(ChatMessage)
-                .filter_by(session_id=sess.id, role="user")
-                .order_by(ChatMessage.id.desc()).first())
-        prev_intent = (last.intent if last else "") or ""
-        if engine.is_refusal(text):
-            res = {"text": ("No problem at all. I'm here whenever you need "
-                            "me — just ask."),
-                   "article": None, "confidence": 99.0, "action": None}
-        else:
-            res = engine.followup_for(prev_intent, prev_intent,
-                                      lang=lang,
-                                      org_id=org.id if org else None)
-            if res is None:
-                # We genuinely cannot tell what was agreed to. ASKING is far
-                # better than guessing and being confidently wrong.
-                res = {"text": ("Happy to help — could you tell me what you'd "
-                                "like me to do? For example \u201cbook an "
-                                "appointment\u201d or \u201cspeak to "
-                                "someone\u201d."),
-                       "article": None, "confidence": 99.0, "action": None}
+    # Answer book only. A language model must not invent a suggestion the
+    # hospital never wrote. If the book has nothing, we stop.
+    from ..chatbot.serve import remember, respond
+    got = respond(text, org=org, lang=lang, session=sess)
+    remember(sess, got)
 
-    if res is None:
-        res = engine.answer(text, lang=lang, org_id=org.id if org else None)
-
-    # ---- AI fallback: only when the curated library has no confident answer.
-    # The hospital's own words always win; AI fills the long tail.
-    if res is None:
-        from ..chatbot import ai
-        recent = (db.session.query(ChatMessage)
-                  .filter_by(session_id=sess.id)
-                  .order_by(ChatMessage.id.desc()).limit(4).all())
-        history = [{"role": m.role, "text": m.text} for m in reversed(recent)]
-        try:
-            got = ai.answer(text, org=org, lang=lang, history=history)
-        except Exception:                                # noqa: BLE001 - never break chat
-            current_app.logger.exception("AI fallback failed")
-            got = None
-        if got:
-            db.session.add(ChatMessage(session_id=sess.id, role="user", text=text,
-                                       intent="ai_fallback", unanswered=False))
-            db.session.flush()
-            bot = ChatMessage(session_id=sess.id, role="bot", text=got["text"])
-            db.session.add(bot)
-            db.session.commit()
-            return jsonify(session=sess.id, answered=True, reply=got["text"],
-                           msg_id=bot.id, source=got["provider"])
-
-    if res is None:
-        db.session.add(ChatMessage(session_id=sess.id, role="user", text=text,
-                                   unanswered=True))
-        db.session.commit()
-        return jsonify(session=sess.id, answered=False,
-                       reply=("I want to get this exactly right, and I don't have a perfect answer for "
-                              "that yet. I can connect you to our front desk, or try one of the quick "
-                              "topics below. Shall I get a human to help?"))
     msg = ChatMessage(session_id=sess.id, role="user", text=text,
-                      intent=res["article"].intent if res["article"] else res.get("action"),
-                      confidence=res["confidence"],
-                      article_id=res["article"].id if res["article"] else None)
+                      intent=got.get("intent"),
+                      confidence=got.get("confidence"),
+                      article_id=got["article"].id if got.get("article") else None,
+                      unanswered=bool(got.get("unanswered")))
     db.session.add(msg)
     db.session.flush()
-    bot = ChatMessage(session_id=sess.id, role="bot", text=res["text"],
-                      article_id=res["article"].id if res["article"] else None)
+    bot = ChatMessage(session_id=sess.id, role="bot", text=got["text"],
+                      article_id=got["article"].id if got.get("article") else None)
     db.session.add(bot)
     db.session.commit()
-    return jsonify(session=sess.id, answered=True, reply=res["text"],
-                   action=res.get("action"), msg_id=bot.id,
-                   intent=res["article"].intent if res["article"] else None)
+    return jsonify(session=sess.id, answered=bool(got.get("answered")),
+                   reply=got["text"], action=got.get("action"),
+                   links=got.get("links") or [], msg_id=bot.id,
+                   intent=got.get("intent"),
+                   handoff=bool(got.get("handoff")))
 
 
 @bp.post("/chat/feedback")
@@ -198,22 +145,15 @@ def chat_feedback():
 @csrf_exempt("chat.chat_handoff")
 @rate_limit(limit=10, window=120.0)
 def chat_handoff():
-    """Human handoff: notify the Admin Manager on duty + create a chat-escalation note."""
-    from .. import notifications
+    """Human handoff: notify the Admin Manager on duty once per chat."""
+    from ..chatbot.serve import perform_handoff
     org = _org()
     data = request.get_json(silent=True) or {}
     session_id = data.get("session")
     sess = db.session.get(ChatSession, session_id or 0)
-    if sess:
-        sess.handed_off = True
-    duty = services.on_duty(org.id, now_naive().date()) if org else None
-    ctx = {"ref": f"CHAT-{session_id or 'web'}", "dept": "Front Desk", "category": "Chat handoff",
-           "hospital": org.name if org else "", "sla": ""}
-    if org and duty:
-        notifications.notify(org.id, duty, "complaint_new_admin", ctx, channels=["inapp"],
-                             entity_type="chat", entity_id=session_id or 0)
+    fresh = perform_handoff(org, sess)
     db.session.commit()
-    audit("CHAT_HANDOFF", "chat", session_id or 0, {})
-    return jsonify(ok=True,
-                   message="Thank you for your patience — I've alerted our front desk and a team "
-                           "member will be with you shortly. You're in good hands.")
+    return jsonify(
+        ok=True, already=not fresh,
+        message=("Thank you for your patience — I've alerted our front desk and a team "
+                 "member will be with you shortly. You're in good hands."))

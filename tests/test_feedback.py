@@ -64,3 +64,59 @@ def test_staff_see_feedback_and_satisfaction(client, seeded):
     assert r.status_code == 200
     assert b"Average satisfaction" in r.data
     assert b"Recovery ticket" in r.data  # low rating shows its linked ticket
+    assert b"How patients rated" in r.data
+    assert b"3.5" in r.data or b"3.5" in r.data  # (5+2)/2
+    assert b"Stars given" in r.data
+    assert b"Each department" in r.data
+
+
+def test_satisfaction_csv_has_no_phone_and_no_clinical_words(client, seeded):
+    _rate(client, 5, department_id=seeded["dept"], comment="Kind nurses")
+    login(client, "admin")
+    r = client.get("/feedbacks.csv?days=30")
+    assert r.status_code == 200
+    body = r.data.decode("utf-8")
+    assert "Stars" in body
+    assert "Kind nurses" in body
+    assert "080" not in body
+    for banned in ("diagnosis", "prescription", "blood_group", "genotype"):
+        assert banned not in body.lower()
+
+
+def test_hod_does_not_see_another_department_rating(client, seeded):
+    from app.models import Department, User
+    other = Department(org_id=seeded["org"], name="Pharmacy Store")
+    db.session.add(other)
+    db.session.flush()
+    _rate(client, 1, department_id=other.id, comment="Pharmacy was rude")
+    _rate(client, 5, department_id=seeded["dept"], comment="Emergency was kind")
+    login(client, "hod1")
+    page = client.get("/feedbacks")
+    assert page.status_code == 200
+    assert b"Emergency was kind" in page.data
+    assert b"Pharmacy was rude" not in page.data
+
+
+def test_two_hospitals_cannot_see_each_others_ratings(app, seeded):
+    from app.models import Organization, User
+    from app import satisfaction as sat
+    other = Organization(code="OTH2", name="Other Clinic")
+    db.session.add(other)
+    db.session.flush()
+    _ = PatientFeedback(org_id=other.id, rating=1, comment="secret other hospital")
+    db.session.add(_)
+    db.session.commit()
+    md = db.session.get(User, seeded["md"])
+    board = sat.dashboard(md, days=30)
+    texts = " ".join((r.comment or "") for r in board["recent"])
+    assert "secret other hospital" not in texts
+
+
+def test_word_for_stars():
+    from app import satisfaction as sat
+    assert sat.word_for(4.8) == "Excellent"
+    assert sat.word_for(4.0) == "Good"
+    assert sat.word_for(3.2) == "Fair"
+    assert sat.word_for(2.1) == "Poor"
+    assert sat.word_for(1.0) == "Critical"
+    assert sat.word_for(None) == "No ratings yet"

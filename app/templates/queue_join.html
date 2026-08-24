@@ -39,13 +39,17 @@
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="loc" value="{{ loc or '' }}">
 
-    <div class="step-label">1 · Which department?</div>
-    <select name="department_id" required class="input-big">
-      <option value="">— Select department —</option>
+    <div class="step-label">1 · Where do you need to go?</div>
+    <select name="department_id" required class="input-big" id="q-dept">
+      <option value="">— Select a place —</option>
       {% for d in depts %}
-      <option value="{{ d.id }}" {{ 'selected' if pre == d.id }}>{{ d.name }}</option>
+      <option value="{{ d.id }}" data-fast="{{ 1 if 'fast track' in d.name|lower else 0 }}"
+              {{ 'selected' if pre == d.id }}>
+        {% if 'fast track' in d.name|lower %}⭐ {% endif %}{{ d.name }}
+      </option>
       {% endfor %}
     </select>
+    <p style="font-size:.8rem;color:#6b7d90;margin:6px 0 0;line-height:1.4">Only places a patient visits. Fast Track is at the top — pick it to be seen faster.</p>
 
     <div class="step-label">2 · Your name</div>
     <input type="text" name="patient_name" required class="input-big" placeholder="e.g. Aisha Bello">

@@ -94,7 +94,7 @@
           <div style="flex:1;min-width:0">
             <div style="font-weight:800;font-size:.95rem">{{ item.name }} {% if item.is_fast_track %}<span class="pill purple" style="font-size:.6rem;padding:2px 8px">⭐ {{ item.fast_track_reason or 'Priority' }}</span>{% endif %}</div>
             <div style="font-size:.78rem;opacity:0.7;margin-top:2px">{{ item.code }} {% if item.clinic %}· {{ item.clinic }}{% endif %}</div>
-            {% if item.estimated_wait is defined %}<span class="wait-mini">⏱ ~{{ item.estimated_wait }}m</span>{% endif %}
+            {% if item.estimated_wait is defined %}<span class="wait-mini">⏱ ~{{ (item.estimated_wait)|hm }}</span>{% endif %}
           </div>
           <span class="wait-mini">#{{ item.position if item.position else loop.index }}</span>
         </div>

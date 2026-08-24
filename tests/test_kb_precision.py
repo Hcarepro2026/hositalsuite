@@ -45,8 +45,8 @@ def test_parking_question_is_not_answered_by_billing(app, seeded):
         assert intent != "bill_estimate", "Parking question routed to the billing desk"
 
 
-def test_a_genuine_miss_returns_none_so_ai_can_answer(app, seeded):
-    """If the KB invents an answer, the AI ladder is never reached."""
+def test_a_genuine_miss_returns_none_so_we_stop(app, seeded):
+    """If the book has nothing, we stop. We do not invent."""
     seed_global_kb(app)
     with app.app_context():
         assert engine.answer("Which bus from Ikorodu garage drops at your gate") is None

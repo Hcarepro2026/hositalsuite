@@ -39,8 +39,9 @@ def portal():
         refeng.remember(ref_code)
     else:
         ref_code = ""
-    depts = (db.session.query(Department)
-             .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
+    from ..patient_places import public_departments
+    depts = public_departments(org.id)
+    db.session.commit()
     today = now_naive().date()
     window = int(services.get_setting(org.id, "booking_window_days") or 30)
     s = services.org_settings_bundle(org.id)
@@ -114,7 +115,8 @@ def portal_submit():
         errors.append("That time slot is full — please choose another time.")
 
     if errors:
-        depts = db.session.query(Department).filter_by(org_id=org.id, active=True).all()
+        from ..patient_places import public_departments
+        depts = public_departments(org.id)
         for e in errors:
             flash(e, "error")
         # preserve the QR location tag on re-render
@@ -132,8 +134,10 @@ def portal_submit():
     loc_code = (request.form.get("loc") or "").strip().upper()
     qr_loc = db.session.query(QrLocation).filter_by(code=loc_code).first() if loc_code else None
 
+    from ..patient_places import is_fast_track_dept
     # Fast Track — Booking is now Fast Track premium linked to Reception
-    is_ft = (request.form.get("is_fast_track") or "").strip() in ("1","on","true","yes") or True
+    is_ft = ((request.form.get("is_fast_track") or "").strip() in ("1","on","true","yes")
+             or is_fast_track_dept(dept) or True)
     ft_reason = (request.form.get("fast_track_reason") or "PREMIUM").strip().upper()[:40] or "PREMIUM"
     ft_price = int(services.get_setting(org.id, "fast_track_price") or 15000)
     ft_requires_pay = bool(services.get_setting(org.id, "fast_track_booking_requires_payment"))

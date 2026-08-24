@@ -36,20 +36,20 @@
           {% if r.patient and r.patient.payer_name %} · {{ r.patient.payer_name }}{% endif %}
         </div>
         <div class="muted" style="font-size:.85rem">
-          Visit {{ r.visit.visit_no if r.visit else r.step.visit_id }} · sent {{ r.waited }}m ago
+          Visit {{ r.visit.visit_no if r.visit else r.step.visit_id }} · sent {{ (r.waited)|hm }} ago
           {% if r.step.note %} · {{ r.step.note }}{% endif %}
         </div>
         {% if r.journey and r.journey.total %}
         <div style="margin-top:6px;background:#f6f9fc;border-radius:8px;padding:6px 10px;font-size:.78rem">
-          <b>⏱ Journey est:</b> {{ r.journey.total }}m left
-          {% if r.journey.stages %}· {% for st in r.journey.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %}{% endif %}
+          <b>⏱ Journey est:</b> {{ (r.journey.total)|hm }} left
+          {% if r.journey.stages %}· {% for st in r.journey.stages %}{{ st.label }} {{ (st.minutes)|hm }}{% if not loop.last %} → {% endif %}{% endfor %}{% endif %}
           {% if r.journey.fast_track %}· ⭐ priority{% endif %}
         </div>
         {% endif %}
       </div>
       <div style="text-align:right">
-        <span class="pill {{ 'red' if r.waited >= 20 else 'amber' }}">{{ r.waited }}m</span>
-        {% if r.journey and r.journey.total %}<div style="margin-top:6px"><span class="pill" style="background:#e7f0f8;color:#0e5a8a;font-size:.7rem">{{ r.journey.total }}m total</span></div>{% endif %}
+        <span class="pill {{ 'red' if r.waited >= 20 else 'amber' }}">{{ (r.waited)|hm }}</span>
+        {% if r.journey and r.journey.total %}<div style="margin-top:6px"><span class="pill" style="background:#e7f0f8;color:#0e5a8a;font-size:.7rem">{{ (r.journey.total)|hm }} total</span></div>{% endif %}
       </div>
     </div>
 

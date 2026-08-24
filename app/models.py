@@ -182,6 +182,11 @@ class Branch(db.Model):
     email = db.Column(db.String(160))
     is_main = db.Column(db.Boolean, default=False, nullable=False)
     active = db.Column(db.Boolean, default=True, nullable=False)
+    # Gate pin for staff clock-in. Empty = this site has no fence of its own
+    # (the hospital-wide setting is used, or the fence is off).
+    lat = db.Column(db.Float)
+    lng = db.Column(db.Float)
+    fence_meters = db.Column(db.Integer)          # None = use hospital default
     created_at = db.Column(db.DateTime, default=now_naive)
     org = db.relationship("Organization", backref="branches")
     __table_args__ = (db.UniqueConstraint("org_id", "code", name="uq_branch_org_code"),)
@@ -812,6 +817,9 @@ class ChatSession(db.Model):
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), index=True)
     lang = db.Column(db.String(4), default="en")
     channel = db.Column(db.String(12), default="web")       # web | whatsapp
+    phone = db.Column(db.String(32))                        # WhatsApp thread
+    last_intent = db.Column(db.String(60))
+    last_action = db.Column(db.String(20))
     started_at = db.Column(db.DateTime, default=now_naive)
     ended_at = db.Column(db.DateTime)
     handed_off = db.Column(db.Boolean, default=False)
@@ -1819,6 +1827,10 @@ PERMISSION_GROUPS = (
         ("roster",      "See the duty roster"),
         ("roster_edit", "Change the duty roster"),
     )),
+    ("Staff time", (
+        ("attendance",       "Clock in and out of work"),
+        ("attendance_admin", "See who is at work today and accept an outside clock-in"),
+    )),
     ("Administration", (
         ("admin",       "Open the Administrator settings (full control)"),
         ("roles_admin", "Create roles and decide who may do what"),
@@ -1980,3 +1992,60 @@ class WorkClaim(db.Model):
         if self.seconds is not None:
             return int(self.seconds // 60)
         return max(0, int((now_naive() - self.started_at).total_seconds() // 60))
+
+
+# ---------------------------------------------------------------- staff clock-in
+class StaffAttendance(db.Model):
+    """One clock-in / clock-out for one person on one day.
+
+    NOT a patient record. This is only \"was this member of staff at the
+    hospital gate\". No clinical columns, ever.
+    """
+    __tablename__ = "staff_attendance"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey("branch.id"), index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    duty_date = db.Column(db.Date, nullable=False, index=True)
+
+    clock_in_at = db.Column(db.DateTime, nullable=False, default=now_naive)
+    clock_out_at = db.Column(db.DateTime)
+
+    in_lat = db.Column(db.Float)
+    in_lng = db.Column(db.Float)
+    in_accuracy_m = db.Column(db.Integer)
+    in_distance_m = db.Column(db.Integer)
+    in_inside = db.Column(db.Boolean)
+
+    out_lat = db.Column(db.Float)
+    out_lng = db.Column(db.Float)
+    out_accuracy_m = db.Column(db.Integer)
+    out_distance_m = db.Column(db.Integer)
+    out_inside = db.Column(db.Boolean)
+
+    mode = db.Column(db.String(12), default="off")          # off | optional | required
+    override_reason = db.Column(db.String(200))
+    override_by_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    device_info = db.Column(db.String(200))
+    # Honest clock-in: cheat marks, grace, helped punch, offline time
+    flagged = db.Column(db.Boolean, default=False)
+    flag_note = db.Column(db.String(240))
+    mocked = db.Column(db.Boolean, default=False)
+    client_punched_at = db.Column(db.DateTime)
+    late_minutes = db.Column(db.Integer)
+    in_grace = db.Column(db.Boolean, default=False)
+    help_reason = db.Column(db.String(20))
+    evidence_path = db.Column(db.String(300))
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    branch = db.relationship("Branch", foreign_keys=[branch_id])
+    override_by = db.relationship("User", foreign_keys=[override_by_id])
+
+    __table_args__ = (
+        db.Index("ix_staff_att_org_date", "org_id", "duty_date"),
+        db.Index("ix_staff_att_open", "org_id", "user_id", "clock_out_at"),
+    )
+
+    @property
+    def is_open(self) -> bool:
+        return self.clock_out_at is None

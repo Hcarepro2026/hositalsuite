@@ -12,7 +12,7 @@
     <div style="font-size:1.9rem;font-weight:800">{{ stats.placed }}</div>
     <div class="muted" style="font-size:.8rem">Placed today</div></div>
   <div class="card pad-lg" style="text-align:center">
-    <div style="font-size:1.9rem;font-weight:800">{{ stats.longest_wait }}m</div>
+    <div style="font-size:1.9rem;font-weight:800">{{ (stats.longest_wait)|hm }}</div>
     <div class="muted" style="font-size:.8rem">Longest wait</div></div>
   <div class="card pad-lg" style="text-align:center">
     <div style="font-size:1.9rem;font-weight:800">{{ sessions | length }}</div>
@@ -70,7 +70,7 @@
         {% endif %}
       </div>
       <span class="pill {{ 'red' if r.waited >= long_wait else 'amber' }} {% if r.visit.is_fast_track %}purple{% endif %}">
-        waiting {{ r.waited }}m {% if r.visit.is_fast_track %}⭐{% endif %}</span>
+        waiting {{ (r.waited)|hm }} {% if r.visit.is_fast_track %}⭐{% endif %}</span>
     </div>
 
     {% if r.patient.care_flags %}
@@ -81,7 +81,7 @@
     <div class="notice mt" style="text-align:left;background:#f0f9ff;border-left:3px solid #0e5a8a">
       <b>⏱ Estimated journey:</b> 
       {% if r.journey_estimate %}
-        {{ r.journey_estimate.total }} minutes total — {% for st in r.journey_estimate.stages %}{{ st.label }} {{ st.minutes }}m{% if not loop.last %} → {% endif %}{% endfor %}
+        {{ (r.journey_estimate.total)|hm }} total — {% for st in r.journey_estimate.stages %}{{ st.label }} {{ (st.minutes)|hm }}{% if not loop.last %} → {% endif %}{% endfor %}
         {% if r.journey_estimate.fast_track %}<span style="color:#8b5cf6;font-weight:800">· Priority lane (half time)</span>{% endif %}
       {% else %}
         Triage → Doctor → Lab/Pharmacy → Home (calculating...)

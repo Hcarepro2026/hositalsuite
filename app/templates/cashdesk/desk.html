@@ -35,12 +35,12 @@
         </div>
         {% if r.journey and r.journey.total %}
         <div style="margin-top:8px;background:#fff;border-radius:8px;padding:6px 10px;font-size:.8rem;border:1px solid #f0e6c0">
-          ⏱ About {{ r.journey.total }}m left in total
+          ⏱ About {{ (r.journey.total)|hm }} left in total
         </div>
         {% endif %}
       </div>
       <div style="text-align:right">
-        <span class="pill {{ 'red' if r.waited >= 20 else 'amber' }}">{{ r.waited }}m wait</span>
+        <span class="pill {{ 'red' if r.waited >= 20 else 'amber' }}">{{ (r.waited)|hm }} wait</span>
       </div>
     </div>
 

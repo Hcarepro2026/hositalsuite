@@ -79,7 +79,7 @@
           <div class="l">{{ 'person' if ahead==1 else 'people' }} ahead</div>
         </div>
         <div class="kpi">
-          <div class="v">{% if est %}{{ est }}m{% else %}~{% endif %}</div>
+          <div class="v">{% if est %}{{ (est)|hm }}{% else %}~{% endif %}</div>
           <div class="l">Estimated wait</div>
         </div>
       </div>

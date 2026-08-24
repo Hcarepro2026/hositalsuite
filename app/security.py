@@ -262,7 +262,7 @@ def register_security_hooks(app):
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "same-origin")
-        resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(self), geolocation=(self)")
+        resp.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(self)")
         # HSTS: only meaningful over TLS, and must never be sent on plain-HTTP dev.
         if request.is_secure:
             resp.headers.setdefault("Strict-Transport-Security",
@@ -272,7 +272,9 @@ def register_security_hooks(app):
         # else is locked to same-origin, and framing is forbidden outright.
         resp.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+            "default-src 'self'; "
+            "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
+            "style-src 'self' 'unsafe-inline'; "
             "script-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' data:; "
             "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
         resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")

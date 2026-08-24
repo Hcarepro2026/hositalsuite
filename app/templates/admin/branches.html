@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Hospital sites{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<style>
+  .fence-map{height:280px;border-radius:12px;border:1px solid #d7e3ec;margin:10px 0}
+  .leaflet-container{font-family:inherit}
+</style>
+{% endblock %}
 {% block content %}
 <h1>🏢 Hospital sites</h1>
 <p class="muted">One hospital can have more than one building (Main + Annex).
@@ -10,7 +17,7 @@
   <h2>Sites</h2>
   <div class="table-wrap">
   <table>
-    <tr><th>Name</th><th>Code</th><th>Phone</th><th>Staff</th><th></th></tr>
+    <tr><th>Name</th><th>Code</th><th>Phone</th><th>Gate pin</th><th>Staff</th><th></th></tr>
     {% for b in items %}
     <tr>
       <td><b>{{ b.name }}</b>
@@ -20,6 +27,15 @@
       </td>
       <td><code>{{ b.code }}</code></td>
       <td>{{ b.phone or '—' }}</td>
+      <td>
+        {% if b.lat is not none and b.lng is not none %}
+          <span class="pill green">Pinned</span>
+          <div class="hint">{{ '%.4f'|format(b.lat) }}, {{ '%.4f'|format(b.lng) }}
+            · {{ b.fence_meters or 'default' }} m</div>
+        {% else %}
+          <span class="pill gray">No pin</span>
+        {% endif %}
+      </td>
       <td>{{ counts.get(b.id, 0) }}</td>
       <td class="right">
         {% if not b.is_main %}
@@ -54,6 +70,15 @@
     <input type="tel" name="phone" placeholder="0801…">
     <label>Email (optional)</label>
     <input type="email" name="email">
+    <label>Gate latitude</label>
+    <input type="text" name="lat" id="add-lat" placeholder="Drag the pin on the map">
+    <label>Gate longitude</label>
+    <input type="text" name="lng" id="add-lng">
+    <label>Circle (metres, blank = hospital default)</label>
+    <input type="number" name="fence_meters" id="add-rad" min="50" max="2000" placeholder="200">
+    <p class="hint" id="add-map-label">Drag the pin. Drag the edge of the circle to stretch it.</p>
+    <div id="add-map" class="fence-map" role="img" aria-label="Map to drop the gate pin"></div>
+    <button class="btn ghost small" type="button" id="add-here">Stand at the gate — drop the pin here</button>
     <button class="btn mt">Add site</button>
   </form>
 
@@ -75,8 +100,29 @@
     <input type="tel" name="phone">
     <label>Email</label>
     <input type="email" name="email">
+    <label>Gate latitude</label>
+    <input type="text" name="lat" id="edit-lat" placeholder="6.5244">
+    <label>Gate longitude</label>
+    <input type="text" name="lng" id="edit-lng" placeholder="3.3792">
+    <label>Circle (metres)</label>
+    <input type="number" name="fence_meters" min="50" max="2000" placeholder="200">
+    <button class="btn ghost small" type="button" onclick="pinHere('edit')">Use this phone to mark the gate</button>
     <button class="btn mt">Save changes</button>
   </form>
 </div>
-<p class="mt"><a href="/admin/hospital">← Hospital name, logo and colours</a></p>
+<p class="mt"><a href="/admin/hospital">← Hospital name, logo and colours</a>
+  · <a href="/admin/settings">Clock-in strictness →</a>
+  · <a href="/attendance/today">Who is at work →</a></p>
+<script>
+function pinHere(prefix) {
+  if (!navigator.geolocation) { alert('This phone cannot share its place.'); return; }
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    document.getElementById(prefix + '-lat').value = pos.coords.latitude.toFixed(6);
+    document.getElementById(prefix + '-lng').value = pos.coords.longitude.toFixed(6);
+    if (window.hmsVoice && window.hmsVoice.speak) window.hmsVoice.speak('Gate pin saved on this form. Tap save.');
+  }, function () {
+    alert('Could not read your place. Stand in the open and try again.');
+  }, { enableHighAccuracy: true, timeout: 8000 });
+}
+</script>
 {% endblock %}

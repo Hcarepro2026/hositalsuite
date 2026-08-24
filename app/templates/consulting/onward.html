@@ -53,7 +53,7 @@
             <div class="hint" style="margin-top:2px;color:#6b21a8;font-weight:700">⭐ Priority Lane: {{ r.visit.fast_track_reason }} — seen first</div>
             {% endif %}
           </div>
-          <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }} {% if r.visit and r.visit.is_fast_track %}purple{% endif %}">{{ r.waited }}m {% if r.visit and r.visit.is_fast_track %}⭐{% endif %}</span>
+          <span class="pill {{ 'red' if r.waited >= 30 else 'amber' }} {% if r.visit and r.visit.is_fast_track %}purple{% endif %}">{{ (r.waited)|hm }} {% if r.visit and r.visit.is_fast_track %}⭐{% endif %}</span>
         </div>
         <form method="post" action="/onward/{{ r.step.id }}/done" class="mt">
           <input type="hidden" name="_csrf" value="{{ csrf_token() }}">

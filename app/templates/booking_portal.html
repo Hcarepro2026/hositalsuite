@@ -53,11 +53,14 @@
 
     <div class="step-label">1 · Which service do you need?</div>
     <select name="department_id" required class="input-big">
-      <option value="">— Select service —</option>
+      <option value="">— Select a place —</option>
       {% for d in depts %}
-      <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>{{ d.name }}</option>
+      <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>
+        {% if 'fast track' in d.name|lower %}⭐ {% endif %}{{ d.name }}
+      </option>
       {% endfor %}
     </select>
+    <div class="hint">Only places a patient visits. Fast Track is at the top.</div>
 
     <div class="step-label">2 · Which day?</div>
     <input type="date" name="appointment_date" min="{{ min_date }}" max="{{ max_date }}"
