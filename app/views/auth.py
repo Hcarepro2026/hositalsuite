@@ -9,8 +9,10 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
 from flask_login import current_user, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from .. import accounts
 from ..audit import audit
-from ..models import LoginAttempt, PasswordReset, User, db, now_naive
+from ..models import (LoginAttempt, Organization, PasswordReset, User, db,
+                      now_naive)
 from ..security import (client_ip, password_strength_errors, rate_limit,
                         require_login, safe_next)
 
@@ -69,7 +71,7 @@ def login_post():
                   "or use 'Forgot password'.", "error")
             return render_template("login.html", next=nxt, username=username), 429
 
-    user = db.session.query(User).filter_by(username=username).first()
+    user = accounts.find_login_user(username)
     if not user or not user.check_password(password):
         if lock is not None:
             lock.failures = (lock.failures or 0) + 1
@@ -87,16 +89,28 @@ def login_post():
     if lock is not None:
         lock.failures = 0
         lock.locked_until = None
-    if not user.active:
-        flash("This account is deactivated. Contact your system administrator.", "error")
-        return render_template("login.html", next=nxt, username=username), 403
-    if not getattr(user, "approved", True):
-        # Bulk-uploaded accounts exist but must be approved by an administrator
-        # before they can be used. The password was correct, so say so plainly.
-        audit("LOGIN_UNAPPROVED", "user", user.id, {"username": username})
+    ok, reason = accounts.can_enter(user)
+    if not ok:
+        if reason == "VERIFY":
+            session["pending_verify_uid"] = user.id
+            session["pending_verify_next"] = nxt
+            shown = _kick_activation(user)
+            audit("LOGIN_EMAIL_UNVERIFIED", "user", user.id, {"username": user.username})
+            db.session.commit()
+            flash("Enter the 6-digit code we sent to your email to activate this account.",
+                  "info")
+            if shown:
+                flash(f"(Test code: {shown})", "info")
+            return redirect(url_for("auth.verify_email"))
+        if reason == "PROFILE":
+            session["pending_register_uid"] = user.id
+            audit("LOGIN_PROFILE_PENDING", "user", user.id, {"username": user.username})
+            db.session.commit()
+            flash("Fill in your staff card so the System Admin can give you access.", "info")
+            return redirect(url_for("auth.staff_card"))
+        audit("LOGIN_BLOCKED", "user", user.id, {"username": user.username, "why": reason})
         db.session.commit()
-        flash("Your account is waiting for administrator approval. "
-              "Please ask your hospital administrator to approve it.", "error")
+        flash(reason, "error")
         return render_template("login.html", next=nxt, username=username), 403
     from .mfa import mfa_is_enforced
     if getattr(user, "mfa_enabled", False) and mfa_is_enforced():
@@ -132,6 +146,8 @@ def logout():
         audit("LOGOUT", "user", current_user.id, user=current_user, org_id=current_user.org_id)
     session.pop("pending_mfa_uid", None)
     session.pop("pending_mfa_next", None)
+    session.pop("pending_verify_uid", None)
+    session.pop("pending_register_uid", None)
     session.pop("mfa_setup_secret", None)
     logout_user()
     return redirect(url_for("auth.login"))
@@ -156,7 +172,8 @@ def change_password_post():
     if new_pw != confirm:
         flash("The new passwords do not match.", "error")
         return render_template("change_password.html"), 422
-    errs = password_strength_errors(new_pw)
+    errs = password_strength_errors(new_pw, username=current_user.username,
+                                    email=current_user.email or "")
     if errs:
         for e in errs:
             flash(e, "error")
@@ -187,18 +204,263 @@ def enforce_pending_password_change():
     return redirect(url_for("auth.change_password"))
 
 
+# ================================================================ request access + activate email
+def _home_org() -> Organization | None:
+    try:
+        return db.session.query(Organization).order_by(Organization.id).first()
+    except Exception:
+        return None
+
+
+def _kick_activation(user: User) -> str | None:
+    """Send a code. Returns the digits only in TESTING so tests can read them."""
+    otp = accounts.issue_email_code(user)
+    org = db.session.get(Organization, user.org_id)
+    sent = accounts.send_activation(user, otp, hospital_name=(org.name if org else "the hospital"))
+    from flask import current_app
+    if current_app.config.get("TESTING") or current_app.config.get("SMS_MODE") == "sandbox":
+        current_app.logger.info("activation code for %s: %s (sent=%s)", user.username, otp, sent)
+        return otp
+    return None
+
+
+@bp.get("/request-access")
+def request_access():
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+    org = _home_org()
+    return render_template("request_access.html", hospital=org)
+
+
+@bp.post("/request-access")
+@rate_limit(limit=5, window=300.0, key_extra="request-access")
+def request_access_post():
+    org = _home_org()
+    if org is None:
+        flash("This hospital is not set up yet.", "error")
+        return redirect(url_for("auth.login"))
+    name = (request.form.get("name") or "").strip()
+    username = (request.form.get("username") or "").strip().lower()
+    email = accounts.normalize_email(request.form.get("email") or "")
+    password = request.form.get("password") or ""
+    confirm = request.form.get("confirm_password") or ""
+    errors = []
+    if len(name) < 3:
+        errors.append("Type your full name.")
+    errors.extend(accounts.username_errors(username))
+    errors.extend(accounts.email_allowed_for_hospital(email, org.email))
+    if password != confirm:
+        errors.append("The two passwords do not match.")
+    errors.extend(password_strength_errors(password, username=username, email=email))
+    if db.session.query(User).filter_by(username=username).first():
+        errors.append("That username is already used. Pick another.")
+    if accounts.email_taken(org.id, email):
+        errors.append("That email is already on an account. Sign in, or use Forgot password.")
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        return render_template("request_access.html", hospital=org,
+                               name=name, username=username, email=email), 422
+    u = User(org_id=org.id, username=username, name=name[:120], role="STAFF",
+             email=email, approved=False, email_verified=False,
+             profile_completed=False, active=True, must_change_password=False)
+    u.set_password(password)
+    db.session.add(u)
+    db.session.flush()
+    shown = _kick_activation(u)
+    audit("ACCESS_REQUESTED", "user", u.id, {"username": username, "email": email})
+    db.session.commit()
+    session["pending_verify_uid"] = u.id
+    flash("Check your email for a 6-digit code. Then fill your staff card. "
+          "The System Admin must tap Approve before you can sign in.", "success")
+    if shown:
+        flash(f"(Test code: {shown})", "info")
+    return redirect(url_for("auth.verify_email"))
+
+
+@bp.get("/verify-email")
+def verify_email():
+    uid = session.get("pending_verify_uid")
+    user = db.session.get(User, uid) if uid else None
+    if user is None:
+        flash("Start again from Sign in or Request access.", "error")
+        return redirect(url_for("auth.login"))
+    return render_template("verify_email.html", email=user.email or "")
+
+
+@bp.post("/verify-email")
+@rate_limit(limit=8, window=300.0, key_extra="verify-email")
+def verify_email_post():
+    uid = session.get("pending_verify_uid")
+    user = db.session.get(User, uid) if uid else None
+    if user is None:
+        flash("Start again from Sign in.", "error")
+        return redirect(url_for("auth.login"))
+    err = accounts.check_email_code(user, request.form.get("code") or "")
+    if err:
+        db.session.commit()
+        flash(err, "error")
+        return render_template("verify_email.html", email=user.email or ""), 401
+    audit("EMAIL_VERIFIED", "user", user.id, {"email": user.email})
+    db.session.commit()
+    session.pop("pending_verify_uid", None)
+    if not getattr(user, "profile_completed", True):
+        session["pending_register_uid"] = user.id
+        flash("Email confirmed. Now fill in your staff card.", "success")
+        return redirect(url_for("auth.staff_card"))
+    if not user.approved:
+        flash("Email confirmed. Wait for the System Admin to give you access.", "success")
+        return redirect(url_for("auth.login"))
+    flash("Email confirmed. Sign in with your password.", "success")
+    return redirect(url_for("auth.login"))
+
+
+@bp.post("/verify-email/resend")
+@rate_limit(limit=3, window=300.0, key_extra="verify-resend")
+def verify_email_resend():
+    uid = session.get("pending_verify_uid")
+    user = db.session.get(User, uid) if uid else None
+    if user is None:
+        return redirect(url_for("auth.login"))
+    shown = _kick_activation(user)
+    db.session.commit()
+    flash("A new code is on the way.", "info")
+    if shown:
+        flash(f"(Test code: {shown})", "info")
+    return redirect(url_for("auth.verify_email"))
+
+
+# ================================================================ staff card (after email is proved)
+def _register_user():
+    uid = session.get("pending_register_uid")
+    return db.session.get(User, uid) if uid else None
+
+
+def _dept_tree(org_id: int) -> list[dict]:
+    from ..models import Department, Section, Unit
+    depts = (db.session.query(Department)
+             .filter_by(org_id=org_id, active=True)
+             .order_by(Department.name).all())
+    tree = []
+    for d in depts:
+        sections = []
+        for s in (db.session.query(Section)
+                  .filter_by(org_id=org_id, department_id=d.id)
+                  .order_by(Section.name).all()):
+            units = [{"id": u.id, "name": u.name} for u in
+                     (db.session.query(Unit)
+                      .filter_by(org_id=org_id, section_id=s.id)
+                      .order_by(Unit.name).all())]
+            sections.append({"id": s.id, "name": s.name, "units": units})
+        tree.append({"id": d.id, "name": d.name, "sections": sections})
+    return tree
+
+
+@bp.get("/staff-card")
+def staff_card():
+    user = _register_user()
+    if user is None:
+        flash("Sign in first. After your email is activated we open this page.", "error")
+        return redirect(url_for("auth.login"))
+    if getattr(user, "profile_completed", False):
+        flash("Your staff card is already with the System Admin.", "info")
+        return redirect(url_for("auth.login"))
+    from ..models import role_label
+    roles = [(c, role_label(c)) for c in accounts.REQUESTABLE_ROLES]
+    return render_template("staff_card.html", user=user, hospital=_home_org(),
+                           tree=_dept_tree(user.org_id), roles=roles,
+                           name=user.name or "", cadre=user.cadre or "",
+                           special=user.special_duty or "",
+                           department_id=user.department_id or "",
+                           section_id=user.section_id or "",
+                           unit_id=user.unit_id or "",
+                           requested_role=user.requested_role or "STAFF")
+
+
+@bp.post("/staff-card")
+@rate_limit(limit=8, window=300.0, key_extra="staff-card")
+def staff_card_post():
+    user = _register_user()
+    if user is None:
+        flash("Sign in first.", "error")
+        return redirect(url_for("auth.login"))
+    if getattr(user, "profile_completed", False):
+        return redirect(url_for("auth.login"))
+    from ..models import Department, Section, Unit, role_label
+    name = (request.form.get("name") or "").strip()
+    dept_id = request.form.get("department_id", type=int)
+    section_id = request.form.get("section_id", type=int)
+    unit_id = request.form.get("unit_id", type=int)
+    cadre = (request.form.get("cadre") or "").strip()[:80]
+    role = (request.form.get("requested_role") or "STAFF").strip()
+    special = (request.form.get("special_duty") or "").strip()[:200]
+    errors = []
+    if len(name) < 3:
+        errors.append("Type your full name.")
+    dept = db.session.get(Department, dept_id) if dept_id else None
+    if not dept or dept.org_id != user.org_id:
+        errors.append("Pick your department.")
+        dept = None
+    sec = db.session.get(Section, section_id) if section_id else None
+    if sec and (sec.org_id != user.org_id or (dept and sec.department_id != dept.id)):
+        errors.append("That section does not belong to the department you picked.")
+        sec = None
+    unt = db.session.get(Unit, unit_id) if unit_id else None
+    if unt and (unt.org_id != user.org_id or (sec and unt.section_id != sec.id)):
+        errors.append("That unit does not belong to the section you picked.")
+        unt = None
+    if role not in accounts.REQUESTABLE_ROLES:
+        errors.append("Pick a job from the list. Super Admin cannot be requested.")
+        role = "STAFF"
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        roles = [(c, role_label(c)) for c in accounts.REQUESTABLE_ROLES]
+        return render_template("staff_card.html", user=user, hospital=_home_org(),
+                               tree=_dept_tree(user.org_id), roles=roles,
+                               name=name, cadre=cadre, special=special,
+                               department_id=dept_id or "",
+                               section_id=section_id or "",
+                               unit_id=unit_id or "",
+                               requested_role=role), 422
+    user.name = name[:120]
+    user.department_id = dept.id if dept else None
+    user.section_id = sec.id if sec else None
+    user.unit_id = unt.id if unt else None
+    user.cadre = cadre or None
+    user.requested_role = role
+    user.special_duty = special or None
+    user.role = "STAFF"          # they ask; Admin grants
+    user.profile_completed = True
+    user.profile_completed_at = now_naive()
+    audit("STAFF_CARD_SUBMITTED", "user", user.id,
+          {"name": name, "dept": dept.name if dept else None, "role_asked": role,
+           "cadre": cadre, "special": special})
+    db.session.commit()
+    session.pop("pending_register_uid", None)
+    flash("Staff card sent. The System Admin must tap Approve before you can sign in.",
+          "success")
+    return redirect(url_for("auth.staff_card_done"))
+
+
+@bp.get("/staff-card/done")
+def staff_card_done():
+    return render_template("staff_card_done.html", hospital=_home_org())
+
+
 # ================================================================ self-service password reset
 def _find_active_user(identifier: str):
     ident = (identifier or "").strip()
     if not ident:
         return None
-    q = db.session.query(User).filter_by(active=True)
-    u = q.filter(User.username == ident.lower()).first()
-    if u:
+    u = accounts.find_login_user(ident)
+    if u and u.active:
         return u
     digits = ident.replace(" ", "").replace("-", "").replace("+", "")
-    return db.session.query(User).filter_by(active=True).filter(
-        User.phone.like(f"%{digits[-9:]}%") if len(digits) >= 9 else User.phone == ident).first()
+    if len(digits) >= 9:
+        return db.session.query(User).filter_by(active=True).filter(
+            User.phone.like(f"%{digits[-9:]}%")).first()
+    return None
 
 
 @bp.get("/forgot-password")
@@ -289,7 +551,8 @@ def reset_password_post():
     if new_pw != confirm:
         db.session.commit()
         return fail("The new passwords do not match.")
-    errs = password_strength_errors(new_pw)
+    errs = password_strength_errors(new_pw, username=user.username if user else "",
+                                    email=(user.email or "") if user else "")
     if errs:
         db.session.commit()
         for e in errs:

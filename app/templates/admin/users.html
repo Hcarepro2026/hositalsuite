@@ -8,9 +8,8 @@
 
 {% if pending %}
 <div class="notice" style="border-left-color:var(--amber);background:var(--amber-bg)">
-  <b>⏳ {{ pending|length }} account(s) waiting for your approval.</b>
-  They cannot sign in until you approve them. Look for the amber
-  <span class="pill amber">awaiting approval</span> tag below.
+  <b>⏳ {{ pending|length }} account(s) still need a tap from you.</b>
+  New people: activate email → fill staff card → you tap Approve.
 </div>
 {% endif %}
 
@@ -26,15 +25,32 @@
     <td>{{ u.department.name if u.department else '—' }}</td>
     <td>{{ u.phone or '—' }}</td><td>{{ u.email or '—' }}</td>
     <td>
-      {% if not u.approved %}<span class="pill amber">awaiting approval</span>
-      {% elif u.active %}<span class="pill green">active</span>
-      {% else %}<span class="pill red">deactivated</span>{% endif %}
+      {% if not u.approved %}<span class="pill amber">awaiting approval</span>{% endif %}
+      {% if not u.email_verified %}<span class="pill amber">email not activated</span>{% endif %}
+      {% if not u.profile_completed %}<span class="pill amber">staff card not sent</span>{% endif %}
+      {% if u.approved and u.email_verified and u.profile_completed and u.active %}<span class="pill green">active</span>
+      {% elif u.approved and u.email_verified and u.profile_completed and not u.active %}<span class="pill red">deactivated</span>{% endif %}
+      {% if u.requested_role %}<div class="hint">Asked: {{ u.requested_role.replace('_',' ') }}
+        {%- if u.cadre %} · {{ u.cadre }}{% endif %}
+        {%- if u.special_duty %} · {{ u.special_duty }}{% endif %}</div>{% endif %}
     </td>
     <td class="right">
       {% if not u.approved %}
       <form method="post" action="/admin/users/{{ u.id }}/approve" style="display:inline">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <select name="role" title="Job you are giving them">
+          {% for code, label in role_choices %}
+          <option value="{{ code }}" {{ 'selected' if (u.requested_role or u.role)==code }}>{{ label }}</option>
+          {% endfor %}
+        </select>
         <button class="btn small">✅ Approve</button>
+      </form>
+      {% endif %}
+      {% if not u.email_verified %}
+      <form method="post" action="/admin/users/{{ u.id }}/confirm-email" style="display:inline"
+            onsubmit="return confirm('Mark {{ u.email or u.name }} as activated? Only do this if you have spoken to them.')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn small ghost">Mark email seen</button>
       </form>
       {% endif %}
       <details style="display:inline-block"><summary class="btn small ghost" style="list-style:none">Edit</summary>
@@ -106,10 +122,13 @@
           {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
         </select></div>
       <div><label>Phone (for WhatsApp)</label><input type="tel" name="phone" placeholder="08012345678"></div>
-      <div><label>Email</label><input type="email" name="email"></div>
+      <div><label>Email <span class="req">*</span></label>
+        <input type="email" name="email" required placeholder="name@gmail.com"></div>
       <div><label>Initial password <span class="req">*</span></label><input type="password" name="password" required></div>
     </div>
-    <p class="hint">Password policy: minimum 8 characters, letters + numbers (symbol or 12+ characters recommended).</p>
+    <p class="hint">Gmail, Yahoo, Outlook or work mail. Password: 10+ characters,
+      CAPITAL + small + number + symbol. They must activate the email before sign-in.
+      Self-requested accounts still need your Approve tap.</p>
     <button class="btn mt">Create user</button>
   </form>
 </div>

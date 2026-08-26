@@ -65,12 +65,13 @@ def test_create_user_with_department(client, seeded):
     client.post("/admin/users/create", data={
         "_csrf": csrf(client, "/admin/users"), "username": "nurse1",
         "name": "Ngozi Nurse", "role": "HOD", "phone": "08012341234",
-        "email": "n@example.com", "department_id": seeded["dept"],
+        "email": "ngozi.nurse@gmail.com", "department_id": seeded["dept"],
         "password": "Passw0rd!x"}, follow_redirects=True)
     u = db.session.query(User).filter_by(username="nurse1").first()
     assert u is not None
     assert u.department_id == seeded["dept"]
-    assert u.approved is True, "admin-created accounts are approved immediately"
+    assert u.approved is False, "admin still taps Approve after the staff card"
+    assert u.email_verified is False, "they must still activate the mailbox"
 
 
 def test_create_user_rejects_bad_phone(client, seeded):

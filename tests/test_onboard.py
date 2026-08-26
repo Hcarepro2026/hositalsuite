@@ -15,8 +15,8 @@ def _payload(**extra):
         "admin_name": "Ada Sunrise",
         "username": "sun.admin",
         "admin_phone": "08035550002",
-        "password": "SunPass1!",
-        "confirm": "SunPass1!",
+        "password": "SunPass12!",
+        "confirm": "SunPass12!",
         "brand_primary": "#112233",
         "brand_accent": "#445566",
         "brand_gold": "#FFCC00",
@@ -48,7 +48,7 @@ def test_first_hospital_is_created_and_admin_is_signed_in(client):
     admin = db.session.query(User).filter_by(username="sun.admin").one()
     assert admin.org_id == org.id
     assert admin.role == "SUPER_ADMIN"
-    assert admin.check_password("SunPass1!")
+    assert admin.check_password("SunPass12!")
     assert get_setting(org.id, "brand_primary") == "#112233"
     assert get_setting(org.id, "onboarding_complete") is True
     sites = db.session.query(Branch).filter_by(org_id=org.id).all()

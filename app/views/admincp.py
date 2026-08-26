@@ -119,7 +119,9 @@ def users():
     depts = (db.session.query(Department)
              .filter_by(org_id=current_user.org_id, active=True)
              .order_by(Department.name).all())
-    pending = [u for u in items if not u.approved]
+    pending = [u for u in items if (not u.approved)
+               or (not getattr(u, "email_verified", True))
+               or (not getattr(u, "profile_completed", True))]
     from .. import branches as br
     br.ensure_main_branch(current_user.org_id)
     sites = br.list_active(current_user.org_id)
@@ -159,21 +161,40 @@ def user_create():
     if db.session.query(User).filter_by(username=username).first():
         flash("That username already exists.", "error")
         return redirect(url_for("admin.users"))
-    errs = password_strength_errors(password)
+    from .. import accounts
+    org = db.session.get(Organization, current_user.org_id)
+    mail_errs = accounts.email_allowed_for_hospital(email, org.email if org else None)
+    if mail_errs:
+        for e in mail_errs:
+            flash(e, "error")
+        return redirect(url_for("admin.users"))
+    if accounts.email_taken(current_user.org_id, email):
+        flash("That email is already on another account.", "error")
+        return redirect(url_for("admin.users"))
+    errs = password_strength_errors(password, username=username, email=email)
     if errs:
         for e in errs:
             flash(e, "error")
         return redirect(url_for("admin.users"))
     u = User(org_id=current_user.org_id, username=username, name=name, role=role,
-             email=email or None, phone=phone or None, department_id=dept_id or None,
-             branch_id=branch_id or None,
-             approved=True, must_change_password=True)
+             email=accounts.normalize_email(email), phone=phone or None,
+             department_id=dept_id or None, branch_id=branch_id or None,
+             approved=False, email_verified=False, profile_completed=False,
+             must_change_password=True)
     u.set_password(password)
     db.session.add(u)
     db.session.flush()
+    try:
+        otp = accounts.issue_email_code(u)
+        accounts.send_activation(u, otp, hospital_name=(org.name if org else "the hospital"))
+        if current_app.config.get("TESTING"):
+            current_app.logger.info("activation code for %s: %s", u.username, otp)
+    except Exception:
+        current_app.logger.exception("activation send failed")
     audit("USER_CREATED", "user", u.id, {"username": username, "role": role})
     db.session.commit()
-    flash(f"User {name} ({username}) created.", "success")
+    flash(f"{name} saved. They activate their email, fill their staff card, "
+          f"then you tap Approve. If the mail never arrives, tap Mark email seen.", "success")
     return redirect(url_for("admin.users"))
 
 
@@ -220,11 +241,29 @@ def user_edit(uid: int):
             flash("This is the last Super Admin — change someone else to Super Admin first.",
                   "error")
             return redirect(url_for("admin.users"))
+    from .. import accounts
+    org = db.session.get(Organization, current_user.org_id)
+    new_email = accounts.normalize_email(email)
+    if new_email:
+        mail_errs = accounts.email_allowed_for_hospital(new_email, org.email if org else None)
+        if mail_errs:
+            for e in mail_errs:
+                flash(e, "error")
+            return redirect(url_for("admin.users"))
+        if accounts.email_taken(current_user.org_id, new_email, ignore_user_id=u.id):
+            flash("That email is already on another account.", "error")
+            return redirect(url_for("admin.users"))
     old = {"name": u.name, "role": u.role, "email": u.email, "phone": u.phone,
            "department_id": u.department_id, "branch_id": u.branch_id}
     u.name = name
     u.role = role
-    u.email = email or None
+    if new_email and new_email != accounts.normalize_email(u.email or ""):
+        u.email = new_email
+        u.email_verified = False
+        u.email_verified_at = None
+    elif new_email:
+        u.email = new_email
+    # Blank email on an old account is left as-is so existing staff stay editable.
     u.phone = phone or None
     u.department_id = dept_id or None
     u.branch_id = branch_id or None
@@ -260,10 +299,43 @@ def user_approve(uid: int):
     u = db.session.get(User, uid)
     if not u or u.org_id != current_user.org_id:
         abort(404)
+    from .. import accounts
+    asked = (request.form.get("role") or u.requested_role or u.role or "STAFF").strip()
+    if asked == "SUPER_ADMIN":
+        remaining = (db.session.query(User)
+                     .filter(User.org_id == current_user.org_id,
+                             User.role == "SUPER_ADMIN", User.active.is_(True)).count())
+        # Allow granting Super Admin only if one already exists (you).
+        if remaining == 0:
+            asked = "STAFF"
+    elif asked not in accounts.REQUESTABLE_ROLES and asked != "SUPER_ADMIN":
+        asked = "STAFF"
+    u.role = asked
     u.approved = True
-    audit("USER_APPROVED", "user", u.id, {"username": u.username})
+    audit("USER_APPROVED", "user", u.id, {"username": u.username, "role": asked,
+                                          "asked": u.requested_role})
     db.session.commit()
-    flash(f"{u.name} approved — they can now sign in.", "success")
+    extra = ""
+    if not getattr(u, "email_verified", True):
+        extra = " They still need to activate their email."
+    elif not getattr(u, "profile_completed", True):
+        extra = " They still need to send their staff card."
+    flash(f"{u.name} approved as {asked.replace('_', ' ')}.{extra}", "success")
+    return redirect(url_for("admin.users"))
+
+
+@bp.post("/users/<int:uid>/confirm-email")
+@require_role(*SUPER)
+def user_confirm_email(uid: int):
+    """Mark the mailbox as seen — for when the activation mail never arrived."""
+    u = db.session.get(User, uid)
+    if not u or u.org_id != current_user.org_id:
+        abort(404)
+    u.email_verified = True
+    u.email_verified_at = now_naive()
+    audit("EMAIL_CONFIRMED_BY_ADMIN", "user", u.id, {"email": u.email, "by": current_user.username})
+    db.session.commit()
+    flash(f"{u.name}'s email is marked as activated.", "success")
     return redirect(url_for("admin.users"))
 
 
@@ -406,7 +478,7 @@ def user_reset_password(uid: int):
         abort(404)
     pw = request.form.get("password") or ""
     confirm = request.form.get("confirm") or ""
-    errs = password_strength_errors(pw)
+    errs = password_strength_errors(pw, username=u.username, email=u.email or "")
     if confirm and pw != confirm:
         errs = ["The two passwords do not match."] + list(errs)
     if errs:
@@ -1641,3 +1713,4 @@ def branch_toggle(bid: int):
     flash(f"{b.name} {'is open again' if b.active else 'is hidden from new work'}.",
           "success")
     return redirect(url_for("admin.branches"))
+

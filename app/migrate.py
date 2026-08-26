@@ -61,6 +61,15 @@ COLUMNS = [
     ("department", "hod_phone", "VARCHAR(32)"),
     ("user", "department_id", "INTEGER"),
     ("user", "approved", _bool_true_sql),
+    ("user", "email_verified", _bool_true_sql),
+    ("user", "email_verified_at", "TIMESTAMP"),
+    ("user", "profile_completed", _bool_true_sql),
+    ("user", "profile_completed_at", "TIMESTAMP"),
+    ("user", "section_id", "INTEGER"),
+    ("user", "unit_id", "INTEGER"),
+    ("user", "cadre", "VARCHAR(80)"),
+    ("user", "requested_role", "VARCHAR(20)"),
+    ("user", "special_duty", "VARCHAR(200)"),
     ("inspection", "final_comment", "TEXT"),
     # --- HIMS patient folder: patient-CARE fields (this app is not an EMR).
     # Belt and braces behind migration b3f81a9d5c22: if Alembic is ever skipped

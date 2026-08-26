@@ -116,6 +116,25 @@ class User(UserMixin, db.Model):
     # Account approval: bulk-uploaded/self-registered accounts start unapproved
     # and cannot sign in until an administrator approves them.
     approved = db.Column(db.Boolean, default=True, nullable=False)
+    # Email must be a real mailbox and activated before a new person may enter.
+    # Existing staff are back-filled as verified so a deploy does not lock them out.
+    email_verified = db.Column(db.Boolean, default=True, nullable=False)
+    email_verified_at = db.Column(db.DateTime)
+    # After the mailbox is proved, the person fills their own staff card.
+    # Existing accounts are back-filled as complete so a deploy does not lock them out.
+    profile_completed = db.Column(db.Boolean, default=True, nullable=False)
+    profile_completed_at = db.Column(db.DateTime)
+    section_id = db.Column(
+        db.Integer,
+        db.ForeignKey("section.id", use_alter=True, name="fk_user_section"),
+        index=True)
+    unit_id = db.Column(
+        db.Integer,
+        db.ForeignKey("unit.id", use_alter=True, name="fk_user_unit"),
+        index=True)
+    cadre = db.Column(db.String(80))
+    requested_role = db.Column(db.String(20))
+    special_duty = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=now_naive)
     last_login_at = db.Column(db.DateTime)
     # Which site this person works at (Hospital → Branch → Department).
@@ -128,6 +147,8 @@ class User(UserMixin, db.Model):
 
     org = db.relationship("Organization", backref="users")
     department = db.relationship("Department", foreign_keys=[department_id])
+    section = db.relationship("Section", foreign_keys=[section_id])
+    unit = db.relationship("Unit", foreign_keys=[unit_id])
     branch = db.relationship("Branch", foreign_keys=[branch_id])
 
     @property

@@ -280,6 +280,8 @@ def create_hospital(values: dict, *, actor=None) -> tuple[Organization, User]:
         phone=values.get("admin_phone"),
         email=values.get("email"),
         approved=True,
+        email_verified=True,
+        profile_completed=True,
         must_change_password=False,
         branch_id=main.id,
     )

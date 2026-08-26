@@ -62,7 +62,8 @@ def test_new_roles_can_be_created_and_signed_in(client, seeded, app):
     for code in ("DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR"):
         client.post("/admin/users/create", data={
             "_csrf": csrf(client, "/admin/users"), "username": code.lower(),
-            "name": f"Test {code}", "role": code, "password": "Passw0rd!x"},
+            "name": f"Test {code}", "role": code, "password": "Passw0rd!x",
+            "email": f"{code.lower()}@gmail.com"},
             follow_redirects=True)
         u = db.session.query(User).filter_by(username=code.lower()).first()
         assert u is not None, f"could not create a {code}"

@@ -182,13 +182,13 @@ def test_resetting_a_password_works_and_forces_a_change(app, client, seeded):
     _admin(client, app, seeded)
     r = client.post(f"/admin/users/{uid}/reset-password",
                     data={"_csrf": csrf(client, f"/admin/users/{uid}/password"),
-                          "password": "Str0ngPassw0rd",
-                          "confirm": "Str0ngPassw0rd"},
+                          "password": "Str0ngPassw0rd!",
+                          "confirm": "Str0ngPassw0rd!"},
                     follow_redirects=True)
     assert "password reset" in r.get_data(as_text=True).lower()
     with app.app_context():
         u = db.session.get(User, uid)
-        assert u.check_password("Str0ngPassw0rd")
+        assert u.check_password("Str0ngPassw0rd!")
         assert u.must_change_password is True, \
             "the staff member was not asked to choose their own password"
 
@@ -201,12 +201,12 @@ def test_mismatched_passwords_are_refused(app, client, seeded):
     _admin(client, app, seeded)
     r = client.post(f"/admin/users/{uid}/reset-password",
                     data={"_csrf": csrf(client, f"/admin/users/{uid}/password"),
-                          "password": "Str0ngPassw0rd",
+                          "password": "Str0ngPassw0rd!",
                           "confirm": "Different0ne"},
                     follow_redirects=True)
     assert "do not match" in r.get_data(as_text=True).lower()
     with app.app_context():
-        assert not db.session.get(User, uid).check_password("Str0ngPassw0rd")
+        assert not db.session.get(User, uid).check_password("Str0ngPassw0rd!")
 
 
 def test_a_weak_password_is_refused_on_the_reset_page(app, client, seeded):

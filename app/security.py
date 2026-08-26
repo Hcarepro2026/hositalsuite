@@ -163,20 +163,8 @@ def valid_phone(raw: str) -> bool:
 
 
 # ------------------------------------------------------------------ password policy
-PASSWORD_MIN_LEN = 8
-
-
-def password_strength_errors(pw: str) -> list[str]:
-    errors = []
-    if len(pw) < PASSWORD_MIN_LEN:
-        errors.append(f"Password must be at least {PASSWORD_MIN_LEN} characters.")
-    if not re.search(r"[A-Za-z]", pw):
-        errors.append("Password must contain letters.")
-    if not re.search(r"\d", pw):
-        errors.append("Password must contain numbers.")
-    if not re.search(r"[^A-Za-z0-9]", pw) and len(pw) < 12:
-        errors.append("Use a symbol or make the password at least 12 characters.")
-    return errors
+# Hard-to-guess rule lives in app.accounts so login, reset and admin share it.
+from .accounts import PASSWORD_MIN_LEN, password_strength_errors  # noqa: E402,F401
 
 
 # ------------------------------------------------------------------ file uploads

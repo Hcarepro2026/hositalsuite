@@ -25,14 +25,16 @@
     <form method="post" action="/login">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ next }}">
-      <label>Username</label>
+      <label>Username or email</label>
       <input type="text" name="username" value="{{ username or '' }}" autocomplete="username"
              required autofocus autocapitalize="none">
-      <label>Password</label>
+      <label>Password (the one you chose)</label>
       <input type="password" name="password" autocomplete="current-password" required>
       <div class="mt">
         <button class="btn big" type="submit" style="width:100%">Sign in</button>
       </div>
+      <p class="center mt"><a href="/request-access">New staff? Request access →</a></p>
+      <p class="center mt"><a href="/staff-card">Already activated? Finish your staff card →</a></p>
       <p class="center mt"><a href="/forgot-password">Forgot password? Reset it yourself →</a></p>
       <p class="center mt"><a href="/start">Setting up a new hospital? Start here →</a></p>
     </form>

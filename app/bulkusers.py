@@ -452,6 +452,8 @@ def commit_preview(org_id: int, rows: list[dict], *, created_by_id: int) -> dict
             phone=row.get("phone") or None,
             department_id=row.get("department_id"),
             approved=False,                 # an administrator approves them
+            email_verified=False,           # they must prove they own the mailbox
+            profile_completed=False,        # they fill their own staff card
             must_change_password=True,      # nobody keeps a generated password
         )
         u.set_password(pwd)

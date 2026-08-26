@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request access — {{ hospital.name if hospital else 'Hospital' }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="card login-card pad-lg">
+    <div class="center mb">
+      <div style="font-size:2.4rem">🪪</div>
+      <h1 style="margin:4px 0 2px">Ask for a staff account</h1>
+      <div class="muted">You pick a password that is hard to guess. Then you
+      activate your email. Then the System Admin taps Approve.</div>
+    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    <form method="post" action="/request-access">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>Full name</label>
+      <input type="text" name="name" value="{{ name or '' }}" required autocomplete="name">
+      <label>Username (for sign-in)</label>
+      <input type="text" name="username" value="{{ username or '' }}" required
+             autocapitalize="none" autocomplete="username">
+      <label>Email (Gmail, Yahoo, Outlook, or work mail)</label>
+      <input type="email" name="email" value="{{ email or '' }}" required autocomplete="email">
+      <label>Password you choose</label>
+      <input type="password" name="password" required autocomplete="new-password">
+      <label>Type the password again</label>
+      <input type="password" name="confirm_password" required autocomplete="new-password">
+      <div class="hint">At least 10 characters. One CAPITAL, one small letter,
+        one number, one symbol (like ! @ #). Do not use your name.</div>
+      <div class="mt">
+        <button class="btn big" type="submit" style="width:100%">Send my request</button>
+      </div>
+    </form>
+    <p class="center mt"><a href="/login">Already have an account? Sign in →</a></p>
+  </div>
+</div>
+</body>
+</html>
