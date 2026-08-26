@@ -211,8 +211,11 @@ def check_email_code(user: User, otp: str) -> str | None:
     return None
 
 
-def send_activation(user: User, otp: str, hospital_name: str = "the hospital") -> bool:
-    """Best-effort: email first, SMS spare. Never raises."""
+def send_activation(user: User, otp: str, hospital_name: str = "the hospital") -> dict:
+    """Email first, SMS spare. Never raises. Never logs the digits.
+
+    Returns {ok, via, error} so the screen can tell the truth.
+    """
     from . import sms_pack
     class _O:
         name = hospital_name
@@ -220,20 +223,26 @@ def send_activation(user: User, otp: str, hospital_name: str = "the hospital") -
         phone = None
         id = getattr(user, "org_id", None)
     body = sms_pack.signin_code(_O(), otp, VERIFY_MINUTES)
-    delivered = False
+    subject = f"Your {hospital_name} sign-in code"
+    result = {"ok": False, "via": "", "error": "Nothing sent"}
     try:
         from .notifications import _send_email
         if user.email:
-            err = _send_email(user, "Activate your hospital sign-in", body)
-            delivered = err is None
-    except Exception:
-        delivered = False
-    if not delivered and user.phone:
+            err = _send_email(user, subject, body)
+            if err is None:
+                result = {"ok": True, "via": "email", "error": ""}
+            else:
+                result = {"ok": False, "via": "", "error": err}
+    except Exception as exc:  # noqa: BLE001
+        result = {"ok": False, "via": "", "error": str(exc)[:200]}
+    if not result["ok"] and getattr(user, "phone", None):
         try:
             from . import sms as sms_engine
             sms_engine.queue_sms(user.org_id, user.phone, body, kind="alert",
                                  entity_type="email_verify", entity_id=user.id)
-            delivered = True
-        except Exception:
-            delivered = False
-    return delivered
+            from .tasks import dispatch_delivery
+            dispatch_delivery()
+            result = {"ok": True, "via": "sms", "error": ""}
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "via": "", "error": result["error"] or str(exc)[:200]}
+    return result

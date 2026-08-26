@@ -5,9 +5,6 @@ failures never break the business flow.
 """
 from __future__ import annotations
 
-import smtplib
-from email.mime.text import MIMEText
-
 from flask import current_app
 
 from . import services, whatsapp
@@ -68,23 +65,12 @@ def render(template_key: str, ctx: dict) -> tuple[str, str]:
 
 
 def _send_email(user: User, subject: str, body: str) -> str | None:
-    cfg = current_app.config
-    if not cfg.get("SMTP_HOST") or not user.email:
-        return "SMTP not configured" if not cfg.get("SMTP_HOST") else "No user email"
-    msg = MIMEText(body, "plain", "utf-8")
-    msg["Subject"] = subject
-    msg["From"] = cfg["SMTP_FROM"]
-    msg["To"] = user.email
-    try:
-        with smtplib.SMTP(cfg["SMTP_HOST"], cfg["SMTP_PORT"], timeout=20) as s:
-            if cfg.get("SMTP_TLS"):
-                s.starttls()
-            if cfg.get("SMTP_USER"):
-                s.login(cfg["SMTP_USER"], cfg["SMTP_PASSWORD"])
-            s.send_message(msg)
-        return None
-    except Exception as exc:  # noqa: BLE001 — logged, never fatal
-        return str(exc)[:300]
+    """None if the letter left. Else a plain-English reason. Never raises."""
+    if not user or not getattr(user, "email", None):
+        return "No user email"
+    from . import mailer
+    ok, detail = mailer.send_mail(user.email, subject, body)
+    return None if ok else detail
 
 
 def notify(org_id: int, user: User, template_key: str, ctx: dict,

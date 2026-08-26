@@ -5,6 +5,20 @@
 <div class="card" style="max-width:560px">
   <p><b>Database:</b> <span class="pill {{ 'green' if info.database=='connected' else 'red' }}">{{ info.database }}</span></p>
   <p><b>WhatsApp integration:</b> <span class="pill blue">{{ info.whatsapp_mode }}</span></p>
+  <h2 class="mt">Mail van (activation codes)</h2>
+  {% if info.mail and info.mail.configured %}
+    <p><b>Status:</b> <span class="pill green">on — {{ info.mail.provider }}</span></p>
+    <p class="muted">Letters leave as <code>{{ info.mail.from }}</code>.</p>
+  {% else %}
+    <p><b>Status:</b> <span class="pill red">off — codes are not leaving</span></p>
+    <p class="muted">Render blocks ordinary email ports. Add a free
+      <b>Resend</b> key on the host (see the report
+      <code>docs/reports/2026-08-26-mail-otp.md</code>), then tap the test button.</p>
+  {% endif %}
+  <form method="post" action="/admin/health/test-mail" class="mt">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="btn" type="submit">Send a test letter to my email</button>
+  </form>
   <p><b>Backups:</b> stored in the database (survive restarts) —
      <a href="/admin">download them here</a></p>
   <p><b>Disk space:</b> {{ info.disk or 'unknown' }}</p>

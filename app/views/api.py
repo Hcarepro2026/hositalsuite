@@ -60,7 +60,13 @@ def health():
         "last_backup": last_backup,
         "storage": current_app.config.get("STORAGE_BACKEND", "db"),
         "whatsapp_mode": whatsapp.mode(),
+        "mail": None,
     }
+    try:
+        from .. import mailer
+        payload["mail"] = mailer.status()["provider"] if mailer.is_configured() else "off"
+    except Exception:  # noqa: BLE001
+        payload["mail"] = "off"
     # ALWAYS HTTP 200 — this is a LIVENESS probe, and it is the URL the host
     # uses to decide whether a deploy succeeded. Returning 503 while the
     # database is down makes the platform kill a perfectly good container,

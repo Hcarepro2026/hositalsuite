@@ -13,10 +13,17 @@
     <div class="center mb">
       <div style="font-size:2.4rem">✉️</div>
       <h1 style="margin:4px 0 2px">Activate your email</h1>
+      {% if sent %}
       <div class="muted">We sent a 6-digit code to
       <b>{{ email }}</b>. It dies in 15 minutes. After this we open your
-      staff card. If you do not see the mail, look in Spam, or ask the
-      System Admin to mark the email as seen.</div>
+      staff card. If you do not see the mail, look in Spam.</div>
+      {% else %}
+      <div class="muted">The 6-digit code for <b>{{ email }}</b> did
+      <b>not</b> leave the hospital.
+      {% if send_error %}<div class="hint mt">{{ send_error }}</div>{% endif %}
+      Ask the System Admin to open <b>Users</b> and tap
+      <b>Confirm email</b>, or to set up the mail van on System Health.</div>
+      {% endif %}
     </div>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}

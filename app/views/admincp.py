@@ -1168,11 +1168,14 @@ def backup_download(name: str):
 def health():
     from ..chatbot import ai
     ai_status = ai.status(current_user.org_id)
+    from .. import mailer
+    mail = mailer.status()
     info = {
         "database": "connected" if db.session.execute(db.text("SELECT 1")).scalar() == 1 else "error",
         "whatsapp_mode": whatsapp.mode(),
         "backup_dir": Config.BACKUP_DIR,
         "disk": None,
+        "mail": mail,
     }
     try:
         usage = shutil.disk_usage(os.path.dirname(Config.BACKUP_DIR))
@@ -1180,6 +1183,29 @@ def health():
     except OSError:
         pass
     return render_template("admin/health.html", info=info, ai=ai_status)
+
+
+@bp.post("/health/test-mail")
+@require_role(*SUPER)
+def health_test_mail():
+    """Send one letter to the signed-in admin so they can see if mail works."""
+    from .. import mailer
+    dest = (current_user.email or "").strip()
+    if not dest:
+        flash("Your own account has no email. Add one on Users first.", "error")
+        return redirect(url_for("admin.health"))
+    ok, detail = mailer.send_mail(
+        dest,
+        "Hospital Suite test letter",
+        "This is a test. If you can read this, the 6-digit codes can leave the hospital.",
+    )
+    audit("MAIL_TEST", "system", None, {"ok": ok, "detail": detail, "to": dest})
+    db.session.commit()
+    if ok:
+        flash(f"Test letter sent to {dest} via {detail}. Check the inbox (and Spam).", "success")
+    else:
+        flash(f"Test letter did not leave: {detail}", "error")
+    return redirect(url_for("admin.health"))
 
 
 # ================================================================ KB / chatbot admin (§SaaS)

@@ -82,12 +82,16 @@ class Config:
     WHATSAPP_REPORT_TEMPLATE = os.environ.get("WHATSAPP_REPORT_TEMPLATE", "")
     WHATSAPP_SIMULATE_FAILURE = os.environ.get("WHATSAPP_SIMULATE_FAILURE", "0") == "1"
 
-    # SMTP
+    # Mail. Prefer a web API (Resend / Brevo / SendGrid): Render blocks SMTP.
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+    SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
+    MAIL_FROM = os.environ.get("MAIL_FROM", os.environ.get("SMTP_FROM", ""))
     SMTP_HOST = os.environ.get("SMTP_HOST", "")
     SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
     SMTP_USER = os.environ.get("SMTP_USER", "")
     SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-    SMTP_FROM = os.environ.get("SMTP_FROM", "no-reply@localhost")
+    SMTP_FROM = os.environ.get("SMTP_FROM", os.environ.get("MAIL_FROM", "no-reply@localhost"))
     SMTP_TLS = os.environ.get("SMTP_TLS", "1") == "1"
 
     USSD_SHARED_SECRET = os.environ.get("USSD_SHARED_SECRET", "")

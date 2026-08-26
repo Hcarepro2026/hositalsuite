@@ -97,8 +97,13 @@ def login_post():
             shown = _kick_activation(user)
             audit("LOGIN_EMAIL_UNVERIFIED", "user", user.id, {"username": user.username})
             db.session.commit()
-            flash("Enter the 6-digit code we sent to your email to activate this account.",
-                  "info")
+            if session.get("activation_sent"):
+                flash("Enter the 6-digit code we sent to your email to activate this account.",
+                      "info")
+            else:
+                flash("We could not send the 6-digit code. Ask the System Admin to tap "
+                      "Confirm email on Users, or set up the mail van on System Health.",
+                      "error")
             if shown:
                 flash(f"(Test code: {shown})", "info")
             return redirect(url_for("auth.verify_email"))
@@ -213,13 +218,24 @@ def _home_org() -> Organization | None:
 
 
 def _kick_activation(user: User) -> str | None:
-    """Send a code. Returns the digits only in TESTING so tests can read them."""
+    """Send a code. Returns the digits only in TESTING so tests can read them.
+
+    Never prints the digits on a live page. Sandbox used to flash the code
+    to whoever signed up — that is a hole.
+    """
     otp = accounts.issue_email_code(user)
     org = db.session.get(Organization, user.org_id)
-    sent = accounts.send_activation(user, otp, hospital_name=(org.name if org else "the hospital"))
+    result = accounts.send_activation(user, otp, hospital_name=(org.name if org else "the hospital"))
+    session["activation_sent"] = bool(result.get("ok"))
+    session["activation_via"] = result.get("via") or ""
+    session["activation_error"] = (result.get("error") or "")[:200]
     from flask import current_app
-    if current_app.config.get("TESTING") or current_app.config.get("SMS_MODE") == "sandbox":
-        current_app.logger.info("activation code for %s: %s (sent=%s)", user.username, otp, sent)
+    if result.get("ok"):
+        current_app.logger.info("activation sent to %s via %s", user.username, result.get("via"))
+    else:
+        current_app.logger.warning("activation NOT sent to %s: %s",
+                                   user.username, result.get("error"))
+    if current_app.config.get("TESTING"):
         return otp
     return None
 
@@ -273,8 +289,13 @@ def request_access_post():
     audit("ACCESS_REQUESTED", "user", u.id, {"username": username, "email": email})
     db.session.commit()
     session["pending_verify_uid"] = u.id
-    flash("Check your email for a 6-digit code. Then fill your staff card. "
-          "The System Admin must tap Approve before you can sign in.", "success")
+    if session.get("activation_sent"):
+        flash("We sent a 6-digit code. Then fill your staff card. "
+              "The System Admin must tap Approve before you can sign in.", "success")
+    else:
+        flash("Your account is saved, but the 6-digit code could not be sent. "
+              "Ask the System Admin to tap Confirm email on Users, or tap Send a new code after mail is set up.",
+              "error")
     if shown:
         flash(f"(Test code: {shown})", "info")
     return redirect(url_for("auth.verify_email"))
@@ -287,7 +308,13 @@ def verify_email():
     if user is None:
         flash("Start again from Sign in or Sign up.", "error")
         return redirect(url_for("auth.login"))
-    return render_template("verify_email.html", email=user.email or "")
+    return render_template(
+        "verify_email.html",
+        email=user.email or "",
+        sent=session.get("activation_sent"),
+        via=session.get("activation_via") or "",
+        send_error=session.get("activation_error") or "",
+    )
 
 
 @bp.post("/verify-email")
@@ -302,7 +329,13 @@ def verify_email_post():
     if err:
         db.session.commit()
         flash(err, "error")
-        return render_template("verify_email.html", email=user.email or ""), 401
+        return render_template(
+            "verify_email.html",
+            email=user.email or "",
+            sent=session.get("activation_sent"),
+            via=session.get("activation_via") or "",
+            send_error=session.get("activation_error") or "",
+        ), 401
     audit("EMAIL_VERIFIED", "user", user.id, {"email": user.email})
     db.session.commit()
     session.pop("pending_verify_uid", None)
@@ -326,7 +359,11 @@ def verify_email_resend():
         return redirect(url_for("auth.login"))
     shown = _kick_activation(user)
     db.session.commit()
-    flash("A new code is on the way.", "info")
+    if session.get("activation_sent"):
+        flash("A new code is on the way.", "info")
+    else:
+        flash("The new code could not be sent. Ask the System Admin to tap Confirm email.",
+              "error")
     if shown:
         flash(f"(Test code: {shown})", "info")
     return redirect(url_for("auth.verify_email"))

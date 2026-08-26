@@ -37,6 +37,14 @@ services:
       - key: SMS_MODE
         value: sandbox           # switch to 'termii' when ready — see
                                  # docs/SMS_AND_WHATSAPP_SETUP.md
+      - key: RESEND_API_KEY      # free mail van — https://resend.com (HTTPS, not SMTP)
+        sync: false
+      - key: MAIL_FROM           # must be a sender you verified at Resend, e.g. Hospital <beth.t@example.com>
+        sync: false
+      - key: BREVO_API_KEY       # optional spare mail van
+        sync: false
+      - key: SENDGRID_API_KEY    # optional spare mail van
+        sync: false
       - key: TERMII_API_KEY      # from accounts.termii.com -> Settings -> API
         sync: false
       - key: TERMII_SENDER_ID    # e.g. GHIJEDE (must be approved by Termii)
