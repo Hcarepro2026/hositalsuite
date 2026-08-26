@@ -75,6 +75,9 @@ PROTECTED_TABLES = (
     "chat_session", "data_request", "qr_location",
     "service_clinic", "consulting_room", "service_destination", "clinic_destination",
     "tv_screen", "staff_attendance", "branch",
+    # Shop door: staff names, hospital settings, and the org chart.
+    # These used to rely only on Python remembering the filter.
+    "user", "setting", "department", "section", "unit",
 )
 
 # The PostgreSQL session variable holding "which hospital is this request for".
@@ -210,15 +213,15 @@ def register(app) -> None:
         if not is_postgres():
             return None
         try:
+            # MUST open the door first. Flask-Login looks up the account on
+            # `user`. If that table is locked to an unset hospital, every
+            # signed-in person is treated as a stranger and thrown out.
+            all_orgs()
             from flask_login import current_user
             if getattr(current_user, "is_authenticated", False):
                 set_org(current_user.org_id)
-            else:
-                # Public pages (booking, complaint portal, the chatbot) resolve
-                # their own hospital and write to it. They run in cross-org mode
-                # because there is no signed-in user to scope them, and their
-                # own code sets org_id explicitly on every row it creates.
-                all_orgs()
-        except Exception:                                  # noqa: BLE001
+            # Public pages stay in all_orgs: they pick a hospital in their
+            # own code and stamp org_id on every row they create.
+        except Exception:                                      # noqa: BLE001
             log.exception("tenant scoping failed for this request")
         return None

@@ -248,7 +248,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
         except Exception:
             branch = None
         return dict(csrf_token=csrf_token, settings=bundle,
-                    app_version=app.config.get("APP_VERSION", "1.7.11"),
+                    app_version=app.config.get("APP_VERSION", "1.7.12"),
                     _=i18n.translate, lang=lang, langs=i18n.LANGS,
                     speech_lang=i18n.speech_tag(lang), hospital=hospital,
                     current_branch=branch,

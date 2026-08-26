@@ -12,7 +12,9 @@ def test_login_stylesheet_is_versioned(client, seeded):
 def test_service_worker_is_network_first_and_versioned(client, seeded):
     js = client.get("/sw.js").get_data(as_text=True)
     assert "CSS/JS must be network-first" in js
-    assert "hs-shell-1-7-11" in js
+    from flask import current_app
+    ver = str(current_app.config.get("APP_VERSION") or "1.7.12").replace(".", "-")
+    assert f"hs-shell-{ver}" in js
 
 
 def test_css_caps_the_logo(client):

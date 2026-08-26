@@ -11,9 +11,13 @@
     <p class="muted">Letters leave as <code>{{ info.mail.from }}</code>.</p>
   {% else %}
     <p><b>Status:</b> <span class="pill red">off — codes are not leaving</span></p>
-    <p class="muted">Render blocks ordinary email ports. Add a free
-      <b>Resend</b> key on the host (see the report
-      <code>docs/reports/2026-08-26-mail-otp.md</code>), then tap the test button.</p>
+    <p class="muted">The van is not on this server yet. On <b>Render → Environment</b> add:</p>
+    <ul class="muted">
+      <li><code>BREVO_API_KEY</code> — the key from Brevo (keep it secret)</li>
+      <li><code>MAIL_FROM</code> — <code>Hospital Suite &lt;hcareproapp@gmail.com&gt;</code></li>
+    </ul>
+    <p class="muted">Save, wait for the green restart, then tap the test button.
+      Open that inbox <b>and Spam</b>.</p>
   {% endif %}
   <form method="post" action="/admin/health/test-mail" class="mt">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">

@@ -212,7 +212,8 @@ def test_rls_is_a_harmless_no_op_on_sqlite(app):
 def test_the_protected_list_covers_the_data_that_matters():
     """A table quietly dropped from the list is a silent hole."""
     must_cover = ("patient", "patient_visit", "complaint", "reception_intake",
-                  "journey_segment", "audit_log", "stored_file", "work_claim")
+                  "journey_segment", "audit_log", "stored_file", "work_claim",
+                  "user", "setting", "department", "section", "unit")
     for table in must_cover:
         assert table in rls.PROTECTED_TABLES, \
             f"'{table}' is no longer protected by row-level security"
@@ -227,3 +228,8 @@ def test_the_tenant_is_never_taken_from_the_browser():
                    "request.cookies"):
         assert danger not in body, \
             f"the tenant is being read from {danger} — it must come from the session"
+    # Locking `user` without opening the door first logs everyone out.
+    open_at = body.index("all_orgs()")
+    load_at = body.index("current_user")
+    assert open_at < load_at, \
+        "the account must be loaded AFTER all_orgs(), or signed-in staff vanish"
