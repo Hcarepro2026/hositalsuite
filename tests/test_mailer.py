@@ -90,3 +90,35 @@ def test_admin_health_shows_mail_van(client, seeded):
     page = client.get("/admin/health").get_data(as_text=True)
     assert "Mail van" in page
     assert "off" in page.lower()
+    assert "empty" in page.lower()
+
+
+def test_brevo_is_used_when_only_the_os_has_the_key(app, monkeypatch):
+    """Render puts keys in the process environment. Do not trust only app.config."""
+    app.config["BREVO_API_KEY"] = ""
+    app.config["RESEND_API_KEY"] = ""
+    app.config["MAIL_FROM"] = ""
+    monkeypatch.setenv("BREVO_API_KEY", "  xkeysib-test  ")
+    monkeypatch.setenv("MAIL_FROM", 'Hospital Suite <hcareproapp@gmail.com>')
+    seen = {}
+
+    class _R:
+        status_code = 201
+        text = "{}"
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        seen["url"] = url
+        seen["headers"] = headers
+        seen["json"] = json
+        return _R()
+
+    monkeypatch.setattr("requests.post", fake_post)
+    with app.app_context():
+        assert mailer.active_provider() == "brevo"
+        assert mailer.is_configured() is True
+        ok, via = mailer.send_mail("nurse@gmail.com", "Test", "code 111222")
+        assert ok is True
+        assert via == "brevo"
+        assert "api.brevo.com" in seen["url"]
+        assert seen["headers"]["api-key"] == "xkeysib-test"
+        assert seen["json"]["sender"]["email"] == "hcareproapp@gmail.com"

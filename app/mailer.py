@@ -14,6 +14,7 @@ Returns (ok, detail). Never raises. Never logs the 6-digit code.
 """
 from __future__ import annotations
 
+import os
 import smtplib
 import ssl
 from email.mime.multipart import MIMEMultipart
@@ -26,21 +27,40 @@ def _cfg() -> dict:
     return current_app.config
 
 
+def _secret(name: str) -> str:
+    """Read a key NOW, not the copy taken when the app first started.
+
+    Render can show the *name* of a setting while the *value* is still
+    blank. We also strip spaces/newlines people paste by accident.
+    """
+    env = (os.environ.get(name) or "").strip().strip('"').strip("'")
+    if env:
+        return env
+    try:
+        return str(_cfg().get(name) or "").strip().strip('"').strip("'")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def from_address() -> str:
-    cfg = _cfg()
-    return (cfg.get("MAIL_FROM") or cfg.get("SMTP_FROM") or "").strip()
+    raw = _secret("MAIL_FROM") or _secret("SMTP_FROM")
+    if raw.endswith("@localhost"):
+        return ""
+    return raw
 
 
 def active_provider() -> str:
-    """Which van will carry the letter. 'off' means nothing is set up."""
-    cfg = _cfg()
-    if cfg.get("RESEND_API_KEY"):
-        return "resend"
-    if cfg.get("BREVO_API_KEY"):
+    """Which van will carry the letter. 'off' means nothing is set up.
+
+    Brevo first: that is the van this hospital already paid for.
+    """
+    if _secret("BREVO_API_KEY"):
         return "brevo"
-    if cfg.get("SENDGRID_API_KEY"):
+    if _secret("RESEND_API_KEY"):
+        return "resend"
+    if _secret("SENDGRID_API_KEY"):
         return "sendgrid"
-    if cfg.get("SMTP_HOST"):
+    if _secret("SMTP_HOST"):
         return "smtp"
     return "off"
 
@@ -60,6 +80,13 @@ def status() -> dict[str, Any]:
         "provider": provider,
         "configured": is_configured(),
         "from": from_address() or None,
+        "seen": {
+            "brevo": bool(_secret("BREVO_API_KEY")),
+            "resend": bool(_secret("RESEND_API_KEY")),
+            "sendgrid": bool(_secret("SENDGRID_API_KEY")),
+            "smtp": bool(_secret("SMTP_HOST")),
+            "mail_from": bool(from_address()),
+        },
     }
 
 
@@ -122,7 +149,7 @@ def send_mail(to: str, subject: str, text: str, *, html: str | None = None) -> t
 
 def _via_resend(sender, to, subject, text, html) -> tuple[bool, str]:
     import requests
-    key = _cfg().get("RESEND_API_KEY")
+    key = _secret("RESEND_API_KEY")
     r = requests.post(
         "https://api.resend.com/emails",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
@@ -136,7 +163,7 @@ def _via_resend(sender, to, subject, text, html) -> tuple[bool, str]:
 
 def _via_brevo(sender, to, subject, text, html) -> tuple[bool, str]:
     import requests
-    key = _cfg().get("BREVO_API_KEY")
+    key = _secret("BREVO_API_KEY")
     name, email = _split_from(sender)
     r = requests.post(
         "https://api.brevo.com/v3/smtp/email",
@@ -157,7 +184,7 @@ def _via_brevo(sender, to, subject, text, html) -> tuple[bool, str]:
 
 def _via_sendgrid(sender, to, subject, text, html) -> tuple[bool, str]:
     import requests
-    key = _cfg().get("SENDGRID_API_KEY")
+    key = _secret("SENDGRID_API_KEY")
     name, email = _split_from(sender)
     r = requests.post(
         "https://api.sendgrid.com/v3/mail/send",
