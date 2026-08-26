@@ -6,7 +6,7 @@
 <meta name="theme-color" content="{{ settings.brand_primary or '#0e5a8a' }}">
 <title>{% block title %}Hospital Admin Manager Suite{% endblock %}</title>
 {% include "_pwa_head.html" %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 {% block extra_head %}{% endblock %}
 <style>
   /* Per-hospital colours (never per-deploy). Saved under Admin → Hospital. */
@@ -62,7 +62,8 @@
   {% endif %}
 </div>
 {% if current_user.is_authenticated %}
-<div class="navwrap">
+<button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="mainnav">☰ Menu</button>
+<div class="navwrap" id="navwrap">
 <nav class="nav" id="mainnav">
   {# ------------------------------------------------------------------
      MENUS ARE PER ROLE, NOT ONE BLOCK FOR EVERYONE.
@@ -187,7 +188,7 @@
   <br><a href="/privacy">Privacy Notice</a> · <a href="/privacy/request">Your data rights</a>
 </div>
 <div id="toast-zone" aria-live="polite"></div>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
 {% if current_user.is_authenticated %}
 <script>hmsVoice.alertLang = "{{ speech_lang }}"; hmsAlerts.start();</script>
 {% endif %}

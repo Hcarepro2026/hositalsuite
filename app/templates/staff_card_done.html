@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 {% include "_pwa_head.html" %}
 <title>Waiting for approval — {{ hospital.name if hospital else 'Hospital' }}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 </head>
 <body>
 <div class="login-wrap">

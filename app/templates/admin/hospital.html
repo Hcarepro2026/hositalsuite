@@ -22,7 +22,7 @@
   <input type="text" name="address" value="{{ org.address or '' }}"
          placeholder="e.g. 12 Marina Road, Lagos Island, Lagos">
 
-  <label>Logo (appears on every page and on PDF reports)</label>
+  <label>Logo (a square picture of the hospital — not a QR code)</label>
   <input type="file" name="logo" accept="image/jpeg,image/png,image/webp">
   {% if org.logo_path %}
   <p class="hint mt">Current logo:</p>

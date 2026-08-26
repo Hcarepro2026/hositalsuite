@@ -5,7 +5,7 @@ from conftest import csrf, login
 
 # Pages a visitor / patient may open. Anything else staff-only must bounce.
 PATIENT_OK = (
-    "/welcome", "/login", "/signup", "/request-access", "/book", "/queue/join",
+    "/welcome", "/login", "/signup", "/signup/TEST", "/request-access", "/book", "/queue/join",
     "/complaint", "/feedback", "/chat", "/privacy", "/privacy/request",
     "/book/status", "/complaint/status", "/sales",
 )

@@ -6,7 +6,7 @@
 {% include "_pwa_head.html" %}
 <meta name="theme-color" content="#0e5a8a">
 <title>{{ _('tagline') }} — {{ org.name if org else 'Hospital' }}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 <style>
   .hub-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:10px}
   @media (min-width:620px){.hub-grid{grid-template-columns:1fr 1fr}}

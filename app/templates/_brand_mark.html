@@ -1,8 +1,7 @@
 {# Hospital name + logo for public portal headers #}
 {% set h = org or hospital %}
 {% if h and h.logo_path %}
-  <img src="/branding/logo" alt="{{ h.name }}"
-       style="height:88px;width:88px;object-fit:contain;background:#fff;border-radius:12px;padding:4px">
+  <img class="auth-logo" src="/branding/logo" alt="{{ h.name }}">
 {% else %}
   <div style="font-size:2rem">🏥</div>
 {% endif %}

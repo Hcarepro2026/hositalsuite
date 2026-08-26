@@ -49,12 +49,9 @@ def manifest_response(org, settings: dict) -> Response:
 
 
 SW_JS = r"""/* Hospital Suite — keep the last screens on a weak signal. */
-const CACHE = "hs-shell-v1";
+const CACHE = "hs-shell-__VERSION__";
 const SHELL = [
   "/offline",
-  "/static/css/app.css",
-  "/static/js/app.js",
-  "/static/js/pwa.js",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png"
 ];
@@ -85,17 +82,17 @@ self.addEventListener("fetch", function (event) {
   if (url.pathname.indexOf("/api/") === 0) return;
   if (url.pathname.indexOf("/admin") === 0) return;
 
+  // CSS/JS must be network-first. Cache-first froze the old look on phones
+  // after we changed Sign in (giant logo, eye sitting under the box).
   if (url.pathname.indexOf("/static/") === 0) {
     event.respondWith(
-      caches.match(req).then(function (hit) {
-        return hit || fetch(req).then(function (res) {
-          if (res && res.ok) {
-            var copy = res.clone();
-            caches.open(CACHE).then(function (c) { c.put(req, copy); });
-          }
-          return res;
-        });
-      })
+      fetch(req).then(function (res) {
+        if (res && res.ok) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put(req, copy); });
+        }
+        return res;
+      }).catch(function () { return caches.match(req); })
     );
     return;
   }
@@ -114,7 +111,8 @@ self.addEventListener("fetch", function (event) {
 
 
 def service_worker_response() -> Response:
-    resp = make_response(SW_JS)
+    ver = str(current_app.config.get("APP_VERSION") or "1.7.11")
+    resp = make_response(SW_JS.replace("__VERSION__", ver.replace(".", "-")))
     resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
     resp.headers["Service-Worker-Allowed"] = "/"
     resp.headers["Cache-Control"] = "no-cache"

@@ -16,7 +16,7 @@
       <td>Create them below, or send this hospital’s sign-up link only to people you know:
         <div class="row mt" style="gap:8px">
           <input type="text" id="signup-link" readonly
-                 value="{{ request.host_url.rstrip('/') }}/signup"
+                 value="{{ request.host_url.rstrip('/') }}/signup/{{ hospital.code if hospital and hospital.code else '' }}"
                  style="flex:1;font-size:.85rem">
           <button type="button" class="btn small" onclick="navigator.clipboard.writeText(document.getElementById('signup-link').value)">Copy</button>
         </div>

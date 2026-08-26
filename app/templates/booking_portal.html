@@ -6,7 +6,7 @@
 {% include "_pwa_head.html" %}
 <meta name="theme-color" content="#b8860b">
 <title>Book a Visit — {{ org.name }}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 <style>
   .hero-gold{background: linear-gradient(135deg,#FFD700 0%,#FFC400 40%,#FFA500 100%);color:#000;padding:18px 20px 16px;border-radius:18px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,165,0,0.3);border:1px solid rgba(0,0,0,0.06)}
   .hero-gold h1{margin:0;font-size:1.25rem;font-weight:900;letter-spacing:-0.01em}
@@ -133,7 +133,7 @@
   {% include "_help_desk.html" %}
 </main>
 <div class="footer">Book a visit — Fast Track available — <a href="/privacy">Privacy</a></div>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
 {% include "_install.html" %}
 </body>
 </html>

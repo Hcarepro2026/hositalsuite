@@ -13,7 +13,7 @@
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
     {% endwith %}
-    <form method="post" action="/signup">
+    <form method="post" action="{{ '/signup/' + org_code if org_code else '/signup' }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <label>Full name</label>
       <input type="text" name="name" value="{{ name or '' }}" required autocomplete="name">
@@ -40,6 +40,6 @@
     </nav>
   </div>
 </div>
-<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+<script src="{{ url_for('static', filename='js/auth.js') }}?v={{ app_version }}"></script>
 </body>
 </html>

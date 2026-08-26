@@ -18,6 +18,18 @@
   window.addEventListener("offline", paintConn);
   paintConn();
 
+  /* ------------------------------------------------ phone menu (hamburger) */
+  (function () {
+    var btn = document.getElementById("nav-toggle");
+    var wrap = document.getElementById("navwrap");
+    if (!btn || !wrap) return;
+    btn.addEventListener("click", function () {
+      var open = wrap.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.textContent = open ? "✕ Close" : "☰ Menu";
+    });
+  })();
+
   /* ------------------------------------------------ nav dropdown */
   window.hmsToggleMenu = function (btn) {
     var dd = btn.closest(".dd");

@@ -217,6 +217,32 @@ def _home_org() -> Organization | None:
         return None
 
 
+def _org_from_signup_code(code: str | None) -> Organization | None:
+    raw = (code or request.args.get("h") or "").strip().upper()
+    if not raw:
+        return None
+    return db.session.query(Organization).filter_by(code=raw).first()
+
+
+def _signup_org(org_code: str | None = None) -> Organization | None:
+    """Which hospital this Sign up belongs to.
+
+    A private link /signup/GHE is the real door. If this server only has
+    ONE hospital, the bare /signup still works. If there are many, a
+    stranger without a link is not dropped into the first hospital.
+    """
+    picked = _org_from_signup_code(org_code)
+    if picked:
+        return picked
+    try:
+        n = db.session.query(Organization).count()
+    except Exception:
+        n = 0
+    if n <= 1:
+        return _home_org()
+    return None
+
+
 def _kick_activation(user: User) -> str | None:
     """Send a code. Returns the digits only in TESTING so tests can read them.
 
@@ -240,22 +266,26 @@ def _kick_activation(user: User) -> str | None:
     return None
 
 
+@bp.get("/signup/<org_code>")
 @bp.get("/signup")
 @bp.get("/request-access")
-def request_access():
+def request_access(org_code: str | None = None):
     if current_user.is_authenticated:
         return redirect(url_for("main.dashboard"))
-    org = _home_org()
-    return render_template("request_access.html", hospital=org)
+    org = _signup_org(org_code)
+    if org is None:
+        return render_template("signup_pick.html"), 404
+    return render_template("request_access.html", hospital=org, org_code=org.code)
 
 
+@bp.post("/signup/<org_code>")
 @bp.post("/signup")
 @bp.post("/request-access")
 @rate_limit(limit=5, window=300.0, key_extra="request-access")
-def request_access_post():
-    org = _home_org()
+def request_access_post(org_code: str | None = None):
+    org = _signup_org(org_code)
     if org is None:
-        flash("This hospital is not set up yet.", "error")
+        flash("Ask your hospital for their own Sign up link.", "error")
         return redirect(url_for("auth.login"))
     name = (request.form.get("name") or "").strip()
     username = (request.form.get("username") or "").strip().lower()
@@ -277,7 +307,7 @@ def request_access_post():
     if errors:
         for e in errors:
             flash(e, "error")
-        return render_template("request_access.html", hospital=org,
+        return render_template("request_access.html", hospital=org, org_code=org.code,
                                name=name, username=username, email=email), 422
     u = User(org_id=org.id, username=username, name=name[:120], role="STAFF",
              email=email, approved=False, email_verified=False,

@@ -6,7 +6,7 @@
 {% include "_pwa_head.html" %}
 <meta name="theme-color" content="#0e5a8a">
 <title>{{ _('refer_landing_title') }} — {{ org.name }}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 </head>
 <body>
 <div class="portal-head">
@@ -35,6 +35,6 @@
   {% include "_help_desk.html" %}
 </main>
 <div class="footer">{{ org.name }} · share good care · no login needed</div>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
 </body>
 </html>

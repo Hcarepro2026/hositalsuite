@@ -6,7 +6,7 @@
 {% include "_pwa_head.html" %}
 <meta name="theme-color" content="#0e5a8a">
 <title>{{ _('f_cat') }} — {{ org.name }}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 </head>
 <body>
 <div class="portal-head">
@@ -115,7 +115,7 @@
   {% include "_help_desk.html" %}
 </main>
 <div class="footer">{{ _('no_account') }} · Hospital Admin Manager Suite · <a href="/privacy">Privacy</a></div>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
 {% include "_install.html" %}
 </body>
 </html>
