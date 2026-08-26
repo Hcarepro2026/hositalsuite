@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="{{ settings.brand_primary or '#0e5a8a' }}">
 <title>{% block title %}Hospital Admin Manager Suite{% endblock %}</title>
+{% include "_pwa_head.html" %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 {% block extra_head %}{% endblock %}
 <style>

@@ -46,6 +46,15 @@
       <input type="color" name="brand_gold" value="{{ (brand.brand_gold if brand else settings.brand_gold) or '#ffd700' }}">
     </div>
   </div>
+  <h2 class="mt">Name on SMS</h2>
+  <p class="hint">This is the first word on every text the hospital sends (3–11 letters, no spaces).
+    Termii allows 11. Example: <code>GHIJEDE</code>.</p>
+  <input type="text" name="sms_sender_tag" maxlength="11"
+         value="{{ brand.sms_sender_tag or org.code or '' }}"
+         placeholder="GHIJEDE" pattern="[A-Za-z0-9]{3,11}"
+         title="3 to 11 letters or numbers, no spaces"
+         style="text-transform:uppercase;max-width:220px">
+
   <button class="btn mt">Save</button>
 </form>
 <p class="mt"><a class="btn ghost" href="/admin/branches">🏢 Manage hospital sites (Main / Annex) →</a></p>

@@ -63,6 +63,8 @@ DEFAULT_SETTINGS = {
     "attendance_lat": None,
     "attendance_lng": None,
     "attendance_grace_minutes": 60,
+    # Name printed at the start of every SMS (3–11 letters). Per hospital.
+    "sms_sender_tag": "",
 }
 
 

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{% include "_pwa_head.html" %}
 <meta name="theme-color" content="#0e5a8a">
 <title>{{ _('f_cat') }} — {{ org.name }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
@@ -115,5 +116,6 @@
 </main>
 <div class="footer">{{ _('no_account') }} · Hospital Admin Manager Suite · <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% include "_install.html" %}
 </body>
 </html>

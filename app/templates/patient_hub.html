@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{% include "_pwa_head.html" %}
 <meta name="theme-color" content="#0e5a8a">
 <title>{{ _('tagline') }} — {{ org.name if org else 'Hospital' }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
@@ -199,5 +200,6 @@
   });
 })();
 </script>
+{% include "_install.html" %}
 </body>
 </html>

@@ -263,7 +263,7 @@ def register_security_hooks(app):
             "default-src 'self'; "
             "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
             "style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' data:; "
+            "script-src 'self' 'unsafe-inline'; worker-src 'self'; connect-src 'self'; font-src 'self' data:; "
             "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
         resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         resp.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")

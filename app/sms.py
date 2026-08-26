@@ -49,13 +49,15 @@ class TermiiSmsProvider(SmsProvider):
     def send(self, to: str, body: str) -> str:
         if not self.api_key:
             raise SmsProviderError("Termii API key not configured")
+        # DND = transactional (booking, codes, queue). Generic is promo and
+        # is blocked on MTN at night. Live hospital texts are never adverts.
         resp = requests.post(self.URL, json={
             "api_key": self.api_key,
             "from": self.sender_id or "HospSuite",
             "to": to,
             "sms": body,
             "type": "plain",
-            "channel": "generic",
+            "channel": "dnd",
         }, timeout=30)
         if resp.status_code not in (200, 201):
             raise SmsProviderError(f"Termii error {resp.status_code}: {resp.text[:160]}")
@@ -111,7 +113,9 @@ def get_provider() -> SmsProvider:
 def queue_sms(org_id: int, to_number: str, body: str, kind: str = "alert",
               entity_type: str = None, entity_id: int = None,
               to_user_id: int = None) -> SmsMessage:
-    msg = SmsMessage(org_id=org_id, to_number=to_number, body=body[:480], kind=kind,
+    from .sms_pack import one_sms
+    body = one_sms(body)
+    msg = SmsMessage(org_id=org_id, to_number=to_number, body=body, kind=kind,
                      entity_type=entity_type, entity_id=entity_id,
                      to_user_id=to_user_id)
     db.session.add(msg)

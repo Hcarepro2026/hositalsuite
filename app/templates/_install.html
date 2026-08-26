@@ -1,0 +1,18 @@
+<div class="install-bar" id="install-bar" hidden>
+  <div>
+    <b>Put this hospital on your phone</b>
+    <div class="hint" style="margin:0;color:inherit;opacity:.85">One tap. Opens like an app. No Play Store.</div>
+  </div>
+  <button type="button" class="btn small" id="install-btn">Add</button>
+  <button type="button" class="install-x" id="install-dismiss" aria-label="Hide">×</button>
+</div>
+<div class="install-how" id="install-how" hidden>
+  <b>Add to your home screen</b>
+  <ol>
+    <li>Tap the Chrome menu (three dots).</li>
+    <li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li>
+    <li>Tap Add. The hospital icon appears with your other apps.</li>
+  </ol>
+  <button type="button" class="btn small" id="install-how-ok">Got it</button>
+</div>
+<script src="{{ url_for('static', filename='js/pwa.js') }}" defer></script>

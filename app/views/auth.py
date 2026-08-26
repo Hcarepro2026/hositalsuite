@@ -489,7 +489,9 @@ def forgot_password_post():
                                  expires_at=now_naive() + timedelta(minutes=OTP_TTL_MINUTES)))
     db.session.commit()
 
-    body = f"{OTP_TTL_MINUTES}-min password reset code: {otp}. If you did not request this, ignore it."
+    from .. import sms_pack
+    org = db.session.get(Organization, user.org_id) if user.org_id else None
+    body = sms_pack.signin_code(org, otp, OTP_TTL_MINUTES)
     delivered = False
     if user.phone:
         from .. import sms as sms_engine

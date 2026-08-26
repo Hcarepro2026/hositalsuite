@@ -2,9 +2,8 @@
 
 Date: 26 August 2026
 
-Local product is **1.7.7**. GitHub `main` is still **1.7.5** (`0f8880c`).
-This batch is **not** on GitHub yet. A new token is needed to push
-(the last one was deleted after use, as you asked).
+Local product is **1.7.7**. Now also on GitHub `main` as **`42d4c72`**.
+The push token was used once and removed from this machine.
 
 Existing Ijede staff still sign in with the password they already use.
 Nobody is locked out.
@@ -72,7 +71,7 @@ Phone-code lock is still **off**. Sign-in is username (or email) + password only
 
 ## Not in this batch
 
-- Not on GitHub until a new token is pasted.
+- On GitHub as of 26 August 2026 (`42d4c72`). Token deleted after the push.
 - Phone-code lock stays paused.
 - Live booking SMS is still longer than 160 characters (menu 7).
 - Native voice bank is waiting for your pick (menu 6).

@@ -213,8 +213,13 @@ def check_email_code(user: User, otp: str) -> str | None:
 
 def send_activation(user: User, otp: str, hospital_name: str = "the hospital") -> bool:
     """Best-effort: email first, SMS spare. Never raises."""
-    body = (f"{hospital_name}: Your activation code is {otp}. "
-            f"It dies in {VERIFY_MINUTES} minutes. If you did not ask, ignore this.")
+    from . import sms_pack
+    class _O:
+        name = hospital_name
+        code = ""
+        phone = None
+        id = getattr(user, "org_id", None)
+    body = sms_pack.signin_code(_O(), otp, VERIFY_MINUTES)
     delivered = False
     try:
         from .notifications import _send_email

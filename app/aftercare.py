@@ -53,40 +53,26 @@ def thank_you_sms(org_id: int, visit: PatientVisit, patient: Patient | None = No
         if existing:
             return False
 
-        mins = _visit_duration_minutes(visit)
-        if mins is not None and mins < 240:
-            duration_txt = f" Your visit today took about {mins} minutes."
-        else:
-            duration_txt = ""
-
-        org_name = "the hospital"
+        org = None
         try:
             from .models import Organization
-
             org = db.session.get(Organization, org_id)
-            if org:
-                org_name = org.name
         except Exception:
-            pass
-
+            org = None
         feedback_url = "/feedback"
         try:
             from flask import current_app
-
             base = (current_app.config.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
             if base:
                 feedback_url = f"{base}/feedback"
         except Exception:
             pass
-
-        body_en = f"Thank you for visiting {org_name} today.{duration_txt} We appreciate you. Please rate your experience: {feedback_url}"
-        body_yo = f"E seun fun bibẹ wa si {org_name} loni. E jọwọ ẹ fun wa ni imọran: {feedback_url}"
-        body = f"{body_en}\n{body_yo}"
-
+        from . import sms_pack
+        body = sms_pack.thank_you(org, feedback_url)
         sms_engine.queue_sms(
             org_id,
             patient.phone,
-            body[:480],
+            body,
             kind="thank_you",
             entity_type="patient_visit",
             entity_id=visit.id,

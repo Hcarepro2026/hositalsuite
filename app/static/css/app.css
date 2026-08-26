@@ -32,6 +32,25 @@
   *{animation:none!important;transition:none!important}
 }
 
+/* ---------------- look + phone chrome ---------------- */
+html{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+@media (display-mode: standalone){
+  .footer{padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+  .install-bar,.install-how{display:none!important}
+}
+.install-bar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));
+  z-index:80;display:flex;align-items:center;gap:10px;
+  background:linear-gradient(120deg,#0a4468,var(--primary,#0e5a8a));color:#fff;
+  border-radius:16px;padding:12px 14px;box-shadow:var(--shadow-pop)}
+.install-bar[hidden],.install-how[hidden]{display:none!important}
+.install-bar .btn{background:#fff;color:#0a4468;min-height:40px;padding:8px 16px}
+.install-x{background:transparent;border:0;color:#fff;font-size:1.4rem;line-height:1;
+  padding:4px 8px;cursor:pointer;opacity:.8}
+.install-how{position:fixed;left:16px;right:16px;bottom:calc(88px + env(safe-area-inset-bottom));
+  z-index:81;background:#fff;border:1px solid var(--line);border-radius:16px;
+  padding:16px;box-shadow:var(--shadow-pop);max-width:420px;margin:0 auto}
+.install-how ol{margin:8px 0 12px 18px;padding:0;color:var(--ink-2);font-size:.92rem}
+
 /* ---------------- base ---------------- */
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
@@ -63,7 +82,8 @@ small{color:var(--muted)}
 
 /* ---------------- top bar ---------------- */
 .topbar{background:linear-gradient(120deg,var(--primary-700),var(--primary) 55%,#116ba3);
-  color:#fff;padding:11px 16px;display:flex;align-items:center;gap:10px;
+  color:#fff;padding:11px 16px;padding-top:calc(11px + env(safe-area-inset-top));
+  display:flex;align-items:center;gap:10px;
   position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(8,58,88,.35)}
 .topbar .brand{font-weight:800;font-size:1.02rem;color:#fff;flex:1;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.01em;
@@ -236,7 +256,7 @@ tbody tr:hover td{background:#f6fafd}
 .notice.red{border-left-color:var(--red);background:var(--red-bg)}
 
 /* ---------------- login ---------------- */
-.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+.login-wrap{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;
   background:
     radial-gradient(900px 480px at 15% -10%, rgba(18,181,165,.25), transparent 55%),
     radial-gradient(900px 520px at 110% 110%, rgba(18,181,165,.18), transparent 55%),

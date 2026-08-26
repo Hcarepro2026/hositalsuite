@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{% include "_pwa_head.html" %}
 <meta name="theme-color" content="#0e5a8a">
 <title>Your Experience — {{ org.name }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
@@ -70,5 +71,6 @@
 </main>
 <div class="footer">Every rating is read by management · Low ratings trigger immediate follow-up · <a href="/privacy">Privacy</a></div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% include "_install.html" %}
 </body>
 </html>

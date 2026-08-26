@@ -152,11 +152,9 @@ Tick list:
 
 ---
 
-# E. Honest note about the live app
+# E. Live app (from 1.7.8)
 
-The **live booking text** today is longer than 160 characters (it names the building, price and gold lane in one go). These samples are the **approved short lines**.
-
-Say the word if you want the app itself cut down to these exact sentences. Until then, Termii still needs the short samples to open DND.
+The live booking, queue, complaint, thank-you and sign-in texts now use this same short pack. A test fails the build if any queued SMS is longer than 160 characters. Termii is sent on the **DND** (transactional) route, not Generic. The name at the start of each text is set per hospital under **Admin → Hospital → Name on SMS**.
 
 ---
 

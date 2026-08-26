@@ -135,6 +135,13 @@ def join_submit():
     # Announce to the department: staff hear how many are now waiting.
     # Previously nothing was raised here at all, so no announcement could
     # ever be spoken however well the voice engine worked.
+    if phone:
+        from .. import sms_pack
+        from ..tasks import dispatch_delivery
+        sms_engine.queue_sms(org.id, phone,
+                             sms_pack.queue_number(org, ticket=t.code, dept=dept.name),
+                             kind="alert", entity_type="queue_ticket", entity_id=t.id)
+        dispatch_delivery()
     try:
         announce_queue_depth(org.id, dept)
     except Exception:                                    # noqa: BLE001
@@ -295,9 +302,13 @@ def call_next(tid: int):
     audit("QUEUE_CALLED", "queue_ticket", t.id, {"code": t.code})
     # patient notification (SMS where configured — never exposes clinical detail)
     if t.phone:
+        from .. import sms_pack
+        from ..models import Organization
+        org = db.session.get(Organization, t.org_id)
         sms_engine.queue_sms(t.org_id, t.phone,
-                             f"You are next in the {t.department.name} queue. Ticket {t.code}. "
-                             f"Please proceed now.", kind="alert",
+                             sms_pack.queue_next(org, ticket=t.code,
+                                                 dept=t.department.name if t.department else "OPD"),
+                             kind="alert",
                              entity_type="queue_ticket", entity_id=t.id)
         from ..tasks import dispatch_delivery
         dispatch_delivery()   # §39 — async delivery

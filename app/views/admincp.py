@@ -56,6 +56,7 @@ def hospital():
         "brand_primary": services.get_setting(org.id, "brand_primary") or "#0E5A8A",
         "brand_accent": services.get_setting(org.id, "brand_accent") or "#12B5A5",
         "brand_gold": services.get_setting(org.id, "brand_gold") or "#FFD700",
+        "sms_sender_tag": services.get_setting(org.id, "sms_sender_tag") or "",
     }
     return render_template("admin/hospital.html", org=org, brand=brand)
 
@@ -104,6 +105,12 @@ def hospital_save():
         raw = (request.form.get(key) or "").strip()
         if _re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
             services.set_setting(org.id, key, raw.upper())
+    from .. import sms_pack
+    tag = sms_pack.parse_tag(request.form.get("sms_sender_tag") or "")
+    if tag:
+        services.set_setting(org.id, "sms_sender_tag", tag)
+    elif (request.form.get("sms_sender_tag") or "").strip():
+        flash("SMS name must be 3–11 letters or numbers (no spaces). Left unchanged.", "error")
     audit("HOSPITAL_UPDATED", "organization", org.id, {"name": org.name, "code": org.code})
     db.session.commit()
     flash("Hospital profile updated.", "success")

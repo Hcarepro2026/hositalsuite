@@ -379,3 +379,24 @@ def privacy_request_post():
     flash(f"Request received. Your reference is {req.ref}. "
           "We will respond within 30 days.", "success")
     return redirect(url_for("main.privacy"))
+
+
+# ================================================================ install-on-phone (PWA)
+@bp.get("/manifest.webmanifest")
+def web_manifest():
+    from .. import pwa
+    from ..services import current_org, org_settings_bundle
+    org = current_org()
+    bundle = org_settings_bundle(org.id) if org else {}
+    return pwa.manifest_response(org, bundle)
+
+
+@bp.get("/sw.js")
+def service_worker():
+    from .. import pwa
+    return pwa.service_worker_response()
+
+
+@bp.get("/offline")
+def offline_page():
+    return render_template("offline.html")

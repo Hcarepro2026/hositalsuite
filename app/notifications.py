@@ -128,24 +128,21 @@ def notify(org_id: int, user: User, template_key: str, ctx: dict,
     # If caller asked for whatsapp, we still queue SMS as fallback (WhatsApp-first strategy)
     if ("sms" in channels or ("whatsapp" in channels and not wa_queued)) and user.phone:
         from . import sms as sms_engine
-        # Only queue SMS if WhatsApp mode is disabled OR caller explicitly asked for sms
-        # For WhatsApp-first: queue SMS anyway as safety net — process_queue will prioritize WhatsApp
+        from . import sms_pack
+        from .models import Organization
+        sms_text = sms_pack.staff(template_key, dict(ctx, org_id=org_id),
+                                  org=db.session.get(Organization, org_id))
         try:
-            # Check config: if WHATSAPP_MODE disabled or Twilio configured, queue SMS
             cfg = current_app.config
             if cfg.get("WHATSAPP_MODE") == "disabled" or "sms" in channels:
-                sms_engine.queue_sms(org_id, user.phone, text, kind=wa_kind,
+                sms_engine.queue_sms(org_id, user.phone, sms_text, kind=wa_kind,
                                      entity_type=entity_type, entity_id=entity_id, to_user_id=user.id)
             elif wa_queued:
-                # WhatsApp queued — also queue SMS as fallback that will be sent only if WhatsApp fails
-                # Mark as fallback so tasks.py can decide
-                sms_engine.queue_sms(org_id, user.phone, text, kind=f"{wa_kind}_fallback",
+                sms_engine.queue_sms(org_id, user.phone, sms_text, kind=f"{wa_kind}_fallback",
                                      entity_type=entity_type, entity_id=entity_id, to_user_id=user.id)
         except Exception:
-            # Last resort: ensure SMS is queued
             try:
-                from . import sms as sms_engine
-                sms_engine.queue_sms(org_id, user.phone, text, kind=wa_kind,
+                sms_engine.queue_sms(org_id, user.phone, sms_text, kind=wa_kind,
                                      entity_type=entity_type, entity_id=entity_id, to_user_id=user.id)
             except Exception:
                 pass
@@ -181,30 +178,13 @@ def super_admins(org_id: int) -> list[User]:
 
 # ------------------------------------------------------------------ patient (no login) — SMS + WhatsApp
 def patient_update_text(event: str, hospital: str, ref: str, extra: str = "") -> str:
-    extra = (extra or "").strip()
-    extra_bit = f" {extra}" if extra else ""
-    texts = {
-        "received": (
-            f"{hospital} received your complaint. Reference: {ref}. "
-            f"We are looking into it. Keep this number — you can check progress anytime."
-        ),
-        "acknowledged": (
-            f"{hospital}: Your complaint {ref} has been acknowledged. Our team is working on it."
-        ),
-        "progress": (
-            f"{hospital}: An update on your complaint {ref}.{extra_bit}"
-        ),
-        "resolved": (
-            f"{hospital}: Your complaint {ref} has been resolved.{extra_bit} Thank you."
-        ),
-        "closed": (
-            f"{hospital}: Your complaint {ref} is now closed. Thank you for telling us."
-        ),
-        "escalated": (
-            f"{hospital}: Your complaint {ref} has been sent to hospital management for urgent attention."
-        ),
-    }
-    return texts.get(event, f"{hospital}: An update on your complaint {ref}.{extra_bit}")
+    from . import sms_pack
+    class _O:
+        name = hospital
+        code = ""
+        phone = None
+        id = None
+    return sms_pack.complaint(_O(), event, ref, extra)
 
 
 def notify_complaint_patient(org, complaint, event: str, extra: str = "") -> str:
@@ -214,8 +194,8 @@ def notify_complaint_patient(org, complaint, event: str, extra: str = "") -> str
     history and shown on the public status page (their in-app inbox).
     Returns the message text.
     """
-    hospital = getattr(org, "name", None) or "The hospital"
-    body = patient_update_text(event, hospital, complaint.ref, extra)
+    from . import sms_pack
+    body = sms_pack.complaint(org, event, complaint.ref, extra)
     db.session.add(AppNotification(
         org_id=org.id, user_id=None, channel="inapp",
         template_key=f"patient_{event}", subject=f"Complaint {complaint.ref}",

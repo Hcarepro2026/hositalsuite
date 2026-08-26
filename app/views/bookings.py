@@ -181,19 +181,11 @@ def portal_submit():
           {"ref": apt.ref, "dept": dept.name, "date": str(day), "slot": slot,
            "repeat": bool(apt.is_repeat), "referral_id": apt.referral_id}, org_id=org.id)
 
-    # confirmation — WhatsApp FIRST, Twilio SMS fallback (premium)
-    s_bundle = services.org_settings_bundle(org.id)
-    ft_building = s_bundle.get("fast_track_building_name") or "Executive Building"
-    ft_price = s_bundle.get("fast_track_price") or 15000
-    ft_curr = s_bundle.get("fast_track_currency") or "NGN"
-    confirm_body = (
-        f"{org.name}: ⭐ FAST TRACK BOOKED for {day.strftime('%a %d %b')} at {slot} "
-        f"({dept.name}) — {ft_building}. Ref: {apt.ref}. "
-        f"Price: {ft_curr} {ft_price:,}. {s_bundle.get('fast_track_price_note','Pay more, get fast — gold lane')}. "
-        f"Please arrive 15 minutes early. Show ref at Reception + Fast Track Desk — gold lane."
-    )
+    # confirmation — one SMS (160). WhatsApp may carry the same short line.
+    from .. import sms_pack
+    confirm_body = sms_pack.visit_booked(
+        org, day=day, time=slot, dept=dept.name, ref=apt.ref, fast_track=bool(is_ft))
     if services.get_setting(org.id, "booking_confirmation_sms", True):
-        # Unified WhatsApp first, Twilio fallback
         try:
             from .. import whatsapp as wa_engine
             wa_engine.queue_message(org.id, phone, confirm_body, kind="confirmation",
@@ -253,6 +245,18 @@ def portal_cancel():
     apt.status = "CANCELLED"
     apt.cancelled_at = now_naive()
     audit("BOOKING_CANCELLED", "appointment", apt.id, {"ref": apt.ref}, org_id=apt.org_id)
+    try:
+        from .. import sms_pack
+        from ..models import Organization
+        org = db.session.get(Organization, apt.org_id)
+        body = sms_pack.visit_cancelled(org, day=apt.appointment_date,
+                                        time=apt.appointment_time, ref=apt.ref)
+        sms_engine.queue_sms(apt.org_id, phone, body, kind="alert",
+                             entity_type="appointment", entity_id=apt.id)
+        from ..tasks import dispatch_delivery
+        dispatch_delivery()
+    except Exception:
+        pass
     db.session.commit()
     flash("Your booking has been cancelled.", "success")
     return redirect(url_for("bookings.portal_status", ref=ref, phone=phone))
@@ -296,6 +300,19 @@ def mark_paid_fasttrack(aid: int):
     apt.fast_track_paid_at = now_naive()
     audit("FASTTRACK_BOOKING_PAID", "appointment", apt.id,
           {"ref": apt.ref, "payment_ref": ref, "amount": apt.fast_track_amount}, org_id=apt.org_id)
+    if apt.phone:
+        try:
+            from .. import sms_pack, sms as sms_engine
+            from ..models import Organization
+            from ..tasks import dispatch_delivery
+            org = db.session.get(Organization, apt.org_id)
+            body = sms_pack.fasttrack_paid(org, day=apt.appointment_date,
+                                           time=apt.appointment_time, ref=apt.ref)
+            sms_engine.queue_sms(apt.org_id, apt.phone, body, kind="confirmation",
+                                 entity_type="appointment", entity_id=apt.id)
+            dispatch_delivery()
+        except Exception:
+            pass
     db.session.commit()
     flash(f"⭐ {apt.patient_name} Fast Track marked PAID — {ref} — gold lane ready.", "success")
     return redirect(url_for("bookings.staff_list"))
