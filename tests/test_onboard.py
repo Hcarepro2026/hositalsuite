@@ -120,8 +120,11 @@ def test_weak_password_is_rejected(client):
     assert db.session.query(Organization).filter_by(code="SUN").first() is None
 
 
-def test_sales_and_login_point_at_setup(client):
+def test_sales_points_at_setup_login_does_not(client):
+    """A stranger on Sign in must not see 'open a new hospital'."""
     sales = client.get("/sales")
     assert b"/start" in sales.data
     login_page = client.get("/login")
-    assert b"/start" in login_page.data
+    assert b"/start" not in login_page.data
+    assert b"Sign up" in login_page.data
+    assert b"Forgot password" in login_page.data

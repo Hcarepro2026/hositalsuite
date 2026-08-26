@@ -5,7 +5,7 @@ from conftest import csrf, login
 
 # Pages a visitor / patient may open. Anything else staff-only must bounce.
 PATIENT_OK = (
-    "/welcome", "/login", "/request-access", "/book", "/queue/join",
+    "/welcome", "/login", "/signup", "/request-access", "/book", "/queue/join",
     "/complaint", "/feedback", "/chat", "/privacy", "/privacy/request",
     "/book/status", "/complaint/status", "/sales",
 )
@@ -90,9 +90,16 @@ def test_cannot_self_assign_super_admin(client, seeded, app):
 
 def test_new_pages_are_linked(client, seeded):
     login_html = client.get("/login").get_data(as_text=True)
-    assert "/request-access" in login_html
-    assert "/staff-card" in login_html
+    assert "/signup" in login_html
     assert "/forgot-password" in login_html
+    assert "/staff-card" not in login_html
+    assert "/start" not in login_html
+    assert "pw-eye" in login_html
+    signup = client.get("/signup")
+    assert signup.status_code == 200
+    sign_html = signup.get_data(as_text=True)
+    assert "Sign up" in sign_html
+    assert "pw-eye" in sign_html
     card = client.get("/staff-card", follow_redirects=False)
     assert card.status_code == 302
     assert "/login" in card.headers.get("Location", "")
@@ -100,3 +107,5 @@ def test_new_pages_are_linked(client, seeded):
     assert users.status_code == 302
     page = client.get("/admin/users").get_data(as_text=True)
     assert "staff card" in page.lower() or "Approve" in page
+    assert "/signup" in page
+    assert "/start" in page

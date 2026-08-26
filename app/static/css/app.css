@@ -262,6 +262,18 @@ tbody tr:hover td{background:#f6fafd}
     radial-gradient(900px 520px at 110% 110%, rgba(18,181,165,.18), transparent 55%),
     linear-gradient(160deg,#0e5a8a 0%,#0a4468 55%,#083a58 100%)}
 .login-card{width:100%;max-width:410px;box-shadow:var(--shadow-pop);border:0}
+.auth-brand h1{font-size:1.25rem;margin:10px 0 2px}
+.auth-logo{height:72px;width:72px;object-fit:contain;background:#fff;border-radius:16px;padding:4px}
+.auth-links{display:flex;justify-content:center;gap:22px;margin-top:18px;padding-top:14px;
+  border-top:1px solid var(--line-soft)}
+.auth-links a{font-weight:700;font-size:.95rem}
+.pw-wrap{position:relative}
+.pw-wrap input{padding-right:48px}
+.pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  border:0;background:transparent;color:var(--muted);cursor:pointer;
+  width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:10px}
+.pw-eye:hover{color:var(--primary);background:var(--primary-light)}
 
 /* ---------------- public portal ---------------- */
 .portal-head{background:

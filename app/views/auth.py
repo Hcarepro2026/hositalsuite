@@ -224,6 +224,7 @@ def _kick_activation(user: User) -> str | None:
     return None
 
 
+@bp.get("/signup")
 @bp.get("/request-access")
 def request_access():
     if current_user.is_authenticated:
@@ -232,6 +233,7 @@ def request_access():
     return render_template("request_access.html", hospital=org)
 
 
+@bp.post("/signup")
 @bp.post("/request-access")
 @rate_limit(limit=5, window=300.0, key_extra="request-access")
 def request_access_post():
@@ -283,7 +285,7 @@ def verify_email():
     uid = session.get("pending_verify_uid")
     user = db.session.get(User, uid) if uid else None
     if user is None:
-        flash("Start again from Sign in or Request access.", "error")
+        flash("Start again from Sign in or Sign up.", "error")
         return redirect(url_for("auth.login"))
     return render_template("verify_email.html", email=user.email or "")
 

@@ -1,48 +1,37 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-{% include "_pwa_head.html" %}
-<title>Sign in — Hospital Admin Manager Suite</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+{% include "_auth_head.html" %}
+<title>Sign in{% if hospital %} — {{ hospital.name }}{% endif %}</title>
 </head>
 <body>
 <div class="login-wrap">
   <div class="card login-card pad-lg">
-    <div class="center mb">
-      {% if hospital and hospital.logo_path %}
-        <img src="/branding/logo" alt="{{ hospital.name }}"
-             style="height:104px;width:104px;object-fit:contain;background:#fff;border-radius:12px;padding:4px">
-      {% else %}
-        <div style="font-size:2.4rem">🏥</div>
-      {% endif %}
-      <h1 style="margin:4px 0 2px">{{ hospital.name if hospital else 'Hospital Admin Manager Suite' }}</h1>
-      <div class="muted">Inspection · Monitoring · Complaints</div>
-    </div>
+    {% set subtitle = "Sign in" %}
+    {% include "_auth_brand.html" %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
     {% endwith %}
     <form method="post" action="/login">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ next }}">
-      <label>Username or email</label>
-      <input type="text" name="username" value="{{ username or '' }}" autocomplete="username"
-             required autofocus autocapitalize="none">
-      <label>Password (the one you chose)</label>
-      <input type="password" name="password" autocomplete="current-password" required>
+      <label for="username">Username or email</label>
+      <input type="text" id="username" name="username" value="{{ username or '' }}"
+             autocomplete="username" required autofocus autocapitalize="none">
+      {% with name="password", id="login-password", label="Password", autocomplete="current-password" %}
+        {% include "_pw_field.html" %}
+      {% endwith %}
       <div class="mt">
         <button class="btn big" type="submit" style="width:100%">Sign in</button>
       </div>
-      <p class="center mt"><a href="/request-access">New staff? Request access →</a></p>
-      <p class="center mt"><a href="/staff-card">Already activated? Finish your staff card →</a></p>
-      <p class="center mt"><a href="/forgot-password">Forgot password? Reset it yourself →</a></p>
-      <p class="center mt"><a href="/start">Setting up a new hospital? Start here →</a></p>
     </form>
-    <p class="hint center mt">Patients &amp; visitors: you do not need an account to make a complaint.
-      Scan the complaint QR code or ask at reception.</p>
+    <nav class="auth-links">
+      <a href="/signup">Sign up</a>
+      <a href="/forgot-password">Forgot password</a>
+    </nav>
   </div>
 </div>
+<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
 {% include "_install.html" %}
 </body>
 </html>

@@ -3,8 +3,35 @@
 {% block content %}
 <h1>Users &amp; Roles</h1>
 <p class="row" style="gap:8px;flex-wrap:wrap">
-  <a class="btn small secondary" href="/admin/users/import">📋 Bulk upload staff (nominal roll)</a>
+  <a class="btn small secondary" href="/admin/users/import">Bulk upload staff</a>
 </p>
+
+<div class="card pad mb">
+  <h2 style="margin-top:0">Doors that stay off the public sign-in page</h2>
+  <p class="muted">Anyone on the internet can open Sign in. These other doors live here so a stranger cannot walk in.</p>
+  <table>
+    <tr><th>Door</th><th>What you do</th></tr>
+    <tr>
+      <td>Sign up (new staff)</td>
+      <td>Create them below, or send this hospital’s sign-up link only to people you know:
+        <div class="row mt" style="gap:8px">
+          <input type="text" id="signup-link" readonly
+                 value="{{ request.host_url.rstrip('/') }}/signup"
+                 style="flex:1;font-size:.85rem">
+          <button type="button" class="btn small" onclick="navigator.clipboard.writeText(document.getElementById('signup-link').value)">Copy</button>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td>Staff card</td>
+      <td>After they prove their email, they fill name / department / job they are asking for. Amber tags below mean they are still waiting. You tap Approve.</td>
+    </tr>
+    <tr>
+      <td>New hospital</td>
+      <td>Never advertised on Sign in. Open <a href="/start">Set up another hospital</a> (a setup code is required once this hospital already exists).</td>
+    </tr>
+  </table>
+</div>
 
 {% if pending %}
 <div class="notice" style="border-left-color:var(--amber);background:var(--amber-bg)">

@@ -74,7 +74,7 @@ def test_no_enumeration_and_weak_password_rejected(client, seeded, monkeypatch):
 
 def test_admin_still_can_reset_and_login_link_present(client, seeded):
     r = client.get("/login")
-    assert b"Forgot password?" in r.data
+    assert b"Forgot password" in r.data
     login(client, "admin")
     tok = csrf(client, "/admin/users")
     r = client.post(f"/admin/users/{seeded['am']}/reset-password",
