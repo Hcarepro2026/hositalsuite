@@ -16,7 +16,7 @@ def _request_code(client, monkeypatch, otp="123456"):
 
 def test_full_self_service_reset_flow(client, seeded, monkeypatch):
     r = _request_code(client, monkeypatch)
-    assert b"reset code has been sent" in r.data          # generic, no enumeration
+    assert b"on the way" in r.data          # generic, no enumeration
     row = db.session.query(PasswordReset).first()
     assert row is not None and row.used_at is None
 
@@ -62,7 +62,7 @@ def test_no_enumeration_and_weak_password_rejected(client, seeded, monkeypatch):
     r = client.post("/forgot-password", data={
         "_csrf": csrf(client, "/forgot-password"), "identifier": "ghost-user"},
         follow_redirects=True)
-    assert b"reset code has been sent" in r.data            # same generic message
+    assert b"on the way" in r.data            # same generic message
     assert db.session.query(PasswordReset).count() == 0     # but nothing created
 
     _request_code(client, monkeypatch)
@@ -70,6 +70,30 @@ def test_no_enumeration_and_weak_password_rejected(client, seeded, monkeypatch):
         "_csrf": csrf(client, "/reset-password"), "identifier": "am2", "otp": "123456",
         "new_password": "weak", "confirm_password": "weak"})
     assert r.status_code == 422
+
+
+def test_forgot_password_uses_the_mail_van_not_fake_sms(client, seeded, monkeypatch, app):
+    """Sandbox SMS must not pretend a letter left and skip email."""
+    from app.models import User
+    u = db.session.query(User).filter_by(username="am2").first()
+    u.email = "am2@gmail.com"
+    u.phone = "08031112222"
+    db.session.commit()
+    seen = {}
+
+    def fake_send(to, subject, text, **kwargs):
+        seen["to"] = to
+        seen["text"] = text
+        return True, "brevo"
+
+    monkeypatch.setattr("app.mailer.is_configured", lambda: True)
+    monkeypatch.setattr("app.mailer.send_mail", fake_send)
+    r = _request_code(client, monkeypatch)
+    assert r.status_code == 200
+    assert seen.get("to") == "am2@gmail.com"
+    assert "123456" in (seen.get("text") or "")
+    row = db.session.query(PasswordReset).first()
+    assert row.channel == "email"
 
 
 def test_admin_still_can_reset_and_login_link_present(client, seeded):

@@ -542,44 +542,40 @@ def forgot_password():
 def forgot_password_post():
     identifier = request.form.get("identifier") or ""
     user = _find_active_user(identifier)
-    # Generic message regardless — never reveal whether an account exists.
-    flash("If that username or phone number exists and is active, a 6-digit reset "
-          "code has been sent to the registered phone (or email). It expires in "
-          f"{OTP_TTL_MINUTES} minutes.", "info")
+    # Same sentence whether the account exists or not.
+    flash("If we can reach that account, a 6-digit code is on the way. "
+          f"It expires in {OTP_TTL_MINUTES} minutes.", "info")
     if user is None:
         return redirect(url_for("auth.forgot_password"))
 
     otp = f"{secrets.randbelow(1000000):06d}"
-    # invalidate previous unused codes for this user
     db.session.query(PasswordReset).filter_by(user_id=user.id, used_at=None).update(
         {"used_at": now_naive()})
-    db.session.add(PasswordReset(user_id=user.id, otp_hash=generate_password_hash(otp),
-                                 channel="sms",
-                                 expires_at=now_naive() + timedelta(minutes=OTP_TTL_MINUTES)))
-    db.session.commit()
 
-    from .. import sms_pack
+    from .. import mailer, sms_pack
     org = db.session.get(Organization, user.org_id) if user.org_id else None
     body = sms_pack.signin_code(org, otp, OTP_TTL_MINUTES)
-    delivered = False
-    if user.phone:
+    channel = "none"
+    # Real mail van first. Sandbox SMS is not a letter — it used to mark
+    # "delivered" and never try email, so Forgot password stayed silent.
+    if user.email and mailer.is_configured():
+        ok, _detail = mailer.send_mail(user.email, "Your hospital sign-in code", body)
+        if ok:
+            channel = "email"
+    sms_mode = (current_app.config.get("SMS_MODE") or "sandbox").lower()
+    if channel == "none" and user.phone and sms_mode not in ("sandbox", "disabled", "off", ""):
         from .. import sms as sms_engine
         from ..tasks import dispatch_delivery
-        from flask import current_app
         sms_engine.queue_sms(user.org_id, user.phone, body, kind="alert",
                              entity_type="password_reset", entity_id=user.id)
         dispatch_delivery()
-        if current_app.config.get("SMS_MODE", "sandbox") == "sandbox":
-            print(f"[DEV] password-reset OTP for {user.username}: {otp}")
-        delivered = True
-    if not delivered and user.email:
-        from ..notifications import _send_email
-        err = _send_email(user, "Password reset code", body)
-        delivered = err is None
-    if not delivered:
-        # no channel available — dev/demo fallback only; production must have SMS/email
-        print(f"[DEV] no delivery channel; password-reset OTP for {user.username}: {otp}")
-    audit("PASSWORD_RESET_REQUESTED", "user", user.id, {"channel": "sms" if user.phone else "email"})
+        channel = "sms"
+    db.session.add(PasswordReset(user_id=user.id, otp_hash=generate_password_hash(otp),
+                                 channel=channel if channel != "none" else "email",
+                                 expires_at=now_naive() + timedelta(minutes=OTP_TTL_MINUTES)))
+    if current_app.config.get("TESTING") and channel == "none":
+        current_app.logger.info("password-reset code not sent (no live van)")
+    audit("PASSWORD_RESET_REQUESTED", "user", user.id, {"channel": channel})
     db.session.commit()
     return redirect(url_for("auth.reset_password"))
 

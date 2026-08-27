@@ -45,7 +45,7 @@ def _connect_args() -> dict:
 
 
 class Config:
-    APP_VERSION = "1.7.13"
+    APP_VERSION = "1.7.14"
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-key-change-me")
     SQLALCHEMY_DATABASE_URI = _data_uri("app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
