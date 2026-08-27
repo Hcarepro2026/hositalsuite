@@ -74,6 +74,18 @@ def is_configured() -> bool:
     return True
 
 
+def _brevo_key_shape() -> str:
+    """Does the stored secret look like a real Brevo API key? Never returns the key."""
+    k = _secret("BREVO_API_KEY")
+    if not k:
+        return "empty"
+    if k.startswith("xkeysib-") and len(k) >= 40:
+        return "ok"
+    if k.startswith("xkeysib-"):
+        return "short"
+    return "wrong_kind"
+
+
 def status() -> dict[str, Any]:
     provider = active_provider()
     return {
@@ -87,6 +99,7 @@ def status() -> dict[str, Any]:
             "smtp": bool(_secret("SMTP_HOST")),
             "mail_from": bool(from_address()),
         },
+        "brevo_key_shape": _brevo_key_shape(),
     }
 
 
@@ -179,7 +192,16 @@ def _via_brevo(sender, to, subject, text, html) -> tuple[bool, str]:
     )
     if r.status_code in (200, 201, 202):
         return True, "brevo"
-    return False, f"Brevo said {r.status_code}: {(r.text or '')[:180]}"
+    body = (r.text or "")[:180]
+    if r.status_code in (401, 403) and "key not found" in body.lower():
+        return False, (
+            "Brevo does not recognise this key. On Brevo open SMTP & API → "
+            "API keys & MCP (not the SMTP tab) → Generate API key → copy the "
+            "long line that starts with xkeysib- from the popup (only shown "
+            "once). Paste that whole line into Render BREVO_API_KEY. Do not "
+            "copy the dots of an old key. Do not tap Activate for API keys."
+        )
+    return False, f"Brevo said {r.status_code}: {body}"
 
 
 def _via_sendgrid(sender, to, subject, text, html) -> tuple[bool, str]:

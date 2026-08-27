@@ -10,6 +10,11 @@
   {% if info.mail and info.mail.configured %}
     <p><b>Status:</b> <span class="pill green">on — {{ info.mail.provider }}</span></p>
     <p class="muted">Letters leave as <code>{{ info.mail.from }}</code>.</p>
+    {% if info.mail.provider == 'brevo' and info.mail.brevo_key_shape and info.mail.brevo_key_shape != 'ok' %}
+      <p class="flash error">The secret on this server does not look like a Brevo
+        <b>API</b> key (must start with <code>xkeysib-</code> and be long).
+        You may have pasted the SMTP password or the hidden dots of an old key.</p>
+    {% endif %}
   {% else %}
     <p><b>Status:</b> <span class="pill red">off — codes are not leaving</span></p>
     <p>I looked inside <b>this</b> live server. Seeing the name on Render is not enough — the secret must be pasted and saved.</p>

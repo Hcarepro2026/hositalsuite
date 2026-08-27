@@ -122,3 +122,19 @@ def test_brevo_is_used_when_only_the_os_has_the_key(app, monkeypatch):
         assert "api.brevo.com" in seen["url"]
         assert seen["headers"]["api-key"] == "xkeysib-test"
         assert seen["json"]["sender"]["email"] == "hcareproapp@gmail.com"
+
+
+def test_brevo_unknown_key_is_explained(app, monkeypatch):
+    app.config["BREVO_API_KEY"] = "xkeysib-not-real-but-long-enough-xxxxxxxxxxxx"
+    app.config["MAIL_FROM"] = "Hospital Suite <hcareproapp@gmail.com>"
+
+    class _R:
+        status_code = 401
+        text = '{"message":"Key not found","code":"unauthorized"}'
+
+    monkeypatch.setattr("requests.post", lambda *a, **k: _R())
+    with app.app_context():
+        ok, why = mailer.send_mail("a@gmail.com", "Hi", "x")
+        assert ok is False
+        assert "does not recognise this key" in why
+        assert "xkeysib-" in why
