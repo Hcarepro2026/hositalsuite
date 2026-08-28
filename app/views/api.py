@@ -60,6 +60,10 @@ def health():
         "last_backup": last_backup,
         "storage": current_app.config.get("STORAGE_BACKEND", "db"),
         "whatsapp_mode": whatsapp.mode(),
+        "sms_mode": current_app.config.get("SMS_MODE", "sandbox"),
+        "twilio_sid_set": bool(current_app.config.get("TWILIO_ACCOUNT_SID")),
+        "twilio_from_set": bool(current_app.config.get("TWILIO_FROM")),
+        "twilio_wa_from_set": bool(current_app.config.get("TWILIO_WHATSAPP_FROM") or current_app.config.get("TWILIO_FROM")),
         "mail": None,
     }
     try:

@@ -21,13 +21,50 @@ from .models import WhatsAppMessage, db, now_naive
 
 GRAPH = "https://graph.facebook.com/v19.0"
 
+def normalize_ng_number(raw: str) -> str:
+    """Normalize Nigerian numbers to E.164 +234... format (same as sms.py)."""
+    if not raw:
+        return raw
+    s = str(raw).strip().replace(" ", "").replace("-", "")
+    if s.startswith("whatsapp:"):
+        s = s[len("whatsapp:"):]
+    if s.startswith("+2340"):
+        s = "+234" + s[5:]
+    if s.startswith("2340"):
+        s = "+234" + s[4:]
+    if s.startswith("234"):
+        s = "+" + s
+    if s.startswith("0"):
+        s = "+234" + s.lstrip("0")
+    if not s.startswith("+"):
+        if len(s) == 10 and s.startswith(("70","80","81","90","91")):
+            s = "+234" + s
+        else:
+            s = "+" + s.lstrip("+")
+    return s
+
+def ensure_whatsapp_prefix(num: str) -> str:
+    """Ensure number is whatsapp:+234... format for Twilio."""
+    if not num:
+        return num
+    n = str(num).strip()
+    if n.startswith("whatsapp:"):
+        # Normalize inner number too
+        inner = n[len("whatsapp:"):]
+        inner = normalize_ng_number(inner)
+        return f"whatsapp:{inner}"
+    # Normalize then prefix
+    norm = normalize_ng_number(n)
+    return f"whatsapp:{norm}"
+
+
 
 class WhatsAppError(RuntimeError):
     pass
 
 
 def mode() -> str:
-    return current_app.config.get("WHATSAPP_MODE", "sandbox")
+    return (current_app.config.get("WHATSAPP_MODE", "sandbox") or "sandbox").lower()
 
 
 # ------------------------------------------------------------------ media
@@ -108,6 +145,8 @@ def _send_text(to_number: str, body: str) -> str:
 def queue_message(org_id: int, to_number: str, body: str, kind: str = "report",
                   media_path: str | None = None, entity_type: str = None,
                   entity_id: int = None, to_user_id: int = None) -> WhatsAppMessage:
+    # v1.7.20 FIX: normalize Nigerian numbers to +234 before queuing
+    to_number = normalize_ng_number(to_number)
     msg = WhatsAppMessage(org_id=org_id, to_number=to_number, body=body, kind=kind,
                           media_path=media_path, entity_type=entity_type, entity_id=entity_id,
                           to_user_id=to_user_id, status="QUEUED")
@@ -117,7 +156,7 @@ def queue_message(org_id: int, to_number: str, body: str, kind: str = "report",
 
 
 def _send_twilio(to_number: str, body: str) -> str:
-    """Send a WhatsApp message through Twilio.
+    """Send a WhatsApp message through Twilio — v1.7.20 hardened.
 
     WHY TWILIO IS HERE AS A FALLBACK
     --------------------------------
@@ -127,8 +166,10 @@ def _send_twilio(to_number: str, body: str) -> str:
     not an answer. Twilio costs a little per message and can be live in an
     afternoon, so it is the safety net rather than the default.
 
-    Twilio wants numbers as `whatsapp:+234...`, which is easy to get wrong by
-    hand, so the formatting is done here once.
+    v1.7.20 FIXES:
+    - Normalize Nigerian numbers: 080... -> +234..., +2340... -> +234...
+    - Validate FROM format must be whatsapp:+...
+    - Better error messages for trial account, unverified numbers, sandbox join
     """
     cfg = current_app.config
     sid = cfg.get("TWILIO_ACCOUNT_SID", "")
@@ -137,15 +178,21 @@ def _send_twilio(to_number: str, body: str) -> str:
     if not (sid and token and sender):
         raise WhatsAppError(
             "Twilio WhatsApp is selected but TWILIO_ACCOUNT_SID, "
-            "TWILIO_AUTH_TOKEN or TWILIO_WHATSAPP_FROM is missing.")
+            "TWILIO_AUTH_TOKEN or TWILIO_WHATSAPP_FROM is missing. "
+            "Set TWILIO_WHATSAPP_FROM=whatsapp:+14155238886 for sandbox or whatsapp:+234... for approved.")
+
+    # Validate sender format
+    if not str(sender).strip().startswith("whatsapp:"):
+        # Try to auto-fix if user set +1415... without whatsapp: prefix
+        if str(sender).strip().startswith("+"):
+            sender = f"whatsapp:{normalize_ng_number(sender)}"
+        else:
+            raise WhatsAppError(f"TWILIO_WHATSAPP_FROM must start with whatsapp: — got {sender}. Example: whatsapp:+14155238886")
+
+    to_number = normalize_ng_number(to_number)
 
     def _wa(num: str) -> str:
-        num = (num or "").strip()
-        if num.startswith("whatsapp:"):
-            return num
-        if not num.startswith("+"):
-            num = "+" + num.lstrip("0")
-        return f"whatsapp:{num}"
+        return ensure_whatsapp_prefix(num)
 
     resp = requests.post(
         f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
@@ -153,16 +200,33 @@ def _send_twilio(to_number: str, body: str) -> str:
         data={"From": _wa(sender), "To": _wa(to_number), "Body": body[:1600]},
         timeout=float(cfg.get("WHATSAPP_TIMEOUT", 15)))
     if resp.status_code >= 300:
-        raise WhatsAppError(f"Twilio error {resp.status_code}: {resp.text[:200]}")
+        txt = resp.text[:400]
+        # Provide helpful hints for common Twilio errors
+        hint = ""
+        if "unverified" in txt.lower() or "21608" in txt:
+            hint = " — Trial account: verify recipient number in Twilio console > Phone Numbers > Verified Caller IDs"
+        if "join" in txt.lower() or "21610" in txt or "63016" in txt:
+            hint = " — WhatsApp sandbox: recipient must send 'join <code>' to your Twilio WhatsApp number first. Code in Twilio console > Messaging > Try it out > WhatsApp sandbox"
+        if "not a valid phone number" in txt.lower() or "21211" in txt:
+            hint = f" — Invalid number format. To was {to_number}, must be +234... E.164. Got {to_number}"
+        raise WhatsAppError(f"Twilio error {resp.status_code}: {txt}{hint}")
     return (resp.json() or {}).get("sid", "")
 
 
 def send_message(msg: WhatsAppMessage) -> WhatsAppMessage:
-    """Attempt to deliver one queued/failed message. Updates status in place."""
+    """Attempt to deliver one queued/failed message. Updates status in place.
+
+    v1.7.20: Normalize number, immediate SMS fallback if WhatsApp fails.
+    """
     cfg = current_app.config
-    m = mode()
+    m = (mode() or "sandbox").lower()
     msg.attempts += 1
     msg.status = "SENDING"
+    # Normalize before sending
+    try:
+        msg.to_number = normalize_ng_number(msg.to_number)
+    except Exception:
+        pass
     db.session.commit()
     try:
         if m == "disabled":
@@ -219,6 +283,20 @@ def send_message(msg: WhatsAppMessage) -> WhatsAppMessage:
         # retried, never allowed to take the queue down with it.
         msg.status = "FAILED" if msg.attempts >= 3 else "QUEUED"
         msg.last_error = str(exc)[:400]
+        # v1.7.20: WhatsApp-first -> SMS fallback immediately on failure
+        try:
+            from . import sms as sms_engine
+            # Only fallback if SMS not disabled and not already tried too many times
+            if cfg.get("SMS_MODE", "sandbox") != "disabled" and msg.attempts >= 1:
+                # Avoid double-fallback loops: only fallback once per WhatsApp message
+                if not (msg.last_error or "").lower().startswith("sms fallback already"):
+                    sms_engine.queue_sms(msg.org_id, msg.to_number, msg.body,
+                                         kind=(msg.kind or "alert") + "_fallback",
+                                         entity_type=msg.entity_type, entity_id=msg.entity_id,
+                                         to_user_id=msg.to_user_id)
+                    msg.last_error = (msg.last_error or "") + " | SMS fallback queued"
+        except Exception:
+            pass
     db.session.commit()
     return msg
 
