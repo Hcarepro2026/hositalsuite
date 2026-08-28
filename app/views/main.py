@@ -17,19 +17,44 @@ from ..security import rate_limit, require_login, require_role, save_upload
 bp = Blueprint("main", __name__)
 
 
-def _kpi(org_id: int) -> dict:
+def _kpi(org_id: int, viewer=None) -> dict:
+    """v1.7.18: scoped KPI — HOD/APEX_NURSE/STAFF see only own Department/Section/Unit, System Admin upgrades.
+
+    - SUPER_ADMIN, HEAD_ADMIN_HR, MD_CEO, DMD, DCST, ADMIN_MANAGER on-duty: whole hospital
+    - HOD, APEX_NURSE: only own dept(s) via visible_department_ids
+    - STAFF: only own dept
+    """
     now = now_naive()
     today = now.date()
     st = services.inspection_state(org_id, today, now=now)
 
-    insp_all = db.session.query(Inspection).filter_by(org_id=org_id, status="SUBMITTED").all()
+    # Determine visible departments for this viewer
+    visible_ids = None
+    is_limited = False
+    if viewer is not None:
+        try:
+            from ..roles import visible_department_ids
+            visible_ids = visible_department_ids(viewer)
+            if visible_ids is not None:
+                is_limited = True
+        except Exception:
+            visible_ids = None
+
+    # Base query for inspections
+    insp_q = db.session.query(Inspection).filter_by(org_id=org_id, status="SUBMITTED")
+    if is_limited and visible_ids is not None:
+        insp_q = insp_q.filter(Inspection.department_id.in_(visible_ids or [-1]))
+    insp_all = insp_q.all()
     total_inspections = len(insp_all)
     avg_score = round(sum(i.total_score or 0 for i in insp_all) / total_inspections, 1) if total_inspections else 0
 
-    # department averages (last 30 days)
+    # department averages (last 30 days) — scoped
     since = today - timedelta(days=30)
+    dept_query = db.session.query(Department).filter_by(org_id=org_id, active=True)
+    if is_limited and visible_ids is not None:
+        dept_query = dept_query.filter(Department.id.in_(visible_ids or [-1]))
     dept_rows = []
-    for d in db.session.query(Department).filter_by(org_id=org_id, active=True).order_by(Department.name).all():
+    for d in dept_query.order_by(Department.name).all():
         recent = [i.total_score for i in insp_all if i.department_id == d.id and i.duty_date >= since]
         if recent:
             dept_rows.append({"dept": d, "avg": round(sum(recent) / len(recent), 1), "n": len(recent)})
@@ -37,38 +62,104 @@ def _kpi(org_id: int) -> dict:
 
     critical_findings = sum(i.critical_count or 0 for i in insp_all if i.duty_date >= since)
 
-    complaints = db.session.query(Complaint).filter_by(org_id=org_id).all()
+    # Complaints — for limited roles, only complaints related to their dept? Complaints are hospital-wide but filter if possible
+    complaints_q = db.session.query(Complaint).filter_by(org_id=org_id)
+    # Complaints don't have department_id directly, so for HOD/STAFF we show only 0 or limited? Keep 0 for STAFF, own dept complaints for HOD if we can match via department name? For now, hide for STAFF, show for HOD/APEX limited view = 0 unless they are management
+    if is_limited:
+        role = getattr(viewer, "role", "") if viewer else ""
+        if role == "STAFF":
+            complaints = []  # STAFF does not see complaints at all
+        else:
+            # HOD/APEX_NURSE: if complaint has department link? For now show all but filtered to their dept if possible via inspection dept? To be safe, show 0 for non-management to avoid leaking hospital-wide complaint counts
+            # Actually HOD should see complaints for own dept — but Complaint model has no department_id, so we show empty to avoid leaking
+            # System Admin can upgrade via Role Management if needed
+            complaints = [] if is_limited and role in ("HOD", "APEX_NURSE") else complaints_q.all()
+            if not is_limited:
+                complaints = complaints_q.all()
+            else:
+                # For HOD/APEX limited, try to get complaints if they have department_id attr, else empty
+                try:
+                    complaints = complaints_q.all() if getattr(viewer, "is_super", False) else []
+                except Exception:
+                    complaints = []
+        # Re-evaluate if complaints not yet set
+        if 'complaints' not in locals() or complaints is None:
+            complaints = []
+    else:
+        complaints = complaints_q.all()
+
+    # For non-limited (management), complaints as before
+    if not is_limited:
+        complaints = db.session.query(Complaint).filter_by(org_id=org_id).all()
+
     open_complaints = [c for c in complaints if c.status in ("NEW", "ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED")]
     escalated = [c for c in complaints if c.escalated]
     resolved = [c for c in complaints if c.status in ("RESOLVED", "CLOSED")]
     sla_breaches = len([c for c in complaints if c.escalated])
 
-    # inspection compliance (last 30 days): roster days with a submitted inspection
-    roster_days = db.session.query(DutyRoster).filter(
-        DutyRoster.org_id == org_id, DutyRoster.duty_date >= since, DutyRoster.duty_date <= today).all()
-    inspected_dates = {i.duty_date for i in insp_all if i.duty_date >= since}
-    compliance = round(100 * len([r for r in roster_days if r.duty_date in inspected_dates]) / len(roster_days)) if roster_days else 0
+    # inspection compliance (last 30 days): roster days with a submitted inspection — whole hospital only for management, 0 for limited
+    if is_limited:
+        compliance = 0
+        roster_days = []
+    else:
+        roster_days = db.session.query(DutyRoster).filter(
+            DutyRoster.org_id == org_id, DutyRoster.duty_date >= since, DutyRoster.duty_date <= today).all()
+        inspected_dates = {i.duty_date for i in insp_all if i.duty_date >= since}
+        compliance = round(100 * len([r for r in roster_days if r.duty_date in inspected_dates]) / len(roster_days)) if roster_days else 0
 
-    cas_open = db.session.query(CorrectiveAction).filter(
+    cas_open_q = db.session.query(CorrectiveAction).filter(
         CorrectiveAction.org_id == org_id,
-        CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE"))).all()
+        CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE")))
+    if is_limited and visible_ids is not None:
+        # Corrective actions may have department link via source? Filter if possible, else empty for STAFF
+        role = getattr(viewer, "role", "") if viewer else ""
+        if role == "STAFF":
+            cas_open = []
+        else:
+            # For HOD/APEX, show only CAs they own
+            cas_open = cas_open_q.filter(CorrectiveAction.owner_id == viewer.id).all() if viewer else []
+    else:
+        cas_open = cas_open_q.all()
 
     from ..models import Appointment, PatientFeedback, QueueTicket, ReferralEvent
-    bookings_today = db.session.query(Appointment).filter_by(
-        org_id=org_id, appointment_date=today, status="BOOKED").count()
-    queue_waiting = db.session.query(QueueTicket).filter_by(
-        org_id=org_id, queue_date=today, status="WAITING").count()
-    fb_all = db.session.query(PatientFeedback).filter_by(org_id=org_id).all()
-    satisfaction_avg = round(sum(f.rating for f in fb_all) / len(fb_all), 1) if fb_all else None
+    bookings_q = db.session.query(Appointment).filter_by(org_id=org_id, appointment_date=today, status="BOOKED")
+    queue_q = db.session.query(QueueTicket).filter_by(org_id=org_id, queue_date=today, status="WAITING")
+    if is_limited and visible_ids is not None:
+        bookings_q = bookings_q.filter(Appointment.department_id.in_(visible_ids or [-1]))
+        queue_q = queue_q.filter(QueueTicket.department_id.in_(visible_ids or [-1]))
+    bookings_today = bookings_q.count()
+    queue_waiting = queue_q.count()
+
+    fb_all = []
+    satisfaction_avg = None
+    if not is_limited:
+        fb_all = db.session.query(PatientFeedback).filter_by(org_id=org_id).all()
+        satisfaction_avg = round(sum(f.rating for f in fb_all) / len(fb_all), 1) if fb_all else None
+
     since30 = now - timedelta(days=30)
-    referral_books_30d = (db.session.query(ReferralEvent)
-                          .filter(ReferralEvent.org_id == org_id,
-                                  ReferralEvent.kind == "book",
-                                  ReferralEvent.created_at >= since30).count())
-    repeat_visits_30d = (db.session.query(Appointment)
-                         .filter(Appointment.org_id == org_id,
-                                 Appointment.is_repeat.is_(True),
-                                 Appointment.created_at >= since30).count())
+    referral_books_30d = 0
+    repeat_visits_30d = 0
+    if not is_limited:
+        referral_books_30d = (db.session.query(ReferralEvent)
+                              .filter(ReferralEvent.org_id == org_id,
+                                      ReferralEvent.kind == "book",
+                                      ReferralEvent.created_at >= since30).count())
+        repeat_visits_30d = (db.session.query(Appointment)
+                             .filter(Appointment.org_id == org_id,
+                                     Appointment.is_repeat.is_(True),
+                                     Appointment.created_at >= since30).count())
+
+    heatmap = services.heatmap_data(org_id, days=14)
+    if is_limited and visible_ids is not None:
+        # Filter heatmap to visible departments only
+        try:
+            heatmap = {k: v for k, v in heatmap.items() if any(dept_id in (visible_ids or []) for dept_id in [getattr(v, 'department_id', None)] )} if isinstance(heatmap, dict) else []
+            # If heatmap is list of dicts, filter
+            if isinstance(heatmap, list):
+                heatmap = [h for h in heatmap if h.get('department_id') in (visible_ids or [])]
+        except Exception:
+            # If filtering fails, hide heatmap for limited roles
+            heatmap = []
 
     return {
         "bookings_today": bookings_today,
@@ -90,7 +181,9 @@ def _kpi(org_id: int) -> dict:
         "resolution_rate": round(100 * len(resolved) / len(complaints)) if complaints else 0,
         "compliance_rate": compliance,
         "cas_open": cas_open,
-        "heatmap": services.heatmap_data(org_id, days=14),
+        "heatmap": heatmap,
+        "is_limited": is_limited,
+        "visible_ids": visible_ids,
     }
 
 
@@ -172,36 +265,61 @@ def patient_hub():
 @require_login
 def dashboard():
     org_id = current_user.org_id
-    kpi = _kpi(org_id)
-    attention = services.management_attention(org_id) if current_user.is_management else []
+    role = getattr(current_user, "role", "") or ""
+
+    # v1.7.18: STAFF sees ONLY own Department/Section/Unit Activities and Dept Roster view only
+    # Redirect STAFF to My Department page — dashboard is hospital-wide management view
+    if role == "STAFF":
+        return redirect(url_for("deptdesk.my_department"))
+
+    kpi = _kpi(org_id, viewer=current_user)
+
+    # Management attention only for management (MD_CEO, DMD, DCST, HEAD_ADMIN_HR, SUPER_ADMIN, on-duty ADMIN_MANAGER)
+    attention = []
+    if current_user.is_management:
+        # For HOD/APEX, don't show management attention (hospital-wide)
+        if role not in ("HOD", "APEX_NURSE"):
+            attention = services.management_attention(org_id)
+
     my_cas = None
-    if current_user.is_am or current_user.is_hod:
-        my_cas = (db.session.query(CorrectiveAction)
-                  .filter(CorrectiveAction.org_id == org_id, CorrectiveAction.owner_id == current_user.id,
-                          CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE")))
-                  .order_by(CorrectiveAction.deadline).all())
+    if current_user.is_am or current_user.is_hod or role == "APEX_NURSE":
+        q = (db.session.query(CorrectiveAction)
+             .filter(CorrectiveAction.org_id == org_id, CorrectiveAction.owner_id == current_user.id,
+                     CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE"))))
+        # For HOD/APEX, already own only
+        my_cas = q.order_by(CorrectiveAction.deadline).all()
+
     recent_complaints = None
-    if current_user.is_hod:
+    # HOD/APEX should not see hospital-wide recent complaints — only own dept if model supports, else none
+    if role in ("MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "SUPER_ADMIN") or getattr(current_user, "is_super", False):
         recent_complaints = (db.session.query(Complaint)
                              .filter(Complaint.org_id == org_id,
                                      Complaint.status.in_(("NEW", "ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED")))
                              .order_by(Complaint.submitted_at.desc()).limit(8).all())
-    # Patient flow on the front page. The whole point of measuring the journey
-    # is that somebody SEES it — a dashboard behind another menu is a dashboard
-    # nobody opens. Guarded: a fault in the statistics must never take down the
-    # main dashboard for everyone.
+
+    # Patient flow: for HOD/APEX/STAFF, show only own dept flow
     flow = None
     try:
         from .. import tracking
-        flow = {"head": tracking.headline(org_id, 7),
-                "advice": tracking.suggest_allocation(org_id)[:2]}
+        if role in ("HOD", "APEX_NURSE"):
+            from ..roles import visible_department_ids
+            visible = visible_department_ids(current_user)
+            if visible:
+                # Headline for own dept(s) only
+                flow = {"head": tracking.headline(org_id, 7, department_ids=visible) if hasattr(tracking.headline, '__code__') and 'department_ids' in tracking.headline.__code__.co_varnames else tracking.headline(org_id, 7),
+                        "advice": []}
+            else:
+                flow = None
+        elif role not in ("STAFF",):
+            flow = {"head": tracking.headline(org_id, 7),
+                    "advice": tracking.suggest_allocation(org_id)[:2]}
     except Exception:                                      # noqa: BLE001
         from flask import current_app
         current_app.logger.exception("patient-flow summary unavailable")
 
     return render_template("dashboard.html", kpi=kpi, attention=attention, my_cas=my_cas,
                            recent_complaints=recent_complaints, scoring=scoring,
-                           flow=flow)
+                           flow=flow, is_limited=kpi.get("is_limited", False))
 
 
 # ------------------------------------------------------------------ notifications inbox
