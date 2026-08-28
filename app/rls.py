@@ -78,6 +78,8 @@ PROTECTED_TABLES = (
     # Shop door: staff names, hospital settings, and the org chart.
     # These used to rely only on Python remembering the filter.
     "user", "setting", "department", "section", "unit",
+    # Native voice phrase bank — per-tenant voices and phrases
+    "native_voice", "native_phrase", "native_voice_setting",
 )
 
 # The PostgreSQL session variable holding "which hospital is this request for".

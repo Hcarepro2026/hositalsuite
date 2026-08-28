@@ -2077,3 +2077,107 @@ class StaffAttendance(db.Model):
     @property
     def is_open(self) -> bool:
         return self.clock_out_at is None
+
+
+# ---------------------------------------------------------------- native voice phrase bank (v1.7.16)
+# Chrome/Google TTS sounds foreign. Native recorded phrase bank — phrase, not clone.
+# 2 male 2 female recycled daily, 4 languages (en, yo, ha, ig), dynamic time/name.
+class NativeVoice(db.Model):
+    """One recorded human voice — e.g., Ada Female1 Nigerian English.
+
+    WHY PHRASE BANK NOT CLONE
+    -------------------------
+    Founder rule: phrase bank, not clone. Clone needs AI model, licensing,
+    and sounds uncanny. Phrase bank is real humans recording real phrases,
+    stitched for dynamic parts (names, numbers, places, times).
+
+    DYNAMIC HANDLING
+    ----------------
+    - Time changes: greeting_morning / afternoon / evening based on now_naive().hour
+    - Name changes: {name} placeholder replaced via speech_name(), not hardcoded
+    - Count changes: number_1, number_2... recordings + TTS fallback
+    - Place changes: place_laboratory, place_pharmacy... recordings per language
+    """
+    __tablename__ = "native_voice"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    code = db.Column(db.String(20), nullable=False)  # FEMALE1, MALE1, FEMALE2, MALE2
+    name = db.Column(db.String(80), nullable=False)  # Ada, Emeka, Folake, Chinedu
+    gender = db.Column(db.String(10), nullable=False)  # female | male
+    language = db.Column(db.String(10), nullable=False, default="en")  # en, yo, ha, ig, en-NG
+    sample_key = db.Column(db.String(300))  # stored_file key for sample audio
+    is_default = db.Column(db.Boolean, default=False)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_naive)
+
+    org = db.relationship("Organization", backref="native_voices")
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "code", "language", name="uq_voice_org_code_lang"),
+        db.Index("ix_voice_org_active", "org_id", "active"),
+    )
+
+    @property
+    def display_name(self) -> str:
+        return f"{self.name} — {self.gender} — {self.language.upper()} ({self.code})"
+
+
+class NativePhrase(db.Model):
+    """One recorded phrase — e.g., go_to_billing in Yoruba by Ada.
+
+    Dynamic placeholders: {name}, {count}, {place}, {room}, {time}, {detail}
+    Text template stored for reference, audio_key is actual recording.
+
+    For dynamic parts, we have separate number and place recordings:
+    - number_0 ... number_100, number_many
+    - place_laboratory, place_pharmacy, place_billing, etc.
+    - greeting_morning, greeting_afternoon, greeting_evening
+    - time_ formats: today, tomorrow, etc.
+
+    If audio missing, fallback to TTS phrase() from announce.py.
+    """
+    __tablename__ = "native_phrase"
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    voice_id = db.Column(db.Integer, db.ForeignKey("native_voice.id"), nullable=False, index=True)
+    key = db.Column(db.String(80), nullable=False, index=True)  # e.g., queue_waiting, go_to_billing, number_3, place_lab
+    language = db.Column(db.String(10), nullable=False, default="en")
+    text_template = db.Column(db.String(500))  # e.g., "{name}, {count} patients waiting at {place}"
+    audio_key = db.Column(db.String(300))  # stored_file key for mp3/wav
+    duration_ms = db.Column(db.Integer, default=0)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_naive)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+
+    voice = db.relationship("NativeVoice", backref="phrases")
+    org = db.relationship("Organization", backref="native_phrases")
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "voice_id", "key", "language", name="uq_phrase_org_voice_key_lang"),
+        db.Index("ix_phrase_org_key_lang", "org_id", "key", "language"),
+    )
+
+
+class NativeVoiceSetting(db.Model):
+    """Per-hospital settings for native voice bank.
+
+    Dynamic: enabled per org, fallback to TTS, volume, languages, daily rotation.
+    """
+    __tablename__ = "native_voice_setting"
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), primary_key=True)
+    enabled = db.Column(db.Boolean, default=False, nullable=False)  # master switch
+    use_native = db.Column(db.Boolean, default=True, nullable=False)  # prefer native over TTS
+    fallback_to_tts = db.Column(db.Boolean, default=True, nullable=False)  # if native missing, use TTS
+    languages = db.Column(db.String(30), default="en,yo,ha,ig")
+    volume = db.Column(db.Integer, default=100)
+    # JSON mapping slot->voice_id for daily rotation override
+    rotation_map = db.Column(db.Text)  # JSON
+    created_at = db.Column(db.DateTime, default=now_naive)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+
+    org = db.relationship("Organization", backref="native_voice_setting")
+
+    @property
+    def language_list(self) -> list[str]:
+        return [l.strip() for l in (self.languages or "en").split(",") if l.strip()]
+

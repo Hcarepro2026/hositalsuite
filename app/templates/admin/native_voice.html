@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Native Voice Bank — {{ hospital.name if hospital else "Hospital" }}{% endblock %}
+{% block content %}
+<h1>🎙 Native Voice Bank — Phrase, Not Clone</h1>
+<p class="muted">Chrome/Google TTS sounds foreign. This is real humans recording real phrases, stitched for dynamic time/name/place/count. 2 male 2 female recycled daily, 4 languages (en, yo, ha, ig).</p>
+
+<div class="card pad mb">
+  <h2>Current: {{ greeting }} — {{ now.strftime('%H:%M %d %b %Y') if now else '' }}</h2>
+  <p class="hint">Time-based greeting changes dynamically: morning (5-11), afternoon (12-16), evening (17-23). Not hardcoded.</p>
+  <p>Voice today: <b>{{ voices[0].display_name if voices else "None seeded yet" }}</b> — rotation day {{ (now.timetuple().tm_yday if now else 0) }} % 4</p>
+</div>
+
+<div class="grid cols2">
+  <div class="card pad">
+    <h2>⚙ Settings</h2>
+    <form method="post" action="/admin/native-voice/settings">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label><input type="checkbox" name="enabled" {% if setting and setting.enabled %}checked{% endif %}> Enable native voice bank (master switch)</label><br>
+      <label><input type="checkbox" name="use_native" {% if setting and setting.use_native %}checked{% endif %}> Prefer native over TTS</label><br>
+      <label><input type="checkbox" name="fallback_to_tts" {% if setting and setting.fallback_to_tts %}checked{% endif %}> Fallback to TTS if native missing (recommended)</label><br>
+      <label>Languages (comma): <input type="text" name="languages" value="{{ setting.languages if setting else 'en,yo,ha,ig' }}" style="width:200px"></label><br>
+      <label>Volume: <input type="number" name="volume" min="0" max="100" value="{{ setting.volume if setting else 100 }}" style="width:80px"></label><br>
+      <label>Rotation map JSON (optional): <input type="text" name="rotation_map" value="{{ setting.rotation_map or '' }}" placeholder='{"0":1,"1":2,"2":3,"3":4}' style="width:300px"></label>
+      <div class="mt"><button class="btn">Save settings</button></div>
+    </form>
+    <p class="hint">Dynamic: languages per tenant, volume per tenant, rotation per day via day_of_year %4, not hardcoded voice.</p>
+  </div>
+
+  <div class="card pad">
+    <h2>🎤 Add Voice</h2>
+    <form method="post" action="/admin/native-voice/voice/add">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>Code: <select name="code"><option>FEMALE1</option><option>MALE1</option><option>FEMALE2</option><option>MALE2</option></select></label><br>
+      <label>Name: <input type="text" name="name" placeholder="Ada" required></label><br>
+      <label>Gender: <select name="gender"><option value="female">female</option><option value="male">male</option></select></label><br>
+      <label>Language: <select name="language"><option value="en">en (Nigerian English)</option><option value="yo">yo (Yorùbá)</option><option value="ha">ha (Hausa)</option><option value="ig">ig (Igbo)</option><option value="en-NG">en-NG</option></select></label><br>
+      <div class="mt"><button class="btn secondary">Add voice</button></div>
+    </form>
+    <p class="hint">Be dynamic: names change, pick any name — Ada, Emeka, Folake, Chinedu, Aisha, Musa, Ngozi, Obinna. Not hardcoded to 4.</p>
+  </div>
+</div>
+
+<div class="card pad mt">
+  <h2>🎧 Voices ({{ voices|length }}) — 2M2F recycled daily</h2>
+  {% for v in voices %}
+    <div class="row spread" style="border-bottom:1px solid #eee;padding:8px 0">
+      <span><b>{{ v.name }}</b> — {{ v.code }} — {{ v.gender }} — {{ v.language }} — {% if v.sample_key %}<span class="pill green">has sample</span>{% else %}<span class="pill red">no sample</span>{% endif %} — {{ v.display_name }}</span>
+      <form method="post" action="/admin/native-voice/voice/{{ v.id }}/upload" enctype="multipart/form-data" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <input type="file" name="audio" accept="audio/*" required>
+        <button class="btn small">Upload sample</button>
+      </form>
+    </div>
+  {% else %}
+    <p class="muted">No voices yet — seed happens on first load, or add manually.</p>
+  {% endfor %}
+</div>
+
+<div class="card pad mt">
+  <h2>🔊 Phrase Bank ({{ phrases|length }}) — dynamic time/name/place/count</h2>
+  <p class="hint">Upload mp3/wav/ogg/m4a for each phrase key + language + voice. Dynamic placeholders: {name}, {count}, {place}, {room}, {time}, {detail}. Example: queue_waiting = "{name}, {count} patients waiting at {place}" — name/count/place change, recording is static parts stitched.</p>
+  <form method="post" action="/admin/native-voice/phrase/upload" enctype="multipart/form-data" class="mb">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Voice: <select name="voice_id" required>{% for v in voices %}<option value="{{ v.id }}">{{ v.display_name }}</option>{% endfor %}</select></label>
+    <label>Key: <input type="text" name="key" list="base_keys" placeholder="queue_waiting" required style="width:200px">
+      <datalist id="base_keys">{% for k in base_keys %}<option value="{{ k }}">{% endfor %}</datalist>
+    </label>
+    <label>Lang: <select name="language"><option value="en">en</option><option value="yo">yo</option><option value="ha">ha</option><option value="ig">ig</option></select></label>
+    <label>Text template: <input type="text" name="text_template" placeholder="{name}, please go to {place}" style="width:250px"></label>
+    <input type="file" name="audio" accept="audio/*" required>
+    <button class="btn small">Upload phrase</button>
+  </form>
+
+  <div style="max-height:400px;overflow:auto">
+    <table class="table">
+      <tr><th>Key</th><th>Lang</th><th>Voice</th><th>Text</th><th>Audio</th><th>Play</th></tr>
+      {% for p in phrases[:100] %}
+        <tr>
+          <td><code>{{ p.key }}</code></td>
+          <td>{{ p.language }}</td>
+          <td>{{ p.voice.name if p.voice else p.voice_id }}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">{{ p.text_template }}</td>
+          <td>{% if p.audio_key %}<span class="pill green">yes</span> {{ p.audio_key[:40] }}{% else %}<span class="pill red">no</span>{% endif %}</td>
+          <td>{% if p.audio_key %}<audio controls src="/api/v1/voice/audio/{{ p.id }}" style="width:150px"></audio>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </table>
+    {% if phrases|length > 100 %}<p class="muted">Showing 100 of {{ phrases|length }} — filter by key in code.</p>{% endif %}
+  </div>
+</div>
+
+<div class="card pad mt">
+  <h2>🧪 Test Compose (dynamic)</h2>
+  <p class="hint">Test dynamic stitching: time changes greeting, names change via speech_name(), counts/places via separate recordings.</p>
+  <div id="compose-test">
+    <label>Kind: <input id="ckind" value="queue_waiting"></label>
+    <label>Name: <input id="cname" value="Mr Tunde"></label>
+    <label>Count: <input id="ccount" type="number" value="3" style="width:60px"></label>
+    <label>Place: <input id="cplace" value="Laboratory"></label>
+    <label>Lang: <select id="clang"><option>en</option><option>yo</option><option>ha</option><option>ig</option></select></label>
+    <button class="btn small" onclick="testCompose()">Compose & Play</button>
+    <pre id="compose-out" style="background:#f5f5f5;padding:8px;margin-top:8px;white-space:pre-wrap"></pre>
+    <div id="compose-audios"></div>
+  </div>
+  <script>
+    async function testCompose(){
+      const kind=document.getElementById('ckind').value;
+      const name=document.getElementById('cname').value;
+      const count=document.getElementById('ccount').value;
+      const place=document.getElementById('cplace').value;
+      const lang=document.getElementById('clang').value;
+      const url=`/api/v1/voice/compose?kind=${encodeURIComponent(kind)}&name=${encodeURIComponent(name)}&count=${count}&place=${encodeURIComponent(place)}&lang=${lang}`;
+      const r=await fetch(url);
+      const j=await r.json();
+      document.getElementById('compose-out').textContent=JSON.stringify(j,null,2);
+      const div=document.getElementById('compose-audios');
+      div.innerHTML='';
+      if(j.audio_sequence && j.audio_sequence.length){
+        j.audio_sequence.forEach(a=>{
+          const au=document.createElement('audio');
+          au.controls=true;
+          au.src=a.audio_url;
+          au.style.display='block';
+          au.style.margin='4px 0';
+          div.appendChild(au);
+        });
+        // Auto-play sequence
+        let idx=0;
+        function playNext(){
+          if(idx>=div.children.length) return;
+          const a=div.children[idx];
+          a.play();
+          a.onended=()=>{idx++; playNext();};
+        }
+        playNext();
+      } else {
+        // Fallback TTS
+        if('speechSynthesis' in window){
+          const u=new SpeechSynthesisUtterance(j.text || j.fallback_text || 'Test');
+          speechSynthesis.speak(u);
+        }
+      }
+    }
+  </script>
+</div>
+
+<div class="card pad mt">
+  <h2>📜 How it works (dynamic)</h2>
+  <ul>
+    <li><b>Time changes:</b> greeting_morning (5-11), afternoon (12-16), evening (17-23) via now_naive().hour with TIMEZONE Africa/Lagos — not hardcoded string</li>
+    <li><b>Name changes:</b> {name} via speech_name() — shortens any new name, title + first name, not full name — works for any staff/patient</li>
+    <li><b>Count changes:</b> number_0..number_20, number_30/40/50/100, number_many recordings per language + TTS fallback plural()</li>
+    <li><b>Place changes:</b> place_laboratory, place_pharmacy etc per language, plus dynamic ServiceDestination.place field (per-tenant)</li>
+    <li><b>Voice rotation:</b> day_of_year %4 → FEMALE1/MALE1/FEMALE2/MALE2, per org, not hardcoded to one voice</li>
+    <li><b>Language:</b> en, yo, ha, ig per tenant setting, per TV</li>
+    <li><b>Storage:</b> audio via storage.py (db or S3), survives Render ephemeral disk</li>
+  </ul>
+</div>
+
+{% endblock %}
