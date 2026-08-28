@@ -63,6 +63,17 @@ def main():
             job_nightly_backup(app)
         print("Backup complete.")
         return
+    if len(sys.argv) > 1 and sys.argv[1] == "tick-loop":
+        # For Render Background Worker: run scheduler loop forever, no web server
+        # Use with DISABLE_SCHEDULER=0 (default) on this worker, and DISABLE_SCHEDULER=1 on web workers
+        import time
+        from app import create_app
+        from app.scheduler import _loop
+        os.environ["DISABLE_SCHEDULER"] = "0"
+        app = create_app(scheduler=False)
+        print("Starting scheduler loop (background worker)...")
+        _loop(app, interval=30)
+        return
 
     from app import create_app
     app = create_app()

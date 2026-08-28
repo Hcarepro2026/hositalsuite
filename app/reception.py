@@ -152,7 +152,13 @@ def clean_form(form) -> tuple[dict, list[str]]:
     lang = (form.get("preferred_lang") or "en").strip()
     v["preferred_lang"] = lang if lang in LANG_CODES else "en"
     picked = form.getlist("assistance") if hasattr(form, "getlist") else []
-    v["assistance"] = ",".join(a for a in picked if a in ASSISTANCE_CODES)[:200]
+    assistance_str = ",".join(a for a in picked if a in ASSISTANCE_CODES)[:200]
+    v["assistance"] = assistance_str
+    # G1 FIX: separate explicit consent for disability/assistance data (NDPA)
+    assistance_consent = form.get("assistance_consent")
+    if assistance_str and not assistance_consent:
+        errors.append("Assistance needs (wheelchair, hearing, etc.) are sensitive — please tick the separate consent box for disability assistance data.")
+    v["assistance_consent_at"] = now_naive() if assistance_consent else None
     v["care_note"] = (form.get("care_note") or "").strip()[:200]
 
     v["needs_blood_sugar"] = bool(form.get("needs_blood_sugar"))

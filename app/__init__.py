@@ -26,6 +26,7 @@ def _configure_logging(app: Flask) -> None:
 
     Gunicorn captures stdout on Render; bare print() statements lose level and
     timestamp, which makes post-incident diagnosis guesswork.
+    FIX: expert review flagged remaining print() — now all via logger.
     """
     import logging
     import sys
@@ -37,6 +38,22 @@ def _configure_logging(app: Flask) -> None:
     app.logger.handlers = [handler]
     app.logger.setLevel(level)
     app.logger.propagate = False
+
+    # Sentry error tracking if DSN set (Phase 1 hardening)
+    dsn = os.environ.get("SENTRY_DSN") or app.config.get("SENTRY_DSN")
+    if dsn:
+        try:
+            import sentry_sdk
+            from sentry_sdk.integrations.flask import FlaskIntegration
+            sentry_sdk.init(
+                dsn=dsn,
+                integrations=[FlaskIntegration()],
+                traces_sample_rate=float(os.environ.get("SENTRY_TRACES", "0.1")),
+                environment=os.environ.get("RENDER_ENV", os.environ.get("ENV", "production")),
+            )
+            app.logger.info("Sentry enabled")
+        except Exception as exc:
+            app.logger.warning("Sentry init failed: %s", exc)
 
 
 def create_app(config_object=None, scheduler: bool = True) -> Flask:
@@ -248,7 +265,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
         except Exception:
             branch = None
         return dict(csrf_token=csrf_token, settings=bundle,
-                    app_version=app.config.get("APP_VERSION", "1.7.14"),
+                    app_version=app.config.get("APP_VERSION", "1.7.15"),
                     _=i18n.translate, lang=lang, langs=i18n.LANGS,
                     speech_lang=i18n.speech_tag(lang), hospital=hospital,
                     current_branch=branch,

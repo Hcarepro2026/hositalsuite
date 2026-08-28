@@ -270,11 +270,20 @@ def validate(form: dict, *, org_id: int, patient_id: int | None = None) -> tuple
         v["category"] = "GENERAL"
     # Language and assistance — how to look after them, not what is wrong with
     # them. This app is not a medical record.
+    # G1 FIX: separate explicit consent for disability/assistance data (NDPA sensitive)
     lang = (form.get("preferred_lang") or "en").strip().lower()[:4]
     v["preferred_lang"] = lang if lang in PATIENT_LANG_LABELS else "en"
     picked = form.getlist("assistance") if hasattr(form, "getlist") else \
         [a for a in (form.get("assistance") or "").split(",") if a]
-    v["assistance"] = ",".join(a for a in picked if a in ASSISTANCE_CODES)[:200]
+    assistance_str = ",".join(a for a in picked if a in ASSISTANCE_CODES)[:200]
+    v["assistance"] = assistance_str
+    # If assistance needs provided, require explicit consent checkbox
+    assistance_consent = form.get("assistance_consent") or form.get("assistance_consent_at")
+    if assistance_str and not assistance_consent:
+        errors.append("Assistance needs (wheelchair, hearing, etc.) are sensitive — please tick the separate consent box for disability assistance data.")
+    v["assistance_consent_at"] = now_naive() if assistance_consent else None
+    # General consent timestamp for patient data (NDPA)
+    v["consent_at"] = now_naive()
     v["care_note"] = (form.get("care_note") or "").strip()[:200]
     v["notes"] = (form.get("notes") or "").strip()[:2000]
 

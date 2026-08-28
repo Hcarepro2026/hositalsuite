@@ -1112,6 +1112,8 @@ class Patient(db.Model):
     active = db.Column(db.Boolean, default=True, nullable=False)
     # NDPA: the patient consented to the hospital holding these details.
     consent_at = db.Column(db.DateTime)
+    # G1 FIX: separate explicit consent for disability/assistance-need data (more sensitive)
+    assistance_consent_at = db.Column(db.DateTime)
     anonymized_at = db.Column(db.DateTime)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"))
     created_at = db.Column(db.DateTime, default=now_naive, index=True)
@@ -1352,6 +1354,7 @@ class ReceptionIntake(db.Model):
     # first meets the patient is the one who can see they need a wheelchair.
     preferred_lang = db.Column(db.String(4), default="en")
     assistance = db.Column(db.String(200))        # comma-separated ASSISTANCE_CODES
+    assistance_consent_at = db.Column(db.DateTime)  # G1: separate consent for disability data
     care_note = db.Column(db.String(200))
 
     # --- where they are in the walk

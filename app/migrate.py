@@ -139,6 +139,9 @@ COLUMNS = [
     ("chat_session", "phone", "VARCHAR(32)"),
     ("chat_session", "last_intent", "VARCHAR(60)"),
     ("chat_session", "last_action", "VARCHAR(20)"),
+    # --- NDPA G1: separate consent for disability/assistance data
+    ("patient", "assistance_consent_at", "TIMESTAMP"),
+    ("reception_intake", "assistance_consent_at", "TIMESTAMP"),
 ]
 
 # unique partial indexes — make idempotency race-proof at the DB level (§41)

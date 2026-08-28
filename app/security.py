@@ -73,11 +73,50 @@ def same_org_or_super(entity_org_id: int):
 
 
 # ------------------------------------------------------------------ rate limiting
+# FIX S5 (expert review): in-memory per-process breaks with >1 worker/instance.
+# Now supports Redis if REDIS_URL is set, fallback to in-memory for single-worker pilot.
 class RateLimiter:
     def __init__(self):
         self.hits = defaultdict(deque)
+        self._redis = None
+        self._redis_checked = False
+
+    def _get_redis(self):
+        if self._redis_checked:
+            return self._redis
+        self._redis_checked = True
+        url = os.environ.get("REDIS_URL") or os.environ.get("REDIS_TLS_URL", "")
+        if not url:
+            try:
+                from flask import current_app
+                url = current_app.config.get("REDIS_URL", "") if current_app else ""
+            except Exception:
+                url = ""
+        if url:
+            try:
+                import redis  # type: ignore
+                self._redis = redis.from_url(url, decode_responses=True, socket_connect_timeout=2)
+                self._redis.ping()
+            except Exception:
+                self._redis = None
+        return self._redis
 
     def allow(self, key: str, limit: int, window: float) -> bool:
+        r = self._get_redis()
+        if r:
+            try:
+                # Redis sliding window via INCR + EXPIRE
+                pipe = r.pipeline()
+                pipe.incr(key)
+                pipe.ttl(key)
+                count, ttl = pipe.execute()
+                if ttl == -1:
+                    r.expire(key, int(window))
+                return int(count) <= limit
+            except Exception:
+                # Fall back to memory if Redis fails
+                pass
+
         now = time.monotonic()
         # bound memory: drop stale keys occasionally
         if len(self.hits) > 10000:

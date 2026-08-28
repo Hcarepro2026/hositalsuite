@@ -45,17 +45,21 @@ def _connect_args() -> dict:
 
 
 class Config:
-    APP_VERSION = "1.7.14"
+    APP_VERSION = "1.7.15"
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-key-change-me")
     SQLALCHEMY_DATABASE_URI = _data_uri("app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Resilient connections: validate before use (pool_pre_ping) and recycle
     # before the Supabase pooler drops idle connections — prevents
     # "SSL SYSCALL error: EOF detected" after idle periods.
+    # FIX: explicit pool sizing (expert review S5, Render DB pooler gap)
+    # Default 5+10 is fine for 1 worker. For >1 worker, set via env and add PgBouncer.
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": 300,
         "pool_timeout": 30,
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", "5")),
+        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "10")),
         # Bound every connection attempt. Without connect_timeout a database
         # that accepts TCP but never answers (Supabase pooler wobble, an IPv6
         # black-hole, a network partition) blocks the worker for the OS default
@@ -64,6 +68,23 @@ class Config:
         # — not even static files. Fail fast instead and start in degraded mode.
         "connect_args": _connect_args(),
     }
+
+    # --- Phase 1 hardening: Redis, Sentry, Object Storage ---
+    REDIS_URL = os.environ.get("REDIS_URL", os.environ.get("REDIS_TLS_URL", ""))
+    SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+    # Object storage: db (default pilot), disk (dev/volume), s3 (Supabase Storage / R2 / S3)
+    # For s3, set S3_BUCKET, S3_REGION, S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT
+    S3_BUCKET = os.environ.get("S3_BUCKET", "")
+    S3_REGION = os.environ.get("S3_REGION", "")
+    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")
+    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
+    S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "")  # for R2 / Supabase
+
+    # --- NDPA / Compliance ---
+    DPO_NAME = os.environ.get("DPO_NAME", "Hospital Admin")
+    DPO_EMAIL = os.environ.get("DPO_EMAIL", "")
+    DATA_RESIDENCY = os.environ.get("DATA_RESIDENCY", "Frankfurt, EU (Render) / AWS EU-West (Supabase) — configure per deployment")
+    RETENTION_DAYS = int(os.environ.get("RETENTION_DAYS", "2190"))  # 6 years default, floor 30 enforced in job
     TIMEZONE = ZoneInfo(os.environ.get("TIMEZONE", "Africa/Lagos"))
 
     UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")

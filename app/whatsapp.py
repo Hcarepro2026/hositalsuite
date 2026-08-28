@@ -224,11 +224,35 @@ def send_message(msg: WhatsAppMessage) -> WhatsAppMessage:
 
 
 def process_queue(limit: int = 20) -> int:
-    """Send everything queued/failed-with-retries-left. Returns count processed."""
+    """Send everything queued/failed-with-retries-left. Returns count processed.
+
+    FIX for stuck SENDING bug (expert review 2026-08-27):
+    Previously only QUEUED was picked up. If process died after committing
+    status=SENDING but before HTTP finished, message stuck in SENDING forever
+    and MD/CEO never got report. Now we also pick up SENDING older than 2 min.
+    """
+    from datetime import timedelta
+    cutoff = now_naive() - timedelta(minutes=2)
+    # QUEUED always, plus SENDING that has been stuck >2 min (sent_at is None)
     msgs = (db.session.query(WhatsAppMessage)
-            .filter(WhatsAppMessage.status.in_(("QUEUED",)), WhatsAppMessage.attempts < 3)
+            .filter(
+                WhatsAppMessage.attempts < 3,
+                db.or_(
+                    WhatsAppMessage.status == "QUEUED",
+                    db.and_(
+                        WhatsAppMessage.status == "SENDING",
+                        WhatsAppMessage.sent_at.is_(None),
+                        WhatsAppMessage.created_at < cutoff
+                    )
+                )
+            )
             .order_by(WhatsAppMessage.created_at).limit(limit).all())
     for m in msgs:
+        # If it was stuck in SENDING, reset to QUEUED for retry visibility
+        if m.status == "SENDING":
+            current_app.logger.warning("whatsapp: re-queuing stuck SENDING id=%s attempts=%s", m.id, m.attempts)
+            m.status = "QUEUED"
+            db.session.commit()
         send_message(m)
     return len(msgs)
 
