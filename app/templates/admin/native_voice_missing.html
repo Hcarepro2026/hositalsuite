@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Missing Phrases — Native Voice{% endblock %}
+{% block content %}
+<h1>🔍 Missing Phrases Report — {{ total_missing }} missing</h1>
+<p class="muted">Expert: Shows which phrase keys have no audio per language/voice. Record these to complete the bank.</p>
+<a class="btn secondary small" href="/admin/native-voice/">← Back to Voice Bank</a>
+<div class="card pad mt">
+  <table class="table">
+    <tr><th>Key</th><th>Lang</th><th>Voice</th><th>Action</th></tr>
+    {% for m in missing %}
+      <tr>
+        <td><code>{{ m.key }}</code></td>
+        <td>{{ m.lang }}</td>
+        <td>{{ m.voice_name }}</td>
+        <td><a class="btn small" href="/admin/native-voice/#upload-{{ m.key }}">Upload</a></td>
+      </tr>
+    {% endfor %}
+  </table>
+  {% if total_missing > 200 %}<p class="muted">Showing 200 of {{ total_missing }} — record top priority first: greeting_*, queue_waiting, consult_call_in, go_to_*, number_*, place_*</p>{% endif %}
+</div>
+{% endblock %}

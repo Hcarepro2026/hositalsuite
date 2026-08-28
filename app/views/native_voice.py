@@ -188,6 +188,117 @@ def upload_phrase():
     return redirect(url_for("native_voice.admin_list"))
 
 
+# ---------------------------------------------------------------- missing report + bulk upload (expert)
+@bp.get("/missing")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "HEAD_ADMIN_HR")
+@require_permission("admin")
+def missing_report():
+    org_id = _org_id()
+    voices = nv_engine.list_voices(org_id)
+    phrases = nv_engine.list_phrases(org_id)
+    # Build matrix: key x lang x voice -> exists?
+    from collections import defaultdict
+    have = set((p.key, p.language, p.voice_id) for p in phrases if p.active and p.audio_key)
+    base_keys = nv_engine.BASE_PHRASE_KEYS
+    langs = ["en", "yo", "ha", "ig"]
+    missing = []
+    for key in base_keys:
+        for lang in langs:
+            for v in voices:
+                if v.language != lang:
+                    continue
+                if (key, lang, v.id) not in have:
+                    missing.append({"key": key, "lang": lang, "voice_id": v.id, "voice_name": v.display_name})
+    return render_template("admin/native_voice_missing.html", voices=voices, missing=missing[:200], total_missing=len(missing), base_keys=base_keys)
+
+@bp.post("/bulk-upload")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER")
+@require_permission("admin")
+def bulk_upload():
+    """Bulk zip upload: files named key_lang_voicecode.mp3 e.g., queue_waiting_en_FEMALE1.mp3"""
+    org_id = _org_id()
+    file = request.files.get("zipfile")
+    if not file or not file.filename or not file.filename.lower().endswith(".zip"):
+        flash("Upload a zip file containing mp3s named like key_lang_code.mp3", "error")
+        return redirect(url_for("native_voice.admin_list"))
+    import zipfile, io, os
+    try:
+        data = file.read(50*1024*1024 + 1)
+        if len(data) > 50*1024*1024:
+            flash("Zip too large (max 50 MB)", "error")
+            return redirect(url_for("native_voice.admin_list"))
+        z = zipfile.ZipFile(io.BytesIO(data))
+        count = 0
+        for name in z.namelist():
+            if name.startswith("__") or name.startswith("."):
+                continue
+            # Parse name: key_lang_code.ext
+            base = os.path.basename(name)
+            if "." not in base:
+                continue
+            name_no_ext, ext = base.rsplit(".", 1)
+            if ext.lower() not in ("mp3","wav","ogg","m4a","mp4"):
+                continue
+            parts = name_no_ext.split("_")
+            if len(parts) < 3:
+                continue
+            # Last two parts are lang and code, rest is key
+            code = parts[-1].upper()
+            lang = parts[-2].lower()
+            key = "_".join(parts[:-2])
+            if not key or lang not in ("en","yo","ha","ig","en-ng"):
+                continue
+            # Find voice
+            voice = db.session.query(NativeVoice).filter_by(org_id=org_id, code=code, language=lang, active=True).first()
+            if not voice:
+                # Try en fallback for code if lang voice missing
+                voice = db.session.query(NativeVoice).filter_by(org_id=org_id, code=code, active=True).first()
+            if not voice:
+                continue
+            # Save
+            file_data = z.read(name)
+            if len(file_data) > 10*1024*1024:
+                continue
+            audio_key = f"native_voice/{org_id}/{voice.id}/{key}_{lang}_{int(now_naive().timestamp())}_{count}.{ext}"
+            try:
+                from .. import storage
+                storage.put(audio_key, file_data, org_id=org_id, filename=base, content_type=f"audio/{ext}")
+            except Exception as exc:
+                continue
+            # Upsert phrase
+            phrase = db.session.query(NativePhrase).filter_by(org_id=org_id, voice_id=voice.id, key=key, language=lang).first()
+            if not phrase:
+                phrase = NativePhrase(org_id=org_id, voice_id=voice.id, key=key, language=lang, text_template=key, audio_key=audio_key, active=True)
+                db.session.add(phrase)
+            else:
+                phrase.audio_key = audio_key
+                phrase.updated_at = now_naive()
+            count += 1
+        db.session.commit()
+        flash(f"Bulk import: {count} phrases imported from zip", "success")
+    except Exception as exc:
+        flash(f"Zip import failed: {exc}", "error")
+    return redirect(url_for("native_voice.admin_list"))
+
+@bp.get("/script")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "HEAD_ADMIN_HR")
+@require_permission("admin")
+def recording_script():
+    """Generate recording script for voice talents — all base keys with example texts"""
+    org_id = _org_id()
+    from ..announce import phrase as tts_phrase
+    script = []
+    for key in nv_engine.BASE_PHRASE_KEYS:
+        # Generate example text for each key
+        try:
+            example = tts_phrase(key, name="Mr Tunde", count=3, place="Laboratory", patient="Mrs Tayo", room="Room 1", detail="Please attend")
+        except Exception:
+            example = key
+        script.append({"key": key, "example": example})
+    return render_template("admin/native_voice_script.html", script=script, now=now_naive())
+
+# ---------------------------------------------------------------- API
+
 # ---------------------------------------------------------------- API
 @api_bp.get("/audio/<int:phrase_id>")
 def get_audio(phrase_id: int):

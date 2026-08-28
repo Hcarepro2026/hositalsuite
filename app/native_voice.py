@@ -45,27 +45,38 @@ from .announce import speech_name, plural
 
 
 # ------------------------------------------------------------------ defaults
+# Expert-level: 2 male 2 female per language = 16 voices, real Nigerian names, per language
+# Wait for their pick: staff audition and pick, not auto-assign
 DEFAULT_VOICES = [
-    {"code": "FEMALE1", "name": "Ada", "gender": "female", "language": "en"},
-    {"code": "MALE1", "name": "Emeka", "gender": "male", "language": "en"},
-    {"code": "FEMALE2", "name": "Folake", "gender": "female", "language": "en"},
-    {"code": "MALE2", "name": "Chinedu", "gender": "male", "language": "en"},
-    # Yoruba voices
-    {"code": "FEMALE1", "name": "Ada", "gender": "female", "language": "yo"},
-    {"code": "MALE1", "name": "Emeka", "gender": "male", "language": "yo"},
-    # Hausa
-    {"code": "FEMALE1", "name": "Aisha", "gender": "female", "language": "ha"},
-    {"code": "MALE1", "name": "Musa", "gender": "male", "language": "ha"},
-    # Igbo
-    {"code": "FEMALE1", "name": "Ngozi", "gender": "female", "language": "ig"},
-    {"code": "MALE1", "name": "Obinna", "gender": "male", "language": "ig"},
+    # Nigerian English — 2F2M
+    {"code": "FEMALE1", "name": "Ada", "gender": "female", "language": "en", "accent": "en-NG", "desc": "Warm, calm, motherly — best for patient calls"},
+    {"code": "MALE1", "name": "Emeka", "gender": "male", "language": "en", "accent": "en-NG", "desc": "Clear, authoritative, friendly — best for triage"},
+    {"code": "FEMALE2", "name": "Folake", "gender": "female", "language": "en", "accent": "en-NG", "desc": "Bright, energetic, welcoming — best for reception"},
+    {"code": "MALE2", "name": "Chinedu", "gender": "male", "language": "en", "accent": "en-NG", "desc": "Deep, reassuring, calm — best for emergency"},
+    # Yoruba — 2F2M
+    {"code": "FEMALE1", "name": "Bimpe", "gender": "female", "language": "yo", "accent": "yo-NG", "desc": "Yoruba female — warm, respectful"},
+    {"code": "MALE1", "name": "Tunde", "gender": "male", "language": "yo", "accent": "yo-NG", "desc": "Yoruba male — clear, respectful"},
+    {"code": "FEMALE2", "name": "Tayo", "gender": "female", "language": "yo", "accent": "yo-NG", "desc": "Yoruba female 2 — bright"},
+    {"code": "MALE2", "name": "Femi", "gender": "male", "language": "yo", "accent": "yo-NG", "desc": "Yoruba male 2 — deep"},
+    # Hausa — 2F2M
+    {"code": "FEMALE1", "name": "Aisha", "gender": "female", "language": "ha", "accent": "ha-NG", "desc": "Hausa female — warm, respectful"},
+    {"code": "MALE1", "name": "Musa", "gender": "male", "language": "ha", "accent": "ha-NG", "desc": "Hausa male — clear, respectful"},
+    {"code": "FEMALE2", "name": "Zainab", "gender": "female", "language": "ha", "accent": "ha-NG", "desc": "Hausa female 2 — bright"},
+    {"code": "MALE2", "name": "Ibrahim", "gender": "male", "language": "ha", "accent": "ha-NG", "desc": "Hausa male 2 — deep"},
+    # Igbo — 2F2M
+    {"code": "FEMALE1", "name": "Ngozi", "gender": "female", "language": "ig", "accent": "ig-NG", "desc": "Igbo female — warm, respectful"},
+    {"code": "MALE1", "name": "Obinna", "gender": "male", "language": "ig", "accent": "ig-NG", "desc": "Igbo male — clear, respectful"},
+    {"code": "FEMALE2", "name": "Chiamaka", "gender": "female", "language": "ig", "accent": "ig-NG", "desc": "Igbo female 2 — bright"},
+    {"code": "MALE2", "name": "Uche", "gender": "male", "language": "ig", "accent": "ig-NG", "desc": "Igbo male 2 — deep"},
 ]
 
-# Base phrase keys that should exist per language (seed list, dynamic)
+# Expert-level: comprehensive phrase bank — 100+ keys, per language, dynamic slots
+# An expert voice UX designer would cover: greetings, numbers, places, connectors, time, patient journey, staff alerts
 BASE_PHRASE_KEYS = [
-    # Greetings by time (dynamic)
+    # Greetings by time (dynamic via now_naive().hour)
     "greeting_morning", "greeting_afternoon", "greeting_evening", "greeting_general",
-    # Core alerts (from announce.py PATIENT_ALERTS)
+    "greeting_welcome", "greeting_goodbye",
+    # Core patient flow (from announce.py PATIENT_ALERTS) — must have native recordings
     "queue_waiting", "queue_assigned", "dispensary_waiting", "triage_backlog",
     "consult_ready", "lab_waiting", "emergency_arrival", "patient_waiting_long",
     "reception_waiting", "patient_registered", "assistance_needed", "returning_patient",
@@ -74,18 +85,34 @@ BASE_PHRASE_KEYS = [
     "flow_bottleneck", "patient_forgotten", "colleague_joined", "dept_falling_behind",
     "complaint_for_you", "complaint_running_out", "complaint_escalated",
     "complaint_sla_warning_voice", "complaint_escalated_voice",
-    # Numbers 0-20, then tens (dynamic count)
+    # Patient-facing (TV screens) — spoken to patient, not staff
+    "patient_call_fullname", "patient_call_ticket_only", "patient_next", "patient_please_wait",
+    "patient_go_to", "patient_thank_you", "patient_welcome", "patient_directions",
+    # Staff-facing — addressed to staff
+    "staff_attention", "staff_please_attend", "staff_team", "staff_colleague",
+    # Numbers 0-100 (dynamic count) — expert: full 0-20, tens, hundreds
     *[f"number_{i}" for i in range(0, 21)],
-    "number_30", "number_40", "number_50", "number_100", "number_many",
-    # Places (dynamic, per-tenant but seed common)
-    "place_laboratory", "place_pharmacy", "place_billing", "place_payment",
-    "place_triage", "place_reception", "place_hims", "place_dental", "place_opd",
-    "place_emergency", "place_ward", "place_theater",
-    # Connectors (for stitching)
-    "connector_please", "connector_go_to", "connector_waiting_at", "connector_and",
-    "connector_is", "connector_are",
-    # Time words
-    "time_today", "time_tomorrow", "time_morning", "time_afternoon", "time_evening",
+    "number_22", "number_23", "number_24", "number_25", "number_26", "number_27", "number_28", "number_29",
+    "number_30", "number_31", "number_32", "number_33", "number_34", "number_35", "number_36", "number_37", "number_38", "number_39",
+    "number_40", "number_50", "number_60", "number_70", "number_80", "number_90", "number_100", "number_many",
+    # Places (dynamic, per-tenant but seed common Nigerian hospital places)
+    "place_laboratory", "place_pharmacy", "place_billing", "place_payment", "place_megalex",
+    "place_triage", "place_reception", "place_hims", "place_dental", "place_opd", "place_sopd", "place_mopd",
+    "place_emergency", "place_ward", "place_theater", "place_male_ward", "place_female_ward",
+    "place_antenatal", "place_pediatrics", "place_ophthalmology", "place_physiotherapy",
+    "place_radiology", "place_nutrition", "place_maternity", "place_casualty", "place_dressing",
+    "place_lahsma", "place_nhis", "place_records", "place_cashier", "place_consulting_room",
+    # Connectors for stitching (critical for natural flow)
+    "connector_please", "connector_go_to", "connector_waiting_at", "connector_and", "connector_is", "connector_are",
+    "connector_with", "connector_for", "connector_your", "connector_has", "connector_have",
+    "connector_number", "connector_patients", "connector_patient",
+    # Time words (dynamic)
+    "time_today", "time_tomorrow", "time_morning", "time_afternoon", "time_evening", "time_now",
+    "time_minutes", "time_hour", "time_hours",
+    # Politeness / hospitality (Nigerian hospital must be respectful)
+    "polite_please", "polite_thank_you", "polite_welcome", "polite_excuse_me", "polite_sorry",
+    # Urgency markers
+    "urgency_standard", "urgency_urgent", "urgency_emergency",
 ]
 
 # Time-based greeting logic (dynamic, not hardcoded string)
