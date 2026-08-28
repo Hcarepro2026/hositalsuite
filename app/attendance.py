@@ -294,25 +294,84 @@ def grace_for(user: User, now: datetime | None = None) -> dict:
 
 
 def supervise_dept_ids(helper: User) -> set[int] | None:
-    """Departments this person may sign for. None = the whole hospital."""
+    """Departments this person may sign for. None = the whole hospital.
+
+    v1.7.18 STRICT:
+    - SUPER_ADMIN, HEAD_ADMIN_HR, MD_CEO, DMD, DCST: whole hospital (None)
+    - HOD, APEX_NURSE: ONLY own Department/Section/Unit (ids = own + headed + extra grants)
+    - ADMIN_MANAGER: ONLY when on duty TODAY (roster & day-on-duty) → whole hospital when on duty, else own dept only
+    - STAFF: empty set (cannot sign co-staff) — view only roster, no attendance sign-in
+    """
     if helper is None:
         return set()
     from .navigation import permissions_for
     from .roles import sees_whole_hospital, visible_department_ids
-    can = permissions_for(helper)
-    if can.get("attendance_admin") or sees_whole_hospital(helper):
+
+    role = getattr(helper, "role", "") or ""
+
+    # SUPER_ADMIN always whole hospital
+    if getattr(helper, "is_super", False):
         return None
-    ids = set()
-    if helper.department_id:
-        ids.add(helper.department_id)
-    for d in (db.session.query(Department)
-              .filter_by(org_id=helper.org_id, hod_user_id=helper.id).all()):
-        ids.add(d.id)
-    extra = visible_department_ids(helper)
-    if extra:
-        ids.update(extra)
-    if can.get("dept_manage") or helper.role == "HOD":
-        return ids
+
+    # ADMIN_MANAGER: only on-duty today gets whole hospital attendance_admin
+    if role == "ADMIN_MANAGER":
+        try:
+            from .services import on_duty
+            from .models import now_naive
+            today = now_naive().date()
+            duty = on_duty(helper.org_id, today)
+            if duty and duty.id == helper.id:
+                return None  # on duty → whole hospital
+            # Not on duty → only own department (if any) for viewing, but not supervise others
+            # Actually per rule, off-duty Admin Manager should NOT have attendance_admin
+            # So return own dept only if they have it, but can_supervise will be limited
+            # For safety, return empty set if not on duty (cannot sign others)
+            # But allow them to see own dept board? We'll return own dept if exists
+            if helper.department_id:
+                return {helper.department_id}
+            return set()
+        except Exception:
+            return set()
+
+    can = permissions_for(helper)
+
+    # HEAD_ADMIN_HR, MD_CEO, DMD, DCST have attendance_admin and whole hospital
+    if role in ("HEAD_ADMIN_HR", "MD_CEO", "DMD", "DCST"):
+        if can.get("attendance_admin") or sees_whole_hospital(helper):
+            return None
+
+    # SUPER_ADMIN already handled, but also check sees_whole_hospital for other management
+    # For MD_CEO etc, we already returned None above, but keep for safety
+    if sees_whole_hospital(helper) and role in ("MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR"):
+        return None
+
+    # HOD and APEX_NURSE: only own Dept/Section/Unit
+    if role in ("HOD", "APEX_NURSE"):
+        ids = set()
+        if helper.department_id:
+            ids.add(helper.department_id)
+        for d in (db.session.query(Department)
+                  .filter_by(org_id=helper.org_id, hod_user_id=helper.id).all()):
+            ids.add(d.id)
+        extra = visible_department_ids(helper)
+        if extra:
+            ids.update(extra)
+        # Must have dept_manage or be HOD/APEX_NURSE to supervise own dept
+        if can.get("dept_manage") or role in ("HOD", "APEX_NURSE"):
+            return ids
+        return set()
+
+    # STAFF: never supervise (view/read only roster, no sign-in co-staff)
+    if role == "STAFF":
+        return set()
+
+    # Others: if they have attendance_admin via custom role, allow whole hospital, else own dept
+    if can.get("attendance_admin"):
+        return None
+
+    # Fallback: own department only if they have dept_manage, else nothing
+    if can.get("dept_manage") and helper.department_id:
+        return {helper.department_id}
     return set()
 
 
@@ -323,12 +382,18 @@ def can_supervise(helper: User) -> bool:
 
 
 def can_help(helper: User, target: User) -> bool:
-    """May this person sign a colleague in? Admin yes; HOD only own department."""
+    """May this person sign a colleague in? Admin yes; HOD only own department.
+
+    v1.7.18: STAFF cannot sign-in co-staff (view/read only roster). Only HOD/APEX_NURSE (own dept), HEAD_ADMIN_HR, ADMIN_MANAGER on duty, SUPER_ADMIN can.
+    """
     if helper is None or target is None:
         return False
     if helper.org_id != target.org_id:
         return False
     if helper.id == target.id:
+        return False
+    # v1.7.18 explicit: STAFF never helps
+    if getattr(helper, "role", "") == "STAFF":
         return False
     ids = supervise_dept_ids(helper)
     if ids is None:

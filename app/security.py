@@ -53,6 +53,22 @@ def require_login(fn):
     return wrapper
 
 
+def is_admin_manager_on_duty(user) -> bool:
+    """v1.7.18: Only Admin Manager rostered for TODAY has full ADMIN_MANAGER privileges."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "role", "") != "ADMIN_MANAGER":
+        return True  # not AM role, not relevant
+    try:
+        from .services import on_duty
+        from .models import now_naive
+        today = now_naive().date()
+        duty = on_duty(user.org_id, today)
+        return bool(duty and duty.id == user.id)
+    except Exception:
+        return False
+
+
 def require_role(*roles):
     def deco(fn):
         @functools.wraps(fn)
@@ -61,9 +77,50 @@ def require_role(*roles):
                 return redirect(url_for("auth.login", next=request.path))
             if current_user.role not in roles:
                 abort(403)
+            # v1.7.18: ADMIN_MANAGER day-on-duty enforcement
+            if current_user.role == "ADMIN_MANAGER" and "ADMIN_MANAGER" in roles:
+                # SUPER_ADMIN can always, but if ADMIN_MANAGER role required, check on-duty
+                # Unless also SUPER_ADMIN in roles (then super can pass), check duty for AM
+                if not is_admin_manager_on_duty(current_user):
+                    # Allow if user also has SUPER_ADMIN via extra role? Check via roles_of
+                    try:
+                        from .roles import roles_of
+                        extra_roles = [r.code for r in roles_of(current_user)]
+                        if "SUPER_ADMIN" in extra_roles:
+                            pass  # super admin extra hat allows
+                        else:
+                            # Check if on-duty AM, else 403 with helpful message
+                            # But still allow viewing roster (view) — handled in navigation, here we block full AM actions
+                            # For routes that include ADMIN_MANAGER, off-duty AM gets 403
+                            abort(403, description="Admin Manager access is limited to the Admin Manager on duty TODAY (Roster & Day-On-Duty).")
+                    except Exception:
+                        abort(403, description="Admin Manager access is limited to the Admin Manager on duty TODAY.")
             return fn(*a, **kw)
         return wrapper
     return deco
+
+
+def require_admin_manager_on_duty(fn):
+    """Decorator: only on-duty Admin Manager (or SUPER_ADMIN) can access."""
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        if not current_user.is_authenticated:
+            return redirect(url_for("auth.login", next=request.path))
+        if getattr(current_user, "is_super", False):
+            return fn(*a, **kw)
+        if getattr(current_user, "role", "") == "ADMIN_MANAGER":
+            if is_admin_manager_on_duty(current_user):
+                return fn(*a, **kw)
+            abort(403, description="Only the Admin Manager on duty TODAY can perform this action.")
+        # Also allow SUPER_ADMIN via extra role
+        try:
+            from .roles import roles_of
+            if any(r.code == "SUPER_ADMIN" for r in roles_of(current_user)):
+                return fn(*a, **kw)
+        except Exception:
+            pass
+        abort(403)
+    return wrapper
 
 
 def same_org_or_super(entity_org_id: int):

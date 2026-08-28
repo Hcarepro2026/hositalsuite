@@ -31,8 +31,11 @@ from ..security import require_role
 bp = Blueprint("roster", __name__)
 
 VIEWERS = ("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "APEX_NURSE", "HEAD_ADMIN_HR",
-           "ADMIN_MANAGER", "HOD")
-EDITORS = ("SUPER_ADMIN", "HEAD_ADMIN_HR", "HOD")
+           "ADMIN_MANAGER", "HOD", "STAFF")
+# v1.7.18: HOD and APEX_NURSE can create/edit/delete/upload roster for their own dept only (via can_manage)
+# STAFF is VIEW only (read-only), never editor
+# ADMIN_MANAGER can edit ORG roster only when on duty TODAY (checked in can_manage)
+EDITORS = ("SUPER_ADMIN", "HEAD_ADMIN_HR", "HOD", "APEX_NURSE", "ADMIN_MANAGER")
 
 
 # ------------------------------------------------------------------ helpers

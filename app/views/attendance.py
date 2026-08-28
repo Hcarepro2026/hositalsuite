@@ -122,10 +122,18 @@ def punch_out():
 @bp.post("/attendance/gate")
 @login_required
 def save_gate():
-    """System Admin pins the circle on a map — from I am here, not a hidden page."""
+    """System Admin pins the circle on a map — from I am here, not a hidden page.
+
+    v1.7.18: ADMIN_MANAGER only on duty TODAY can pin gate.
+    """
     can = permissions_for(current_user)
     if not (can.get("admin") or can.get("attendance_admin")):
         abort(403)
+    # v1.7.18 extra: if ADMIN_MANAGER, must be on duty
+    if getattr(current_user, "role", "") == "ADMIN_MANAGER":
+        from ..security import is_admin_manager_on_duty
+        if not is_admin_manager_on_duty(current_user):
+            abort(403, description="Only on-duty Admin Manager can pin gate.")
     site = engine.site_for(current_user)
     fence = engine.save_gate(
         current_user.org_id,
@@ -227,7 +235,10 @@ def today():
 @bp.post("/attendance/override")
 @login_required
 def override():
-    """HOD / supervisor / admin signs someone in. Photo + fixed reason required."""
+    """HOD / supervisor / admin signs someone in. Photo + fixed reason required.
+
+    v1.7.18: STAFF cannot sign-in co-staff. ADMIN_MANAGER only on duty TODAY.
+    """
     uid = request.form.get("user_id", type=int)
     code = (request.form.get("help_reason") or "").strip()
     extra = (request.form.get("reason") or "").strip()[:120]
@@ -239,6 +250,16 @@ def override():
     if not target or target.org_id != current_user.org_id or not target.active:
         flash("Pick a member of staff.", "error")
         return redirect(dest)
+    # v1.7.18: STAFF explicit block
+    if getattr(current_user, "role", "") == "STAFF":
+        flash("Staff cannot sign-in co-staff. Only HOD, Apex Nurse (own dept), Admin Manager on duty, or System Admin.", "error")
+        return redirect(dest)
+    # v1.7.18: ADMIN_MANAGER on-duty check
+    if getattr(current_user, "role", "") == "ADMIN_MANAGER":
+        from ..security import is_admin_manager_on_duty
+        if not is_admin_manager_on_duty(current_user):
+            flash("Only the Admin Manager on duty TODAY can sign-in co-staff.", "error")
+            return redirect(dest)
     if not engine.can_help(current_user, target):
         flash("You may only help staff in your own department.", "error")
         return redirect(dest)

@@ -265,16 +265,27 @@ def screen():
 @require_permission("bookings")
 @require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD", "APEX_NURSE")
 def staff_queue():
+    # v1.7.18: LIMIT HOD/APEX_NURSE to own Dept/Section/Unit, System Admin upgrades, STAFF not allowed here (view only via bookings/roster)
+    from ..roles import visible_department_ids
     today = now_naive().date()
     dept_id = request.args.get("dept", type=int)
     q = db.session.query(QueueTicket).filter_by(org_id=current_user.org_id, queue_date=today)
+    visible = visible_department_ids(current_user)
+    if visible is not None:
+        q = q.filter(QueueTicket.department_id.in_(visible or [-1]))
+        # Also restrict dept_id param to visible only
+        if dept_id and dept_id not in visible:
+            dept_id = None
     if dept_id:
         q = q.filter(QueueTicket.department_id == dept_id)
     # Priority lane first — fast-track patients seen first at every desk
     waiting = q.filter(QueueTicket.status == "WAITING").order_by(QueueTicket.is_fast_track.desc(), QueueTicket.id).all()
     called = q.filter(QueueTicket.status == "CALLED").order_by(QueueTicket.called_at.desc()).all()
     done_count = q.filter(QueueTicket.status.in_(("DONE", "NO_SHOW"))).count()
-    depts = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True).all()
+    depts_q = db.session.query(Department).filter_by(org_id=current_user.org_id, active=True)
+    if visible is not None:
+        depts_q = depts_q.filter(Department.id.in_(visible or [-1]))
+    depts = depts_q.all()
     return render_template("queue_staff.html", waiting=waiting, called=called,
                            done_count=done_count, depts=depts, dept_id=dept_id, today=today)
 

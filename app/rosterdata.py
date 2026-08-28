@@ -209,20 +209,144 @@ def resolve_scope(org_id: int, scope: str, department_id=None, section_id=None,
 
 
 def can_manage(user, place: dict) -> bool:
-    """Super Admin manages everything; an HOD manages only their department."""
-    if user.is_super:
+    """Who may create/edit/delete/upload roster for a given place.
+
+    STRICT RULES (v1.7.18):
+    - SUPER_ADMIN: manages everything (System Admin upgrades privileges)
+    - HEAD_ADMIN_HR: manages any department roster (HR)
+    - HOD / APEX_NURSE: manages ONLY their own Department/Section/Unit
+      (hod_user_id == user.id OR department_id == user.department_id)
+    - ADMIN_MANAGER: manages ONLY ORG scope (hospital-wide Admin Manager roster)
+      AND ONLY when on duty TODAY (roster & day-on-duty permission)
+    - STAFF: never manages (view/read only)
+    - All others: no
+    """
+    if getattr(user, "is_super", False):
         return True
-    if getattr(user, "role", "") == "HOD" and place.get("department_id"):
-        dept = db.session.get(Department, place["department_id"])
-        return bool(dept and dept.hod_user_id == user.id)
+
+    role = getattr(user, "role", "") or ""
+    scope = (place.get("scope") or "DEPARTMENT").upper()
+
+    # ORG scope = Admin Manager roster, hospital-wide
+    if scope == "ORG":
+        if role == "SUPER_ADMIN":
+            return True
+        if role == "HEAD_ADMIN_HR":
+            return True  # HR can manage Admin Manager roster
+        if role == "ADMIN_MANAGER":
+            # Only on-duty Admin Manager for TODAY can manage ORG roster
+            try:
+                from .services import on_duty
+                from .models import now_naive
+                today = now_naive().date()
+                duty = on_duty(user.org_id, today)
+                if duty and duty.id == user.id:
+                    return True
+            except Exception:
+                pass
+            return False
+        return False
+
+    # DEPARTMENT / SECTION / UNIT scope
+    dept_id = place.get("department_id")
+    if not dept_id:
+        return False
+
+    # HEAD_ADMIN_HR can manage any department roster
+    if role == "HEAD_ADMIN_HR":
+        return True
+
+    # HOD and APEX_NURSE can manage only their own department/section/unit
+    if role in ("HOD", "APEX_NURSE"):
+        # Check if they are HOD of this department
+        dept = db.session.get(Department, dept_id)
+        if dept and dept.hod_user_id == user.id:
+            return True
+        # Check if their own department matches
+        if getattr(user, "department_id", None) == dept_id:
+            return True
+        # Check extra UserRole grants
+        try:
+            from .models import UserRole
+            for ur in db.session.query(UserRole).filter_by(org_id=user.org_id, user_id=user.id, active=True).all():
+                if ur.department_id == dept_id:
+                    return True
+        except Exception:
+            pass
+        return False
+
+    # STAFF and others: never manage roster (view only)
     return False
 
 
 def visible_departments(user):
+    """Departments this user may see in roster dropdown — strictly limited.
+
+    v1.7.18 rules:
+    - SUPER_ADMIN: all departments
+    - HEAD_ADMIN_HR, MD_CEO, DMD, DCST: all (management sight, but roster edit still via can_manage)
+    - HOD, APEX_NURSE: only departments they head (hod_user_id) + own department + extra UserRole
+    - ADMIN_MANAGER: sees all for viewing (but edit via can_manage on-duty check)
+    - STAFF: only own department (department_id) + extra grants
+    """
     q = db.session.query(Department).filter_by(org_id=user.org_id, active=True)
-    if getattr(user, "role", "") == "HOD" and not user.is_super:
-        q = q.filter(Department.hod_user_id == user.id)
-    return q.order_by(Department.name).all()
+
+    if getattr(user, "is_super", False):
+        return q.order_by(Department.name).all()
+
+    role = getattr(user, "role", "") or ""
+
+    # Management roles that see whole hospital for viewing (but edit via can_manage)
+    # v1.7.18: ADMIN_MANAGER only on-duty sees all
+    if role in ("MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR"):
+        return q.order_by(Department.name).all()
+    if role == "ADMIN_MANAGER":
+        try:
+            from .services import on_duty
+            from .models import now_naive
+            today = now_naive().date()
+            duty = on_duty(user.org_id, today)
+            if duty and duty.id == user.id:
+                return q.order_by(Department.name).all()
+        except Exception:
+            pass
+        # Off-duty ADMIN_MANAGER: only own dept
+        own = getattr(user, "department_id", None)
+        if own:
+            return q.filter(Department.id == own).order_by(Department.name).all()
+        return []
+
+    # HOD and APEX_NURSE: only their own departments
+    if role in ("HOD", "APEX_NURSE"):
+        from .models import UserRole
+        ids = set()
+        if getattr(user, "department_id", None):
+            ids.add(user.department_id)
+        for d in db.session.query(Department).filter_by(org_id=user.org_id, hod_user_id=user.id).all():
+            ids.add(d.id)
+        try:
+            for ur in db.session.query(UserRole).filter_by(org_id=user.org_id, user_id=user.id, active=True).all():
+                if ur.department_id:
+                    ids.add(ur.department_id)
+        except Exception:
+            pass
+        if not ids:
+            return []
+        return q.filter(Department.id.in_(ids)).order_by(Department.name).all()
+
+    # STAFF and others: only own department
+    own = getattr(user, "department_id", None)
+    if own:
+        return q.filter(Department.id == own).order_by(Department.name).all()
+    # No department set: try UserRole grants, else nothing (fail closed)
+    try:
+        from .models import UserRole
+        ids = [ur.department_id for ur in db.session.query(UserRole).filter_by(org_id=user.org_id, user_id=user.id, active=True).all() if ur.department_id]
+        if ids:
+            return q.filter(Department.id.in_(ids)).order_by(Department.name).all()
+    except Exception:
+        pass
+    return []
 
 
 # ------------------------------------------------------------------ people

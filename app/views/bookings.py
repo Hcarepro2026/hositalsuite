@@ -275,7 +275,12 @@ def portal_cancel():
 @require_permission("bookings")
 @require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD", "APEX_NURSE")
 def staff_list():
+    # v1.7.18: LIMIT to own Department/Section/Unit for HOD/APEX_NURSE/STAFF, System Admin upgrades
+    from ..roles import visible_department_ids
     q = db.session.query(Appointment).filter(Appointment.org_id == current_user.org_id)
+    visible = visible_department_ids(current_user)
+    if visible is not None:
+        q = q.filter(Appointment.department_id.in_(visible or [-1]))
     day = request.args.get("date")
     status = request.args.get("status")
     if day:

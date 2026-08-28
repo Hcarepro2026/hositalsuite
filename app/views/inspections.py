@@ -84,6 +84,11 @@ def inspection_new():
 @bp.post("/inspections/departments/<int:dept_id>/children")
 @require_role("ADMIN_MANAGER", "SUPER_ADMIN")
 def department_children(dept_id: int):
+    # v1.7.18: ADMIN_MANAGER day-on-duty
+    if getattr(current_user, "role", "") == "ADMIN_MANAGER":
+        from ..security import is_admin_manager_on_duty
+        if not is_admin_manager_on_duty(current_user):
+            abort(403, description="Only on-duty Admin Manager can access.")
     dept = db.session.get(Department, dept_id)
     if not dept or dept.org_id != current_user.org_id:
         abort(404)
@@ -375,6 +380,11 @@ def inspection_pdf(insp_id: int):
 @bp.post("/inspections/<int:insp_id>/amend")
 @require_role("ADMIN_MANAGER", "SUPER_ADMIN")
 def inspection_amend(insp_id: int):
+    # v1.7.18: ADMIN_MANAGER only on duty
+    if getattr(current_user, "role", "") == "ADMIN_MANAGER":
+        from ..security import is_admin_manager_on_duty
+        if not is_admin_manager_on_duty(current_user):
+            abort(403, description="Only on-duty Admin Manager can amend.")
     """Controlled amendment: the original is locked & superseded, a new record is created."""
     insp = db.session.get(Inspection, insp_id)
     if not insp or insp.org_id != current_user.org_id:

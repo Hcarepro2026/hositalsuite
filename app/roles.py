@@ -94,18 +94,15 @@ BUILTIN_ROLES: dict[str, dict] = {
     },
     "APEX_NURSE": {
         "name": "APEX Nurse — Head of Nursing Services",
-        "scope": "HOSPITAL",
-        "description": "Heads nursing across every ward and clinic.",
-        # HONEST NOTE: the old hard-coded map did NOT give the APEX Nurse
-        # complaints, referrals, corrective actions or reports, and did not let
-        # her work the front desks. That looks like an oversight rather than a
-        # decision, but this seed reproduces it EXACTLY so nothing changes
-        # underneath anybody the day this ships. It is now one tick to fix on
-        # the Role Management screen — which is the whole point of the feature.
+        "scope": "DEPARTMENT",
+        "description": "Heads nursing — limited to own Department/Section/Unit by default (v1.7.18). System Admin upgrades for wider sight.",
+        # v1.7.18 STRICT: HOD and APEX_NURSE limited to own Dept/Section/Unit Activities, Roster C/E/D/Upload, Attendance sign-in of own staff.
+        # Previously HOSPITAL scope gave APEX_NURSE whole hospital sight, violating least privilege. Now DEPARTMENT scope, same as HOD.
+        # System Admin can grant extra departments via Role Management or make scope HOSPITAL.
         "permissions": {
-            "triage", "consulting", "onward", "bookings", "tracking", "roster",
+            "triage", "consulting", "onward", "bookings", "tracking", "roster", "roster_edit",
             "dept_desk", "dept_claim", "dept_staff", "dept_manage",
-            "attendance",
+            "attendance", "attendance_admin",
         },
     },
     "HEAD_ADMIN_HR": {
@@ -123,11 +120,13 @@ BUILTIN_ROLES: dict[str, dict] = {
     "ADMIN_MANAGER": {
         "name": "Admin Manager",
         "scope": "HOSPITAL",
-        "description": "Walks the hospital, inspects, and keeps standards up.",
+        "description": "Walks the hospital — BUT ONLY on-duty Admin Manager of TODAY has full privileges (Roster & Day-On-Duty permission v1.7.18).",
+        # v1.7.18 STRICT: Admin Manager access limited to Roster & Day-On-Duty. Only Admin Manager rostered for TODAY via DutyRoster can assume all ADMIN_MANAGER privileges.
+        # System Admin and HEAD_ADMIN_HR can still manage roster. Others get 403 if not on duty.
         "permissions": {
             "reception", "cashdesk", "hims", "lahsma", "triage", "onward",
             "bookings", "complaints", "escalate", "corrective", "inspections",
-            "tracking", "roster", "referrals",
+            "tracking", "roster", "roster_edit", "referrals",
             "dept_desk", "dept_claim", "dept_staff", "dept_manage",
             "attendance", "attendance_admin",
         },
@@ -135,17 +134,15 @@ BUILTIN_ROLES: dict[str, dict] = {
     "HOD": {
         "name": "HOD — Head of Department",
         "scope": "DEPARTMENT",
-        "description": "Runs one department. Sees that department only.",
-        # reception/cashdesk/hims/lahsma are ticked ON here and then narrowed by
-        # DEPARTMENT in navigation.py. That reproduces the old rule exactly:
-        # the HOD of HIMS runs the HIMS desk, the HOD of Theatre does not, and
-        # an HOD whose department was never recorded still gets through rather
-        # than being locked out of the desk they staff every day.
+        "description": "Runs one department only — Dept/Section/Unit Activities, Roster C/E/D/Upload, Attendance sign-in of own staff (v1.7.18). System Admin upgrades.",
+        # v1.7.18 STRICT: HOD limited to own Dept/Section/Unit by default. Roster creation/edit/delete/uploading allowed for own dept only (via can_manage).
+        # Attendance sign-in of own staff when issue allowed. System Admin upgrades via Role Management.
         "permissions": {
             "reception", "cashdesk", "hims", "lahsma",
             "consulting", "onward", "complaints", "escalate", "corrective",
-            "tracking", "roster", "dept_desk", "dept_claim", "dept_staff", "dept_manage",
-            "attendance",
+            "tracking", "roster", "roster_edit",
+            "dept_desk", "dept_claim", "dept_staff", "dept_manage",
+            "attendance", "attendance_admin",
         },
     },
     # ------------------------------------------------------------------ NEW
@@ -156,10 +153,10 @@ BUILTIN_ROLES: dict[str, dict] = {
     "STAFF": {
         "name": "Staff",
         "scope": "DEPARTMENT",
-        "description": "Works in one department. Sees that department's own work.",
-        # Deliberately NO dept_manage: an ordinary member of staff may step
-        # THEMSELVES off a task, but not wipe a colleague's record of the work
-        # they did. That belongs to whoever runs the department.
+        "description": "Works in one department only — view/read only roster, no edit/delete/upload, no sign-in co-staff (v1.7.18).",
+        # v1.7.18 STRICT: Staff sees ONLY own Dept/Section/Unit Activities and Dept Roster view only.
+        # NO roster_edit, NO dept_manage, NO attendance_admin — so cannot create/edit/delete roster, cannot sign-in co-staff.
+        # Deliberately NO dept_manage: may step themselves off task, not wipe colleague's record.
         "permissions": {"dept_desk", "dept_claim", "dept_staff", "roster", "attendance"},
     },
 }

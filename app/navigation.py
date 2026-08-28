@@ -159,15 +159,12 @@ MENU_KEYS = ("inspections", "reception", "cashdesk", "hims", "lahsma", "triage",
 def permissions_for(user) -> dict:
     """What this person may see and do — read from Role Management.
 
-    Falls back to the original hard-coded map if the role tables cannot be
-    read, so a database fault degrades to yesterday's behaviour instead of
-    handing somebody the administrator's menu.
-
-    ONE DEPARTMENT NUANCE SURVIVES THE MOVE. Front-desk and money-desk work
-    for an HOD is granted by DEPARTMENT, not by rank: the HOD of HIMS runs the
-    HIMS desk, the HOD of Theatre does not. A tick-list alone cannot express
-    that, and taking it out would have re-opened the exact bug this file was
-    written to fix, so it is applied on top of whatever the role grants.
+    v1.7.18 STRICT RULES:
+    - HOD and APEX_NURSE: LIMITED to own Department/Section/Unit Activities, Roster C/E/D/Upload, Attendance sign-in of own staff.
+      System Admin upgrades via Role Management.
+    - STAFF: ONLY own Department/Section/Unit Activities and Department Roster view/read only, no roster edit/delete/upload, no sign-in co-staff.
+    - ADMIN_MANAGER: ONLY on-duty Admin Manager of TODAY has full ADMIN_MANAGER privileges (Roster & Day-On-Duty).
+    - Falls back to legacy map if role tables broken (fail-closed).
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return {k: False for k in MENU_KEYS}
@@ -184,21 +181,63 @@ def permissions_for(user) -> dict:
             can[k] = True
         return can
 
-    # Department nuance for the desks (see the docstring above). Applies only
-    # to the HOD role: for everybody else the tick-list is the whole answer.
-    # FIX 2026-08-21: any front match grants ALL front desks.
-    if (getattr(user, "role", "") or "") == "HOD":
+    role = (getattr(user, "role", "") or "")
+
+    # v1.7.18: ADMIN_MANAGER day-on-duty enforcement
+    if role == "ADMIN_MANAGER":
+        try:
+            from .services import on_duty
+            from .models import now_naive
+            today = now_naive().date()
+            duty = on_duty(user.org_id, today)
+            is_on_duty = duty and duty.id == user.id
+            if not is_on_duty:
+                # Off-duty Admin Manager loses ADMIN_MANAGER privileges for today
+                # Keeps only basic staff powers: dept_desk, roster view, attendance (self)
+                for k in ("inspections", "reception", "cashdesk", "hims", "lahsma",
+                          "triage", "consulting", "onward", "bookings", "complaints",
+                          "referrals", "corrective", "reports", "admin", "roles_admin",
+                          "roster_edit", "attendance_admin", "dept_manage", "escalate"):
+                    can[k] = False
+                # Still can see roster (view) and own dept desk
+                can["roster"] = True
+                can["attendance"] = True
+                can["dept_desk"] = can.get("dept_desk", False)
+        except Exception:
+            pass
+
+    # v1.7.18: HOD and APEX_NURSE limited to own Dept/Section/Unit
+    if role in ("HOD", "APEX_NURSE"):
         if _has_department(user):
             is_front = (_dept_matches(user, FRONT_DESK_DEPARTMENTS)
                         or _dept_matches(user, MONEY_DEPARTMENTS))
             if not is_front:
                 can["reception"] = can["hims"] = can["cashdesk"] = can["lahsma"] = False
-        # Triage is the opposite way round: an HOD does not get the bench from
-        # the tick-list at all, only from working a triage/nursing area.
+        else:
+            # No department set: fail closed to only dept_desk/roster/attendance (own dept none)
+            # Prevents HOD with no dept seeing all front desks (old bug)
+            can["reception"] = can["hims"] = can["cashdesk"] = can["lahsma"] = False
+            can["bookings"] = False
+        # Triage only if works in triage/nursing area
         can["triage"] = can["triage"] or _dept_matches(user, TRIAGE_DEPARTMENTS)
-        # Bookings belong to whoever answers the phone at the front, so a
-        # front-desk HOD gets them on top of whatever the tick-list says.
         can["bookings"] = can["bookings"] or _dept_matches(user, FRONT_DESK_DEPARTMENTS)
+        # HOD/APEX_NURSE cannot have admin, reports, referrals unless explicitly granted by System Admin via extra role
+        # Keep as per tick-list, but ensure scope limited via visible_department_ids
+        # No hospital-wide sight unless System Admin upgrades scope to HOSPITAL
+        pass
+
+    # v1.7.18: STAFF limited to ONLY own Dept/Section/Unit Activities and Dept Roster view only
+    if role == "STAFF":
+        # Remove all powers except dept_desk, dept_claim, dept_staff, roster (view), attendance (self)
+        allowed_staff = {"dept_desk", "dept_claim", "dept_staff", "roster", "attendance"}
+        for k in list(can.keys()):
+            if k not in allowed_staff:
+                can[k] = False
+        # Explicitly no roster_edit, no attendance_admin, no dept_manage
+        can["roster_edit"] = False
+        can["attendance_admin"] = False
+        can["dept_manage"] = False
+
     return can
 
 # ------------------------------------------------------------------ enforcement
