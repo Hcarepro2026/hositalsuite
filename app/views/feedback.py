@@ -17,7 +17,8 @@ from .. import notifications, referrals as refeng, scoring, services
 from ..audit import audit
 from ..models import (Complaint, ComplaintCategory, ComplaintStatusHistory,
                       Department, Organization, PatientFeedback, db, now_naive)
-from ..security import rate_limit, require_login
+from ..navigation import require_permission
+from ..security import rate_limit, require_login, require_role
 
 bp = Blueprint("feedback", __name__)
 
@@ -145,9 +146,11 @@ def portal_thanks():
                            referral=referral, share_url=share_url, wa=wa)
 
 
-# ================================================================ STAFF
+# ================================================================ STAFF — satisfaction board contains patient feedback, staff-only
 @bp.get("/feedbacks")
 @require_login
+@require_permission("complaints")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD")
 def staff_list():
     """Satisfaction board — how patients rated the visit."""
     from .. import satisfaction as sat
@@ -181,6 +184,8 @@ def staff_list():
 
 @bp.get("/feedbacks.csv")
 @require_login
+@require_permission("complaints")
+@require_role("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER")
 def staff_csv():
     from .. import satisfaction as sat
     from ..navigation import permissions_for

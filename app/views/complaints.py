@@ -12,7 +12,8 @@ from ..audit import audit
 from ..config import Config
 from ..models import (Complaint, ComplaintCategory, ComplaintStatusHistory,
                       Department, Organization, QrLocation, db, now_naive)
-from ..security import rate_limit, require_login, resolve_upload_path, save_upload
+from ..navigation import require_permission
+from ..security import rate_limit, require_login, require_role, resolve_upload_path, save_upload
 from .. import scoring
 
 bp = Blueprint("complaints", __name__)
@@ -194,18 +195,23 @@ def portal_thanks():
 
 @bp.get("/complaint/status")
 def portal_status():
-    """Anonymous status check with reference number + phone (no account needed)."""
+    """Anonymous status check with reference number + phone (no account needed) — phone required."""
     ref = (request.args.get("ref") or "").strip()
     phone = (request.args.get("phone") or "").strip().replace(" ", "")
     complaint = None
     error = None
     if ref:
-        q = db.session.query(Complaint).filter(Complaint.ref.ilike(ref))
-        if phone:
+        # SECURITY: ref is sequential (ORG-CMP-YYYY-000001) — must require phone to prevent
+        # enumeration of complaints (patient linkage). Anonymous complaints use phone="anonymous"
+        # and cannot be checked via this portal (by design).
+        if not phone or len(phone) < 7:
+            error = "Please enter both reference number and phone number to verify."
+        else:
+            q = db.session.query(Complaint).filter(Complaint.ref.ilike(ref))
             q = q.filter(Complaint.phone == phone)
-        complaint = q.first()
-        if not complaint:
-            error = "No complaint found for that reference number."
+            complaint = q.first()
+            if not complaint:
+                error = "No complaint found for that reference and phone number."
     return render_template("complaint_status.html", complaint=complaint, error=error,
                            ref=ref, phone=phone)
 
@@ -242,6 +248,8 @@ def _staff_only():
 
 @bp.get("/complaints")
 @require_login
+@require_permission("complaints")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD")
 def staff_queue():
     from .. import roles as R
     q = db.session.query(Complaint).filter(Complaint.org_id == current_user.org_id)
@@ -287,6 +295,8 @@ def staff_queue():
 
 @bp.get("/complaints/<int:cid>")
 @require_login
+@require_permission("complaints")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD")
 def staff_detail(cid: int):
     from .. import escalation
     from .. import roles as R
@@ -309,6 +319,8 @@ def staff_detail(cid: int):
 
 @bp.post("/complaints/<int:cid>/escalate")
 @require_login
+@require_permission("complaints")
+@require_role("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD")
 def staff_escalate(cid: int):
     """An HOD raises it to higher authority BEFORE the clock runs out.
 
@@ -350,6 +362,8 @@ def staff_escalate(cid: int):
 
 @bp.post("/complaints/<int:cid>/update")
 @require_login
+@require_permission("complaints")
+@require_role("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER", "HOD")
 def staff_update(cid: int):
     from .. import roles as R
     c = db.session.get(Complaint, cid)
@@ -419,6 +433,8 @@ def staff_update(cid: int):
 
 @bp.post("/complaints/<int:cid>/extend-sla")
 @require_login
+@require_permission("complaints")
+@require_role("SUPER_ADMIN", "MD_CEO")
 def staff_extend_sla(cid: int):
     """SLA extension is allowed but ALWAYS recorded as an audit event (never silently reset)."""
     if current_user.role not in ("SUPER_ADMIN", "MD_CEO"):
@@ -447,6 +463,8 @@ def staff_extend_sla(cid: int):
 
 @bp.get("/complaints/<int:cid>/attachment")
 @require_login
+@require_permission("complaints")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD")
 def staff_attachment(cid: int):
     c = db.session.get(Complaint, cid)
     if not c or c.org_id != current_user.org_id or not c.attachment_path:

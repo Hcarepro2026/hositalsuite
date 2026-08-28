@@ -15,6 +15,7 @@ from ..inspection_areas import INSPECTION_AREAS, match_department
 from ..models import (CorrectiveAction, Department, Inspection,
                       InspectionScore, Organization, ReportFile,
                       User, db, new_code, now_naive)
+from ..navigation import require_permission
 from ..security import require_login, require_role, save_upload
 
 bp = Blueprint("inspections", __name__)
@@ -317,15 +318,19 @@ def inspection_submit():
     return redirect(url_for("inspections.inspection_detail", insp_id=insp.id))
 
 
-# ------------------------------------------------------------------ list / detail
+# ------------------------------------------------------------------ list / detail — Admin Manager only, patient-adjacent data
 @bp.get("/inspections")
 @require_login
+@require_permission("inspections")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "MD_CEO")
 def inspection_list():
     return _admin_manager_page()
 
 
 @bp.get("/inspections/<int:insp_id>")
 @require_login
+@require_permission("inspections")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR")
 def inspection_detail(insp_id: int):
     insp = db.session.get(Inspection, insp_id)
     if not insp or insp.org_id != current_user.org_id:
@@ -350,6 +355,8 @@ def inspection_detail(insp_id: int):
 
 @bp.get("/inspections/<int:insp_id>/pdf")
 @require_login
+@require_permission("inspections")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR")
 def inspection_pdf(insp_id: int):
     insp = db.session.get(Inspection, insp_id)
     if not insp or insp.org_id != current_user.org_id:

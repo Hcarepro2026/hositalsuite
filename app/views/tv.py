@@ -7,7 +7,7 @@ from flask_login import current_user
 
 from ..models import TvScreen, db
 from .. import tv as tv_engine
-from ..security import require_role
+from ..security import rate_limit, require_role
 
 bp = Blueprint("tv", __name__)
 
@@ -72,6 +72,7 @@ def screen_by_code(code: str):
 
 
 @bp.post("/api/tv/volume")
+@rate_limit(limit=60, window=60.0)
 def api_volume():
     """Save volume per TV — public, per-tenant, best effort. No auth needed for TV remote, but scoped to org."""
     org_id = _resolve_org()
@@ -100,6 +101,7 @@ def api_volume():
 
 
 @bp.post("/api/tv/brightness")
+@rate_limit(limit=60, window=60.0)
 def api_brightness():
     """Save brightness + night mode per TV — public, per-tenant."""
     org_id = _resolve_org()

@@ -11,7 +11,8 @@ from .. import scoring, services
 from ..audit import audit
 from ..models import (AppNotification, Complaint, CorrectiveAction, DataRequest,
                       Department, DutyRoster, Inspection, db, new_code, now_naive)
-from ..security import rate_limit, require_login, save_upload
+from ..navigation import require_permission
+from ..security import rate_limit, require_login, require_role, save_upload
 
 bp = Blueprint("main", __name__)
 
@@ -251,9 +252,11 @@ def notifications_read():
     return redirect(url_for("main.notifications_inbox"))
 
 
-# ------------------------------------------------------------------ corrective actions
+# ------------------------------------------------------------------ corrective actions — management + HOD only, not all staff
 @bp.get("/corrective-actions")
 @require_login
+@require_permission("corrective")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD")
 def corrective_actions():
     q = db.session.query(CorrectiveAction).filter(CorrectiveAction.org_id == current_user.org_id)
     status = request.args.get("status")
@@ -272,6 +275,8 @@ def corrective_actions():
 
 @bp.post("/corrective-actions")
 @require_login
+@require_permission("corrective")
+@require_role("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER")
 def corrective_action_create():
     if current_user.role not in ("SUPER_ADMIN", "MD_CEO", "ADMIN_MANAGER"):
         return redirect(url_for("main.corrective_actions"))
@@ -307,6 +312,7 @@ def corrective_action_create():
 
 @bp.post("/corrective-actions/<int:ca_id>/update")
 @require_login
+@require_permission("corrective")
 def corrective_action_update(ca_id: int):
     ca = db.session.get(CorrectiveAction, ca_id)
     if not ca or ca.org_id != current_user.org_id:

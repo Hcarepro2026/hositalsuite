@@ -11,7 +11,8 @@ from flask_login import current_user
 from .. import sms as sms_engine
 from ..audit import audit
 from ..models import Appointment, Department, QueueTicket, db, now_naive
-from ..security import rate_limit, require_login
+from ..navigation import require_permission
+from ..security import rate_limit, require_login, require_role
 
 bp = Blueprint("queue", __name__)
 
@@ -258,9 +259,11 @@ def screen():
     return resp
 
 
-# ================================================================ STAFF
+# ================================================================ STAFF — patient queue contains PII, front desk + management only
 @bp.get("/queue")
 @require_login
+@require_permission("bookings")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD", "APEX_NURSE")
 def staff_queue():
     today = now_naive().date()
     dept_id = request.args.get("dept", type=int)
@@ -278,6 +281,8 @@ def staff_queue():
 
 @bp.post("/queue/<int:tid>/call-next")
 @require_login
+@require_permission("bookings")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "HOD", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR")
 def call_next(tid: int):
     """Staff control: call the next waiting ticket (progression)."""
     dept_id = request.form.get("department_id", type=int)
@@ -319,6 +324,8 @@ def call_next(tid: int):
 
 @bp.post("/queue/<int:tid>/finish")
 @require_login
+@require_permission("bookings")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "HOD", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR")
 def finish(tid: int):
     t = db.session.get(QueueTicket, tid)
     if not t or t.org_id != current_user.org_id:
@@ -336,6 +343,8 @@ def finish(tid: int):
 
 @bp.post("/queue/<int:tid>/to-reception")
 @require_login
+@require_permission("bookings")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "HOD", "MD_CEO")
 def to_reception(tid: int):
     """Convert a QR queue ticket into a Reception intake — unifies the two queues.
 
@@ -404,6 +413,8 @@ def to_reception(tid: int):
 
 @bp.post("/bookings/<int:aid>/checkin-queue")
 @require_login
+@require_permission("bookings")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "HOD", "MD_CEO")
 def booking_checkin_queue(aid: int):
     """Check a booking in and give the patient a queue ticket — gates on Fast Track payment upfront."""
     from .. import services

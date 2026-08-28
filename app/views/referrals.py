@@ -8,6 +8,7 @@ from flask_login import current_user
 from .. import qrgen, referrals as engine
 from ..audit import audit
 from ..models import Department, Organization, Referral, db
+from ..navigation import require_permission
 from ..security import rate_limit, require_login, require_role
 
 bp = Blueprint("referrals", __name__)
@@ -53,9 +54,11 @@ def qr_png(code: str):
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
-# ================================================================ STAFF
+# ================================================================ STAFF — referral analytics contain patient flow, not PII but staff-only
 @bp.get("/referrals")
 @require_login
+@require_permission("referrals")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER")
 def staff_list():
     org = db.session.get(Organization, current_user.org_id)
     hospital = engine.ensure_hospital_referral(org)

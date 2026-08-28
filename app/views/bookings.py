@@ -12,7 +12,8 @@ from .. import notifications, referrals as refeng, services, sms as sms_engine
 from ..audit import audit
 from ..models import (Appointment, Department, Organization, QrLocation, db,
                       now_naive)
-from ..security import rate_limit, require_login
+from ..navigation import require_permission
+from ..security import rate_limit, require_login, require_role
 
 bp = Blueprint("bookings", __name__)
 
@@ -221,12 +222,16 @@ def portal_status():
     phone = (request.args.get("phone") or "").strip()
     apt, error = None, None
     if ref:
-        q = db.session.query(Appointment).filter(Appointment.ref.ilike(ref))
-        if phone:
+        # SECURITY: ref is sequential (ORG-APT-YYYY-000001) — must require phone verification
+        # to prevent enumeration of patient bookings (PII: name, phone, dept, date)
+        if not phone or len(phone) < 7:
+            error = "Please enter both reference number and phone number to verify your booking."
+        else:
+            q = db.session.query(Appointment).filter(Appointment.ref.ilike(ref))
             q = q.filter(Appointment.phone == phone.replace(" ", ""))
-        apt = q.first()
-        if not apt:
-            error = "No booking found for that reference number."
+            apt = q.first()
+            if not apt:
+                error = "No booking found for that reference and phone number. Check both."
     return render_template("booking_status.html", apt=apt, error=error, ref=ref, phone=phone)
 
 
@@ -262,9 +267,13 @@ def portal_cancel():
     return redirect(url_for("bookings.portal_status", ref=ref, phone=phone))
 
 
-# ================================================================ STAFF
+# ================================================================ STAFF — strictly front desk + management only
+# Patient bookings contain PII (name, phone, dept, date). Must not be visible to
+# unauthorized staff (e.g. HOD of Theatre). Enforced by bookings permission + role.
 @bp.get("/bookings")
 @require_login
+@require_permission("bookings")
+@require_role("SUPER_ADMIN", "MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "ADMIN_MANAGER", "HOD", "APEX_NURSE")
 def staff_list():
     q = db.session.query(Appointment).filter(Appointment.org_id == current_user.org_id)
     day = request.args.get("date")
@@ -285,6 +294,8 @@ def staff_list():
 
 @bp.post("/bookings/<int:aid>/mark-paid-fasttrack")
 @require_login
+@require_permission("bookings")
+@require_role("SUPER_ADMIN", "ADMIN_MANAGER", "HOD", "MD_CEO")
 def mark_paid_fasttrack(aid: int):
     """Mark Fast Track booking as paid upfront — premium."""
     apt = db.session.get(Appointment, aid)
