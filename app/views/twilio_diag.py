@@ -126,6 +126,27 @@ def check():
     return render_template("admin/twilio_check.html", data=data, checks=checks,
                            recent_sms=recent_sms, recent_wa=recent_wa, mask=_mask)
 
+@bp.get("/admin/twilio-templates")
+@require_role(*SUPER)
+def templates_page():
+    """Copy-paste ready templates for Termii & Twilio — accessible"""
+    from .. import sms_pack
+    from pathlib import Path
+    # Load markdown file if exists
+    md_path = Path(__file__).parent.parent.parent / "SMS_WHATSAPP_TEMPLATES_COPY_PASTE.md"
+    md_content = ""
+    try:
+        md_content = md_path.read_text(encoding="utf-8")
+    except Exception:
+        md_content = "Templates file not found — see app/sms_pack.py"
+    # Get samples
+    try:
+        samples = sms_pack.samples(tag="GHIJEDE", phone="08031234567")
+    except Exception:
+        samples = []
+    return render_template("admin/twilio_templates.html", md_content=md_content, samples=samples)
+
+
 @bp.post("/admin/twilio-check/test-sms")
 @require_role(*SUPER)
 def test_sms():

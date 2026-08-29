@@ -126,6 +126,27 @@
 </div>
 
 <div class="card pad-lg mt">
+  <h3 style="margin-top:0">📋 Copy-Paste Templates (Termii & Twilio) — Ready</h3>
+  <p class="muted" style="line-height:1.5">All SMS must be ≤160 chars, no emoji, no ₦, DND channel for Termii. See file <code>SMS_WHATSAPP_TEMPLATES_COPY_PASTE.md</code> in repo for full list. Quick samples:</p>
+  <pre style="background:#f5f5f5;padding:10px;overflow:auto;font-size:.85rem">
+GHIJEDE: Visit booked Mon 24 Aug at 09:00, OPD. Ref BK24082401. Come 15 min early. Call 08031234567
+GHIJEDE: Your number is E-014 at OPD. Keep this SMS. We will text you when it is your turn.
+GHIJEDE: You are next. Ticket E-014, OPD. Please walk to the desk now.
+GHIJEDE received your complaint. Ref CP24082401. We are looking into it. Keep this number.
+GHIJEDE: Your sign-in code is 847291. It dies in 10 minutes.
+GHIJEDE: You are on duty TODAY Mon 28 Aug. Please finish today's walk-round.
+GHIJEDE: New patient report CP20260801, Lab. Reply within 24 hrs. Open Complaints.
+  </pre>
+  <p class="muted">WhatsApp (Twilio) — longer, can include PDF:</p>
+  <pre style="background:#f5f5f5;padding:10px;overflow:auto;font-size:.85rem">
+Test WhatsApp from Hospital Suite — mode twilio — your Twilio is working!
+Daily inspection report INSP20260801 for Laboratory submitted by Miss Okusanya. Overall rating: GOOD (20/25).
+[PDF attached]
+  </pre>
+  <p><a class="btn small secondary" href="/admin/twilio-templates" target="_blank">📄 Open Full Copy-Paste Templates Page</a></p>
+</div>
+
+<div class="card pad-lg mt">
   <h3 style="margin-top:0">Need cheaper Nigeria SMS? Use Termii (recommended)</h3>
   <p class="muted" style="line-height:1.5">Twilio SMS to Nigeria is expensive and sometimes blocked by DND. Termii is Nigerian, cheaper, delivers to MTN/Glo/Airtel/9mobile. Setup: accounts.termii.com → get API key + sender ID (e.g. HOSPITAL) → in Render set SMS_MODE=termii, TERMII_API_KEY=..., TERMII_SENDER_ID=HOSPITAL. Twilio remains fallback if Termii key missing.</p>
 </div>
