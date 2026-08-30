@@ -41,7 +41,7 @@
         <span class="t" style="font-size:1.1rem">{% if t.is_fast_track %}⭐ {% endif %}{{ t.code }} {% if t.is_fast_track %}<span style="background:#8b5cf6;color:#fff;padding:2px 8px;border-radius:999px;font-size:.7rem">⭐ {{ t.fast_track_reason or 'Priority' }}</span>{% endif %}</span>
         <span class="muted">{{ t.created_at.strftime('%H:%M') }}</span>
       </div>
-      <div>{{ t.patient_name }}{% if t.phone %} · {{ t.phone }}{% endif %} {% if t.is_fast_track %}· ⭐ Priority Lane{% endif %}</div>
+      <div>{{ t.patient_name }}{% if t.phone %} · <span title="Full number visible to admin only">{{ t.phone|mask_phone }}</span>{% endif %} {% if t.is_fast_track %}· ⭐ Priority Lane{% endif %}</div>
       <div class="muted">{{ t.department.name }}{% if t.source=='booking' %} · from booking{% endif %}</div>
       <div class="row mt" style="gap:6px;flex-wrap:wrap">
         <form method="post" action="/queue/{{ t.id }}/call-next" style="display:inline">
@@ -65,7 +65,7 @@
         <span class="t" style="font-size:1.1rem">{% if t.is_fast_track %}⭐ {% endif %}{{ t.code }}</span>
         <span class="muted">called {{ t.called_at.strftime('%H:%M') }}</span>
       </div>
-      <div>{{ t.patient_name }} · {{ t.department.name }} {% if t.is_fast_track %}· ⭐ {{ t.fast_track_reason }}{% endif %}</div>
+      <div>{{ t.patient_name|first_name }} · {{ t.department.name }} {% if t.is_fast_track %}· ⭐ {{ t.fast_track_reason }}{% endif %}</div>
       <form method="post" action="/queue/{{ t.id }}/finish" class="row mt">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <button class="btn small" name="outcome" value="done" style="background:var(--green)">✅ Served</button>

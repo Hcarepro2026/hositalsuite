@@ -149,18 +149,20 @@ document.addEventListener('DOMContentLoaded', function(){
     if(window.hmsAlerts){ hmsAlerts.start(); }
     if(window.hmsFeaturePhoneCheck){ hmsFeaturePhoneCheck(); }
   }catch(e){}
-  // Alarm mode banner — works closed like alarm, multi-browser
+  // Alarm mode banner — FIXED: not covering content, dismissible, mobile-friendly
   try{
     if(localStorage.getItem('hms-push-ok') !== '1' && window.hmsPush && hmsPush.isSupported()){
       setTimeout(function(){
-        if(Notification.permission !== 'granted'){
+        if(Notification.permission !== 'granted' && localStorage.getItem('hms-push-hide') !== '1'){
           var bar = document.createElement('div');
           bar.id = 'alarm-banner';
-          bar.style.cssText = 'position:fixed;bottom:70px;left:10px;right:10px;background:linear-gradient(135deg,#0e5a8a,#12b5a5);color:#fff;padding:14px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:9998;display:flex;gap:10px;align-items:center;animation:slideUp .3s';
-          bar.innerHTML = '<span>🔔 Enable alarm mode? Get notified even when app closed, like alarm — free, saves SMS cost (founder: no SMS inside except emergency)</span><button class=\"btn small\" style=\"background:#FFD700;color:#000\" onclick=\"hmsPush.enable().then(()=>{this.parentElement.remove();}).catch(()=>{})\">Enable</button><button class=\"btn small ghost\" onclick=\"this.parentElement.remove(); try{localStorage.setItem(&quot;hms-push-hide&quot;,&quot;1&quot;)}catch(e){}\">Later</button>';
-          if(localStorage.getItem('hms-push-hide') !== '1') document.body.appendChild(bar);
+          bar.style.cssText = 'position:fixed;bottom:16px;left:12px;right:12px;max-width:480px;margin:0 auto;background:linear-gradient(135deg,#0e5a8a,#12b5a5);color:#fff;padding:12px 14px;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.25);z-index:9998;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.88rem;line-height:1.35;animation:slideUp .3s';
+          bar.innerHTML = '<span style=\"flex:1;min-width:180px\">🔔 Enable alarm mode? Get notified even when app closed, like alarm — free, saves SMS cost</span><div style=\"display:flex;gap:8px;flex-wrap:wrap\"><button class=\"btn small\" style=\"background:#FFD700;color:#000;min-height:36px\" onclick=\"hmsPush.enable().then(()=>{this.closest(\\'#alarm-banner\\').remove(); document.body.style.paddingBottom=\\'\\';}).catch(()=>{})\">Enable</button><button class=\"btn small ghost\" style=\"background:#fff;color:#0e5a8a;min-height:36px\" onclick=\"this.closest(\\'#alarm-banner\\').remove(); document.body.style.paddingBottom=\\'\\'; try{localStorage.setItem(\\'hms-push-hide\\',\\'1\\')}catch(e){}\">Later</button></div>';
+          document.body.appendChild(bar);
+          // Add padding so banner doesn't cover footer/content on phone
+          document.body.style.paddingBottom = '90px';
         }
-      }, 3000);
+      }, 3500);
     }
   }catch(e){}
 });

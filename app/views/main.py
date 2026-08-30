@@ -428,62 +428,71 @@ def patient_hub():
 @bp.get("/dashboard")
 @require_login
 def dashboard():
-    org_id = current_user.org_id
-    role = getattr(current_user, "role", "") or ""
-
-    # v1.7.18: STAFF sees ONLY own Department/Section/Unit Activities and Dept Roster view only
-    # Redirect STAFF to My Department page — dashboard is hospital-wide management view
-    if role == "STAFF":
-        return redirect(url_for("deptdesk.my_department"))
-
-    kpi = _kpi(org_id, viewer=current_user)
-
-    # Management attention only for management (MD_CEO, DMD, DCST, HEAD_ADMIN_HR, SUPER_ADMIN, on-duty ADMIN_MANAGER)
-    attention = []
-    if current_user.is_management:
-        # For HOD/APEX, don't show management attention (hospital-wide)
-        if role not in ("HOD", "APEX_NURSE"):
-            attention = services.management_attention(org_id)
-
-    my_cas = None
-    if current_user.is_am or current_user.is_hod or role == "APEX_NURSE":
-        q = (db.session.query(CorrectiveAction)
-             .filter(CorrectiveAction.org_id == org_id, CorrectiveAction.owner_id == current_user.id,
-                     CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE"))))
-        # For HOD/APEX, already own only
-        my_cas = q.order_by(CorrectiveAction.deadline).all()
-
-    recent_complaints = None
-    # HOD/APEX should not see hospital-wide recent complaints — only own dept if model supports, else none
-    if role in ("MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "SUPER_ADMIN") or getattr(current_user, "is_super", False):
-        recent_complaints = (db.session.query(Complaint)
-                             .filter(Complaint.org_id == org_id,
-                                     Complaint.status.in_(("NEW", "ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED")))
-                             .order_by(Complaint.submitted_at.desc()).limit(8).all())
-
-    # Patient flow: for HOD/APEX/STAFF, show only own dept flow
-    flow = None
+    from flask import current_app
     try:
-        from .. import tracking
-        if role in ("HOD", "APEX_NURSE"):
-            from ..roles import visible_department_ids
-            visible = visible_department_ids(current_user)
-            if visible:
-                # Headline for own dept(s) only
-                flow = {"head": tracking.headline(org_id, 7, department_ids=visible) if hasattr(tracking.headline, '__code__') and 'department_ids' in tracking.headline.__code__.co_varnames else tracking.headline(org_id, 7),
-                        "advice": []}
-            else:
-                flow = None
-        elif role not in ("STAFF",):
-            flow = {"head": tracking.headline(org_id, 7),
-                    "advice": tracking.suggest_allocation(org_id)[:2]}
-    except Exception:                                      # noqa: BLE001
-        from flask import current_app
-        current_app.logger.exception("patient-flow summary unavailable")
+        org_id = current_user.org_id
+        role = getattr(current_user, "role", "") or ""
+        if role == "STAFF":
+            return redirect(url_for("deptdesk.my_department"))
 
-    return render_template("dashboard.html", kpi=kpi, attention=attention, my_cas=my_cas,
-                           recent_complaints=recent_complaints, scoring=scoring,
-                           flow=flow, is_limited=kpi.get("is_limited", False))
+        try:
+            kpi = _kpi(org_id, viewer=current_user)
+        except Exception:
+            current_app.logger.exception("kpi failed")
+            kpi = {"bookings_today": 0, "queue_waiting": 0, "today": {}, "total_inspections": 0, "avg_score": 0, "lowest_depts": [], "critical_findings_30d": 0, "complaints_total": 0, "complaints_new": 0, "complaints_open": 0, "complaints_escalated": 0, "sla_breaches": 0, "resolution_rate": 0, "compliance_rate": 0, "cas_open": [], "heatmap": [], "is_limited": False, "visible_ids": None}
+
+        attention = []
+        try:
+            if getattr(current_user, "is_management", False) and role not in ("HOD", "APEX_NURSE"):
+                attention = services.management_attention(org_id)
+        except Exception:
+            current_app.logger.exception("management_attention failed")
+            attention = []
+
+        my_cas = None
+        try:
+            if getattr(current_user, "is_am", False) or getattr(current_user, "is_hod", False) or role == "APEX_NURSE":
+                q = (db.session.query(CorrectiveAction)
+                     .filter(CorrectiveAction.org_id == org_id, CorrectiveAction.owner_id == current_user.id,
+                             CorrectiveAction.status.in_(("OPEN", "IN_PROGRESS", "OVERDUE"))))
+                my_cas = q.order_by(CorrectiveAction.deadline).all()
+        except Exception:
+            my_cas = []
+
+        recent_complaints = None
+        try:
+            if role in ("MD_CEO", "DMD", "DCST", "HEAD_ADMIN_HR", "SUPER_ADMIN") or getattr(current_user, "is_super", False):
+                recent_complaints = (db.session.query(Complaint)
+                                     .filter(Complaint.org_id == org_id,
+                                             Complaint.status.in_(("NEW", "ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED")))
+                                     .order_by(Complaint.submitted_at.desc()).limit(8).all())
+        except Exception:
+            recent_complaints = []
+
+        flow = None
+        try:
+            from .. import tracking as _tracking
+            if role not in ("STAFF",):
+                try:
+                    flow = {"head": _tracking.headline(org_id, 7), "advice": _tracking.suggest_allocation(org_id)[:2]}
+                except Exception:
+                    flow = {"head": {"total_visits": 0, "avg_total_minutes": 0}, "advice": []}
+        except Exception:
+            current_app.logger.exception("patient-flow summary unavailable")
+            flow = None
+
+        return render_template("dashboard.html", kpi=kpi, attention=attention, my_cas=my_cas,
+                               recent_complaints=recent_complaints, scoring=scoring,
+                               flow=flow, is_limited=kpi.get("is_limited", False))
+    except Exception:
+        current_app.logger.exception("dashboard outer failed")
+        try:
+            return render_template("dashboard.html",
+                                   kpi={"bookings_today": 0, "queue_waiting": 0, "today": {}, "total_inspections": 0, "avg_score": 0, "lowest_depts": [], "critical_findings_30d": 0, "complaints_total": 0, "complaints_new": 0, "complaints_open": 0, "complaints_escalated": 0, "sla_breaches": 0, "resolution_rate": 0, "compliance_rate": 0, "cas_open": [], "heatmap": [], "is_limited": False},
+                                   attention=[], my_cas=[], recent_complaints=[], scoring=scoring, flow=None, is_limited=False)
+        except Exception:
+            return render_template("error.html", code=500, message="Dashboard loading — please refresh."), 500
+
 
 
 # ------------------------------------------------------------------ notifications inbox

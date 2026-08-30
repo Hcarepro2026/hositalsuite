@@ -259,16 +259,20 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
             step for step in pending_onward if visits_by_id.get(step.visit_id) and (visits_by_id[step.visit_id].clinic or "").upper() == clinic_filter
         ]
 
-    # Enrich onward with visit + patient for template (fixes bug where patients dict keyed by patient_id not visit_id)
+    # Enrich onward with visit + patient — privacy: first name only
     onward_enriched = []
     for step in pending_onward[:20]:
         visit = visits_by_id.get(step.visit_id)
         patient = patients.get(visit.patient_id) if visit else None
         waited = max(0, int((now - step.sent_at).total_seconds() // 60))
+        display_name = "Patient"
+        if patient:
+            display_name = getattr(patient, 'spoken_name', None) or (patient.full_name.split()[0] if patient.full_name else "Patient")
         onward_enriched.append({
             "step": step,
             "visit": visit,
             "patient": patient,
+            "display_name": display_name,
             "waited": waited,
             "is_fast_track": bool(visit.is_fast_track) if visit else False,
             "fast_track_reason": getattr(visit, 'fast_track_reason', None) if visit else None,
@@ -284,22 +288,25 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     )
 
     # --- Build NOW SERVING: patients IN_CONSULTATION + recently CALLED queue + recently triaged placed
+    # Privacy: public TV shows first name only + ticket code, NOT full name + hospital number (NDPA)
     now_serving = []
     # 1. Patients currently in consultation (most important)
     for v in sorted(in_consult, key=lambda x: x.seen_at or x.triaged_at or x.started_at, reverse=True)[:3]:
         p = patients.get(v.patient_id)
         if not p:
             continue
-        # Journey estimate for this visit
         try:
             journey_est = tracking_engine.estimate_remaining_journey(org_id, v)
         except Exception:
             journey_est = {"total": 0, "stages": [], "fast_track": bool(v.is_fast_track)}
+        # Privacy: use spoken_name (title + first name) for display, code is ticket/hospital number but we show code only
+        display_name = getattr(p, 'spoken_name', None) or (p.full_name.split()[0] if p.full_name else "Patient")
         now_serving.append(
             {
                 "type": "consultation",
                 "code": p.hospital_number,
-                "name": p.full_name,
+                "name": display_name,  # first name only for privacy
+                "full_name_private": p.full_name,  # kept for voice, not displayed as full on TV
                 "spoken": p.spoken_name,
                 "clinic": v.clinic,
                 "room": v.consulting_room,
@@ -332,7 +339,7 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
 
     # --- NEXT: triaged waiting + queue waiting (fast-track first, then oldest) — premium patient care
     next_up = []
-    # Triaged: fast-track first
+    # Triaged: fast-track first — privacy: first name only
     sorted_triaged = sorted(triaged, key=lambda x: (not bool(x.is_fast_track), x.triaged_at or x.started_at))
     for idx, v in enumerate(sorted_triaged[:5]):
         p = patients.get(v.patient_id)
@@ -344,11 +351,12 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         except Exception:
             journey_est = {"total": 0, "stages": [], "fast_track": bool(v.is_fast_track)}
             wait_est = 0
+        display_name = getattr(p, 'spoken_name', None) or (p.full_name.split()[0] if p.full_name else "Patient")
         next_up.append(
             {
                 "type": "triaged",
                 "code": p.hospital_number,
-                "name": p.full_name,
+                "name": display_name,
                 "spoken": p.spoken_name,
                 "clinic": v.clinic,
                 "room": v.consulting_room or v.clinic,
@@ -386,7 +394,7 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
             }
         )
 
-    # --- Reception rows with fast-track + journey estimate
+    # --- Reception rows with fast-track + journey estimate — privacy: first name only
     reception_enriched = []
     for idx, r in enumerate(reception_rows):
         try:
@@ -395,9 +403,12 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         except Exception:
             journey_est = {"total": 0, "stages": [], "fast_track": bool(r.is_fast_track)}
             wait_est = 0
+        # Privacy: show first name only, not full name
+        first = (r.full_name.split()[0] if getattr(r, 'full_name', None) else "Patient")
         reception_enriched.append(
             {
                 "row": r,
+                "display_name": first,
                 "is_fast_track": bool(r.is_fast_track),
                 "fast_track_reason": r.fast_track_reason,
                 "position": idx + 1,

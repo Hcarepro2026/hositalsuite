@@ -27,23 +27,60 @@ def _days() -> int:
 @require_role(*VIEWERS)
 def dashboard():
     from .. import roles as R
+    from flask import current_app
     org_id = current_user.org_id
     days = _days()
-    # An HOD sees their own department's figures, not a league table of
-    # colleagues they have no power to manage. Management still sees it all.
     mine = R.visible_department_ids(current_user)
+    try:
+        head = tracking.headline(org_id, days)
+    except Exception as exc:
+        current_app.logger.exception("tracking headline failed")
+        head = {"total_visits": 0, "avg_total_minutes": 0, "median_total_minutes": 0}
+    try:
+        stages = tracking.stage_performance(org_id, days)
+    except Exception:
+        current_app.logger.exception("tracking stage_performance failed")
+        stages = []
+    try:
+        departments = tracking.department_performance(org_id, days, only_departments=mine)
+    except Exception:
+        current_app.logger.exception("tracking department_performance failed")
+        departments = []
+    try:
+        staff = tracking.staff_workload(org_id, days, only_departments=mine)
+    except Exception:
+        current_app.logger.exception("tracking staff_workload failed")
+        staff = []
+    try:
+        live = tracking.live_board(org_id)
+    except Exception:
+        current_app.logger.exception("tracking live_board failed")
+        live = []
+    try:
+        advice = tracking.suggest_allocation(org_id)
+    except Exception:
+        advice = []
+    try:
+        weeks = tracking.trend(org_id, 4)
+    except Exception:
+        weeks = []
+    try:
+        hours = tracking.busiest_hours(org_id)
+    except Exception:
+        hours = []
+
     return render_template(
         "tracking/dashboard.html",
         days=days,
         scope_note=R.scope_note(current_user),
-        head=tracking.headline(org_id, days),
-        stages=tracking.stage_performance(org_id, days),
-        departments=tracking.department_performance(org_id, days, only_departments=mine),
-        staff=tracking.staff_workload(org_id, days, only_departments=mine),
-        live=tracking.live_board(org_id),
-        advice=tracking.suggest_allocation(org_id),
-        weeks=tracking.trend(org_id, 4),
-        hours=tracking.busiest_hours(org_id),
+        head=head,
+        stages=stages,
+        departments=departments,
+        staff=staff,
+        live=live,
+        advice=advice,
+        weeks=weeks,
+        hours=hours,
         colours=tracking.RATING_COLOURS,
         targets=tracking.STAGE_TARGET_MINUTES,
         min_sample=tracking.MIN_SAMPLE)

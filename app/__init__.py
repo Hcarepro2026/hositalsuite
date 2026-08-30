@@ -119,9 +119,12 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                       native_voice_bp, voice_api_bp, personal_tv_bp, push_api_bp):
         app.register_blueprint(blueprint)
 
-    from .timefmt import fmt_hm, say_hm
+    from .timefmt import fmt_hm, say_hm, mask_phone, first_name_only, privacy_initials
     app.jinja_env.filters["hm"] = fmt_hm
     app.jinja_env.filters["sayhm"] = say_hm
+    app.jinja_env.filters["mask_phone"] = mask_phone
+    app.jinja_env.filters["first_name"] = first_name_only
+    app.jinja_env.filters["privacy_initials"] = privacy_initials
 
     register_security_hooks(app)
 
@@ -232,73 +235,98 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
 
     @app.context_processor
     def inject_globals():
-        from .security import csrf_token
-        from .services import org_settings_bundle
-        from . import i18n
-        bundle = {}
-        u = getattr(g, "_login_user", None) or (request and getattr(request, "_cached_user", None))
+        # NEVER let template globals crash — return safe defaults on any error
         try:
-            from flask_login import current_user
-            u = current_user if current_user.is_authenticated else None
-        except Exception:
+            from .security import csrf_token
+            from .services import org_settings_bundle
+            from . import i18n
+            bundle = {}
             u = None
-        lang = i18n.get_lang()
-        hospital = None
-        try:
-            from .models import Organization
-            from .services import current_org
-            if u is not None:
-                hospital = db.session.get(Organization, u.org_id)
-            if hospital is None:
-                # Try host-based org resolution first — multi-hospital isolation, no leak
-                try:
-                    hospital = current_org()
-                except Exception:
-                    hospital = None
-            if hospital is None:
-                # Fallback to first org only for single-tenant backward compat, not multi-tenant leak
-                # In multi-tenant, current_org() should have resolved, so this only hits single-org setups
-                try:
-                    # Only fallback if single org in DB
-                    if db.session.query(Organization).count() <= 1:
-                        hospital = db.session.query(Organization).order_by(Organization.id).first()
-                except Exception:
-                    hospital = None
-        except Exception:
-            hospital = None
-        if u is not None:
-            bundle = org_settings_bundle(u.org_id)
-        elif hospital is not None:
             try:
-                bundle = org_settings_bundle(hospital.id)
+                from flask_login import current_user
+                u = current_user if getattr(current_user, "is_authenticated", False) else None
+            except Exception:
+                u = None
+            try:
+                lang = i18n.get_lang()
+            except Exception:
+                lang = "en"
+            hospital = None
+            try:
+                from .models import Organization
+                from .services import current_org
+                if u is not None and getattr(u, "org_id", None):
+                    try:
+                        hospital = db.session.get(Organization, u.org_id)
+                    except Exception:
+                        hospital = None
+                if hospital is None:
+                    try:
+                        hospital = current_org()
+                    except Exception:
+                        hospital = None
+                if hospital is None:
+                    try:
+                        # Only fallback if single org — avoid multi-tenant leak
+                        if db.session.query(Organization).count() <= 1:
+                            hospital = db.session.query(Organization).order_by(Organization.id).first()
+                    except Exception:
+                        hospital = None
+            except Exception:
+                hospital = None
+            try:
+                if u is not None and getattr(u, "org_id", None):
+                    bundle = org_settings_bundle(u.org_id)
+                elif hospital is not None and getattr(hospital, "id", None):
+                    bundle = org_settings_bundle(hospital.id)
             except Exception:
                 bundle = {}
-        def nav_permissions():
-            """Menu visibility. Same source of truth as the route guards."""
-            from flask_login import current_user
-            from .navigation import permissions_for
-            try:
-                return permissions_for(current_user)
-            except Exception:                                  # noqa: BLE001
-                app.logger.exception("nav permissions failed")
-                # Fail CLOSED: show almost nothing rather than leak the
-                # administrator's menu to whoever happens to be signed in.
-                return permissions_for(None)
+            def nav_permissions():
+                try:
+                    from flask_login import current_user as _cu
+                    from .navigation import permissions_for
+                    return permissions_for(_cu)
+                except Exception:
+                    try:
+                        from .navigation import permissions_for as _pf
+                        return _pf(None)
+                    except Exception:
+                        return {}
 
-        branch = None
-        try:
-            if u is not None and getattr(u, "branch_id", None):
-                from .models import Branch
-                branch = db.session.get(Branch, u.branch_id)
-        except Exception:
             branch = None
-        return dict(csrf_token=csrf_token, settings=bundle,
-                    app_version=app.config.get("APP_VERSION", "1.8.0"),
-                    _=i18n.translate, lang=lang, langs=i18n.LANGS,
-                    speech_lang=i18n.speech_tag(lang), hospital=hospital,
-                    current_branch=branch,
-                    nav_permissions=nav_permissions,
-                    onboard_guide=bool(bundle.get("onboard_guide")))
+            try:
+                if u is not None and getattr(u, "branch_id", None):
+                    from .models import Branch
+                    branch = db.session.get(Branch, u.branch_id)
+            except Exception:
+                branch = None
+            try:
+                _ = i18n.translate
+                langs = i18n.LANGS
+                speech_lang = i18n.speech_tag(lang)
+            except Exception:
+                _ = lambda x, **kw: x
+                langs = ["en"]
+                speech_lang = "en-NG"
+            return dict(csrf_token=csrf_token, settings=bundle,
+                        app_version=app.config.get("APP_VERSION", "1.8.0"),
+                        _=_, lang=lang, langs=langs,
+                        speech_lang=speech_lang, hospital=hospital,
+                        current_branch=branch,
+                        nav_permissions=nav_permissions,
+                        onboard_guide=bool(bundle.get("onboard_guide")))
+        except Exception:
+            # Ultimate fallback — never crash rendering
+            try:
+                from .security import csrf_token as _ct
+                ct = _ct
+            except Exception:
+                ct = lambda: ""
+            return dict(csrf_token=ct, settings={}, app_version="1.8.0",
+                        _=lambda x, **kw: x, lang="en", langs=["en"],
+                        speech_lang="en-NG", hospital=None,
+                        current_branch=None,
+                        nav_permissions=lambda: {}, onboard_guide=False)
 
     @app.errorhandler(404)
     def not_found(e):

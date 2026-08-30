@@ -30,6 +30,7 @@ def _org_id() -> int:
 
 # ---------------------------------------------------------------- admin list
 @bp.get("/")
+@bp.get("")
 @require_role("SUPER_ADMIN", "ADMIN_MANAGER", "HEAD_ADMIN_HR")
 @require_permission("admin")
 def admin_list():
@@ -129,24 +130,41 @@ def upload_voice_sample(voice_id: int):
     if not voice or voice.org_id != org_id:
         abort(404)
     file = request.files.get("audio")
-    if not file or not file.filename:
+    if not file or (not file.filename and not file.mimetype):
         flash("No audio file selected", "error")
         return redirect(url_for("native_voice.admin_list"))
 
-    # Save via storage (db or S3)
-    ext = (file.filename.rsplit(".", 1)[-1] or "mp3").lower()[:5]
-    if ext not in ("mp3", "wav", "ogg", "m4a", "mp4"):
-        flash("Audio must be mp3, wav, ogg, m4a", "error")
+    # Allow webm/opus from MediaRecorder
+    raw_name = (file.filename or "sample.webm")
+    ext = (raw_name.rsplit(".", 1)[-1] if "." in raw_name else "webm").lower()[:5]
+    if ext not in ("mp3", "wav", "ogg", "m4a", "mp4", "webm", "opus"):
+        ct = (file.mimetype or "").lower()
+        if "webm" in ct:
+            ext = "webm"
+        elif "ogg" in ct or "opus" in ct:
+            ext = "ogg"
+        elif "wav" in ct:
+            ext = "wav"
+        else:
+            ext = "webm"
+    if ext not in ("mp3", "wav", "ogg", "m4a", "mp4", "webm", "opus"):
+        flash("Audio must be mp3, wav, ogg, webm, m4a", "error")
         return redirect(url_for("native_voice.admin_list"))
 
     data = file.read(10 * 1024 * 1024 + 1)
     if len(data) > 10 * 1024 * 1024:
         flash("Audio too large (max 10 MB)", "error")
         return redirect(url_for("native_voice.admin_list"))
+    if len(data) < 100:
+        flash("Audio too small — record at least 1 second", "error")
+        return redirect(url_for("native_voice.admin_list"))
 
     key = f"native_voice/{org_id}/{voice_id}/sample_{voice.language}.{ext}"
+    ctype = f"audio/{ext}" if ext != "mp3" else "audio/mpeg"
+    if ext == "webm":
+        ctype = "audio/webm"
     try:
-        storage.put(key, data, org_id=org_id, filename=file.filename, content_type=f"audio/{ext}")
+        storage.put(key, data, org_id=org_id, filename=raw_name, content_type=ctype)
         voice.sample_key = key
         db.session.commit()
         flash(f"Sample audio saved for {voice.name}", "success")
@@ -167,7 +185,10 @@ def upload_phrase():
     text_template = (request.form.get("text_template") or "").strip()[:500]
 
     if not voice_id or not key:
-        flash("Voice and phrase key required", "error")
+        err = "Voice and phrase key required"
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""):
+            return jsonify({"ok": False, "error": err}), 400
+        flash(err, "error")
         return redirect(url_for("native_voice.admin_list"))
 
     voice = db.session.get(NativeVoice, voice_id)
@@ -175,14 +196,25 @@ def upload_phrase():
         abort(404)
 
     file = request.files.get("audio")
-    if not file or not file.filename:
-        flash("No audio file selected", "error")
+    if not file or (not file.filename and not file.mimetype):
+        err = "No audio file selected — allow mic permission and record 1-10 sec"
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.headers.get("Sec-Fetch-Mode") == "cors" or request.is_json or request.headers.get("Accept","").startswith("application/json"):
+            return jsonify({"ok": False, "error": err}), 400
+        flash(err, "error")
         return redirect(url_for("native_voice.admin_list"))
 
     phrase, err = nv_engine.upload_phrase_audio(org_id, voice_id, key, language, file, text_template)
+    is_fetch = request.headers.get("X-Requested-With") == "XMLHttpRequest" or "fetch" in request.headers.get("Sec-Fetch-Mode","") or request.headers.get("Accept","").startswith("application/json") or request.headers.get("Content-Type","").startswith("multipart/form-data") and request.headers.get("Sec-Fetch-Site")
+    # Detect fetch via JS: we send via fetch, so return JSON if client expects JSON or is fetch
+    wants_json = request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept","") or request.headers.get("Sec-Fetch-Mode") == "cors" or request.headers.get("Origin") is not None and request.headers.get("Sec-Fetch-Mode") != "navigate"
+
     if err:
+        if wants_json or request.headers.get("Accept","").find("text/html") == -1:
+            return jsonify({"ok": False, "error": err}), 400
         flash(err, "error")
     else:
+        if wants_json:
+            return jsonify({"ok": True, "message": f"Phrase '{key}' ({language}) saved for voice {voice.name}", "phrase_id": phrase.id if phrase else None})
         flash(f"Phrase '{key}' ({language}) saved for voice {voice.name}", "success")
 
     return redirect(url_for("native_voice.admin_list"))
@@ -237,7 +269,7 @@ def bulk_upload():
             if "." not in base:
                 continue
             name_no_ext, ext = base.rsplit(".", 1)
-            if ext.lower() not in ("mp3","wav","ogg","m4a","mp4"):
+            if ext.lower() not in ("mp3","wav","ogg","m4a","mp4","webm","opus"):
                 continue
             parts = name_no_ext.split("_")
             if len(parts) < 3:

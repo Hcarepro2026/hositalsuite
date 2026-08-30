@@ -345,37 +345,43 @@ def list_phrases(org_id: int, language: str | None = None) -> list[NativePhrase]
 
 def upload_phrase_audio(org_id: int, voice_id: int, key: str, language: str, file_storage, text_template: str = "") -> tuple[NativePhrase | None, str | None]:
     """Upload audio for a phrase. Returns (phrase, error). Dynamic file handling."""
-    from .security import validate_upload
     from .models import now_naive
 
-    safe, err = validate_upload(file_storage)
-    if err:
-        # Allow mp3/wav — validate_upload only allows jpg/png/webp/pdf, so check manually for audio
-        ext = (file_storage.filename or "").lower().rsplit(".", 1)[-1]
-        if ext not in ("mp3", "wav", "ogg", "m4a", "mp4"):
-            return None, f"Audio must be mp3, wav, ogg, m4a — got {ext}. {err}"
-        # For audio, bypass image validation, just check size
-        file_storage.seek(0)
-        data = file_storage.read(10 * 1024 * 1024 + 1)  # 10 MB max for audio
-        if len(data) > 10 * 1024 * 1024:
-            return None, "Audio too large (max 10 MB)"
-        safe = f"native_voice/{org_id}/{voice_id}/{key}_{language}.{ext}"
-    else:
-        # Was validated as image/pdf but we want audio — still allow if audio ext
-        ext = (file_storage.filename or "").lower().rsplit(".", 1)[-1]
-        if ext not in ("mp3", "wav", "ogg", "m4a", "mp4", "pdf", "jpg", "png"):
-            # Actually safe from validate_upload is image — but we need audio, so recreate key
-            pass
+    # Audio extensions allowed — include webm from MediaRecorder (Chrome/Android)
+    allowed_audio = ("mp3", "wav", "ogg", "m4a", "mp4", "webm", "opus")
+    filename = (file_storage.filename or "").strip()
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else "webm"
+    # Some browsers send blob without extension — detect from mimetype
+    if ext not in allowed_audio:
+        ct = (getattr(file_storage, "mimetype", "") or "").lower()
+        if "webm" in ct:
+            ext = "webm"
+        elif "ogg" in ct or "opus" in ct:
+            ext = "ogg"
+        elif "wav" in ct:
+            ext = "wav"
+        elif "mp3" in ct or "mpeg" in ct:
+            ext = "mp3"
+        else:
+            ext = "webm"  # default for MediaRecorder
+
+    if ext not in allowed_audio:
+        return None, f"Audio must be mp3, wav, ogg, webm, m4a — got {ext}"
 
     file_storage.seek(0)
     data = file_storage.read(10 * 1024 * 1024 + 1)
     if len(data) > 10 * 1024 * 1024:
         return None, "Audio too large (max 10 MB)"
+    if len(data) < 100:
+        return None, "Audio file empty or too small — record at least 1 second"
 
     # Use storage.py (db or S3)
-    audio_key = f"native_voice/{org_id}/{voice_id}/{key}_{language}_{int(datetime.now().timestamp())}.{ext if 'ext' in locals() else 'mp3'}"
+    audio_key = f"native_voice/{org_id}/{voice_id}/{key}_{language}_{int(datetime.now().timestamp())}.{ext}"
+    ctype = f"audio/{ext}" if ext != "mp3" else "audio/mpeg"
+    if ext == "webm":
+        ctype = "audio/webm"
     try:
-        storage.put(audio_key, data, org_id=org_id, filename=file_storage.filename, content_type=f"audio/{ext if 'ext' in locals() else 'mp3'}")
+        storage.put(audio_key, data, org_id=org_id, filename=filename or f"{key}.{ext}", content_type=ctype)
     except Exception as exc:
         return None, f"Could not save audio: {exc}"
 

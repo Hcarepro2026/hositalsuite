@@ -32,7 +32,7 @@
       {% if a.is_fast_track %}<br><span style="background:#000;color:#FFD700;padding:2px 8px;border-radius:999px;font-size:.65rem;font-weight:900">FAST TRACK</span>{% endif %}
     </td>
     <td>{{ a.department.name }}</td>
-    <td>{{ a.phone }}</td>
+    <td><span title="Full number for contact, masked for privacy">{{ a.phone|mask_phone }}</span></td>
     <td>{% if a.is_fast_track %}<span style="background:#FFD700;color:#000;padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:900">Gold</span>{% else %}—{% endif %}</td>
     <td>
       {% if a.is_fast_track %}

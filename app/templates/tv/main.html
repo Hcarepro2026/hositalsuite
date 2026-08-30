@@ -145,7 +145,7 @@
       {% for enriched in feed.reception_enriched[:5] %}
       {% set r = enriched.row %}
       <div class="row" style="{% if enriched.is_fast_track %}border-left:5px solid #FFD700;padding-left:10px;background:linear-gradient(135deg,rgba(255,215,0,0.15),transparent){% endif %}">
-        <span class="left">{% if enriched.is_fast_track %}⭐ {% endif %}{{ r.full_name }}<br><small style="opacity:0.6;font-weight:400">{{ r.ref }} · {{ r.stage }}</small></span>
+        <span class="left">{% if enriched.is_fast_track %}⭐ {% endif %}{{ enriched.display_name or r.full_name.split()[0] }}<br><small style="opacity:0.6;font-weight:400">{{ r.ref[:12] }} · {{ r.stage }}</small></span>
         <span class="right"><span class="wait-mini">~{{ (enriched.estimated_wait)|hm }}</span></span>
       </div>
       {% endfor %}
@@ -189,7 +189,7 @@
       <h2>Lab / Pharmacy / Billing — Waiting — Fast Track gold first ⭐</h2>
       {% for item in feed.onward_enriched[:6] %}
       <div class="row" style="{% if item.is_fast_track %}border-left:5px solid #FFD700;padding-left:10px;background:linear-gradient(135deg,rgba(255,215,0,0.15),transparent){% endif %}">
-        <span class="left">{% if item.is_fast_track %}⭐ {% endif %}{{ item.patient.full_name if item.patient else 'Patient' }}<br><small style="opacity:0.6;font-weight:400">{{ item.step.destination }} · {{ item.patient.hospital_number if item.patient else '' }}{% if item.is_fast_track %} · FAST TRACK{% endif %}</small></span>
+        <span class="left">{% if item.is_fast_track %}⭐ {% endif %}{{ item.display_name or 'Patient' }}<br><small style="opacity:0.6;font-weight:400">{{ item.step.destination }}{% if item.is_fast_track %} · FAST TRACK{% endif %}</small></span>
         <span class="right">{{ (item.waited)|hm }} ago</span>
       </div>
       {% endfor %}
