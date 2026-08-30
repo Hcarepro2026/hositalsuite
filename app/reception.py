@@ -351,5 +351,6 @@ def folder_values(intake: ReceptionIntake) -> dict:
         "payer_name": intake.payer_name or "",
         "preferred_lang": intake.preferred_lang or "en",
         "assistance": intake.assistance or "",
+        "assistance_consent": "1" if intake.assistance_consent_at else "",
         "care_note": intake.care_note or "",
     }

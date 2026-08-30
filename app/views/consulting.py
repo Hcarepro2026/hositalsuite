@@ -139,6 +139,14 @@ def call_in(vid: int):
                    department_id=visit.department_id,
                    staff_id=current_user.id)
     consulting.announce_called_in(visit, patient)
+    # v2 personal TV — patient called in, alarm-like
+    try:
+        from .. import personal_tv
+        sess = personal_tv.ensure_personal_session(visit.org_id, visit=visit)
+        personal_tv.update_session_from_visit(sess)
+        personal_tv.notify_patient_personal(sess, title="You are next! Doctor calling", body=f"{patient.full_name} — please go to {visit.consulting_room or 'consulting room'} NOW", data={"stage":"CONSULTATION"})
+    except Exception:
+        pass
     audit("PATIENT_CALLED_IN", "patient_visit", visit.id,
           {"room": visit.consulting_room})
     db.session.commit()
@@ -167,7 +175,14 @@ def finish(vid: int):
                            staff_id=current_user.id, close_previous=False)
     else:
         tracking.safely(tracking.close_journey, visit.org_id, visit_id=visit.id)
-        # Thank-you SMS when visit closed directly (no onward)
+        # Thank-you — now via personal TV + push, not SMS (cost saver) unless outside
+        try:
+            from .. import personal_tv
+            sess = personal_tv.ensure_personal_session(visit.org_id, visit=visit)
+            personal_tv.update_session_from_visit(sess)
+            personal_tv.notify_patient_personal(sess, title="Visit Finished ✅", body=f"Thank you {patient.full_name} — your visit is complete. Get well soon!", data={"stage":"DONE"})
+        except Exception:
+            pass
         try:
             from .. import aftercare
             aftercare.thank_you_sms(visit.org_id, visit, patient)
@@ -175,6 +190,16 @@ def finish(vid: int):
             pass
 
     consulting.announce_onward(visit, patient, steps)
+    # v2 onward notify personal TV
+    try:
+        from .. import personal_tv
+        if steps:
+            sess = personal_tv.ensure_personal_session(visit.org_id, visit=visit)
+            personal_tv.update_session_from_visit(sess)
+            where = ", ".join(ONWARD_LABELS.get(s.destination, s.destination).split(" — ")[0] for s in steps)
+            personal_tv.notify_patient_personal(sess, title=f"Sent to {where}", body=f"{patient.full_name} — please go to {where}")
+    except Exception:
+        pass
     audit("CONSULTATION_FINISHED", "patient_visit", visit.id,
           {"sent_to": [s.destination for s in steps] or ["home"]})
     db.session.commit()

@@ -188,17 +188,181 @@ def _kpi(org_id: int, viewer=None) -> dict:
 
 
 @bp.get("/branding/logo")
-def branding_logo():
-    """Public hospital logo — used on every page, including login and patient portals."""
+@bp.get("/branding/logo/<int:size>")
+@bp.get("/branding/logo/<string:variant>")
+def branding_logo(size=None, variant=None):
+    """Public hospital logo — per-org, multi-hospital, compressed, shows on phone home screen.
+    Hardened: never 500, handles None org, corrupted image, missing file, PIL errors.
+
+    - /branding/logo → original optimized logo (max 512)
+    - /branding/logo/192 → 192x192 for PWA manifest <30KB
+    - /branding/logo/512 → 512x512 <80KB
+    - /branding/logo/maskable → 512 with padding for maskable purpose (20% safe zone white)
+    - /branding/logo/apple → 180x180 apple-touch-icon
+
+    Loading time premium: resized on fly, cached, <30KB for 192, <80KB for 512
+    Slow internet: small sizes for fast load, Cache-Control 86400
+    Security: no org leak, per-tenant via current_org(), 404 if no logo
+    """
     from .. import storage
-    from ..services import current_org
-    org = current_org()
-    if not org or not org.logo_path:
-        abort(404)
+    from flask import Response
+    import io
+
     try:
-        return storage.send(org.logo_path, max_age=3600)
+        from ..services import current_org
+        org = current_org()
+    except Exception:
+        org = None
+
+    if not org or not getattr(org, 'logo_path', None):
+        abort(404)
+
+    # Determine target size — defensive
+    target = 512
+    is_maskable = False
+    try:
+        if variant == "maskable":
+            target = 512
+            is_maskable = True
+        elif variant == "apple":
+            target = 180
+        elif isinstance(size, int) and size in (192, 512, 180, 256, 384):
+            target = size
+        elif isinstance(size, int):
+            target = min(512, max(48, size))
+        # variant could be numeric string like "192"
+        if variant and isinstance(variant, str) and variant.isdigit():
+            try:
+                target = min(512, max(48, int(variant)))
+            except Exception:
+                pass
+    except Exception:
+        target = 512
+        is_maskable = False
+
+    # Try to get raw bytes — defensive
+    raw = None
+    try:
+        raw = storage.get(org.logo_path)
     except FileNotFoundError:
         abort(404)
+    except Exception:
+        current_app.logger.exception("logo storage.get failed")
+        abort(404)
+
+    if not raw:
+        abort(404)
+
+    # If requesting original and size is None, serve directly via storage.send (handles caching)
+    if size is None and variant is None:
+        try:
+            return storage.send(org.logo_path, max_age=3600)
+        except FileNotFoundError:
+            abort(404)
+        except Exception:
+            current_app.logger.exception("logo send failed")
+            abort(404)
+
+    # Resize with PIL — premium, keeps transparency for maskable, hardened for corrupted image
+    try:
+        from PIL import Image, UnidentifiedImageError
+    except ImportError:
+        # PIL not installed — fallback to original
+        try:
+            return storage.send(org.logo_path, max_age=3600)
+        except Exception:
+            abort(404)
+
+    try:
+        # Open image — may raise UnidentifiedImageError if corrupted
+        img = Image.open(io.BytesIO(raw))
+        # Verify image is not truncated / corrupted
+        try:
+            img.load()
+        except Exception:
+            # Corrupted — fallback to original or 404
+            raise UnidentifiedImageError("corrupted image")
+
+        if is_maskable:
+            # Maskable needs 20% padding safe zone — Android adaptive icons
+            # Spec: logo centered 80% with white background, 20% safe zone padding
+            # Premium: white opaque background for maskable, not transparent, so icon visible on any wallpaper
+            try:
+                canvas = Image.new("RGBA", (512, 512), (255, 255, 255, 255))
+                logo_size = int(512 * 0.8)
+                img_copy = img.copy()
+                if img_copy.mode != "RGBA":
+                    img_copy = img_copy.convert("RGBA")
+                img_copy.thumbnail((logo_size, logo_size), Image.LANCZOS)
+                x = (512 - img_copy.width)//2
+                y = (512 - img_copy.height)//2
+                canvas.paste(img_copy, (x, y), img_copy)
+                img = canvas
+            except Exception:
+                # If maskable fails, fallback to regular thumbnail
+                if img.mode not in ("RGB", "RGBA"):
+                    img = img.convert("RGBA")
+                img.thumbnail((512, 512), Image.LANCZOS)
+        else:
+            # Regular resize preserving aspect, max target
+            try:
+                if img.mode not in ("RGB", "RGBA"):
+                    img = img.convert("RGBA")
+                img.thumbnail((target, target), Image.LANCZOS)
+            except Exception:
+                # If thumbnail fails, try to serve original
+                raise
+
+        out = io.BytesIO()
+        try:
+            img.save(out, format="PNG", optimize=True, compress_level=9)
+        except Exception:
+            # If PNG save fails (e.g., too large), try JPEG fallback or original
+            try:
+                # Convert to RGB for JPEG if has alpha
+                if img.mode == "RGBA":
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    bg.paste(img, mask=img.split()[3])
+                    img = bg
+                out = io.BytesIO()
+                img.save(out, format="JPEG", quality=85, optimize=True)
+            except Exception:
+                # Final fallback to original
+                try:
+                    return storage.send(org.logo_path, max_age=3600)
+                except Exception:
+                    abort(404)
+        out.seek(0)
+        data = out.getvalue()
+        # Enforce size limits for premium loading time — 192 <30KB, 512 <80KB
+        # If larger, we still serve but log warning (not crash)
+        try:
+            if target == 192 and len(data) > 35*1024:
+                current_app.logger.warning(f"logo 192 larger than expected: {len(data)} bytes")
+            if target == 512 and len(data) > 90*1024:
+                current_app.logger.warning(f"logo 512 larger than expected: {len(data)} bytes")
+        except Exception:
+            pass
+        resp = Response(data, mimetype="image/png" if target != 0 else "image/png")
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        resp.headers["Content-Length"] = str(len(data))
+        return resp
+
+    except FileNotFoundError:
+        abort(404)
+    except Exception as e:
+        # Catch all — including UnidentifiedImageError, OSError for corrupted image
+        try:
+            current_app.logger.exception("logo resize failed, fallback to original")
+        except Exception:
+            pass
+        # Fallback to original via storage.send, not crash
+        try:
+            return storage.send(org.logo_path, max_age=3600)
+        except FileNotFoundError:
+            abort(404)
+        except Exception:
+            abort(404)
 
 
 @bp.get("/")

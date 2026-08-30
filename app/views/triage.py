@@ -119,6 +119,15 @@ def place(vid: int):
     triage.announce_placement(visit, patient, session)
     if clinic == "EMERGENCY":
         triage.announce_emergency(visit, patient)
+    # v2 personal TV + queue estimator update
+    try:
+        from .. import personal_tv
+        pt_sess = personal_tv.ensure_personal_session(visit.org_id, visit=visit)
+        personal_tv.update_session_from_visit(pt_sess)
+        doctor_name = session.doctor.name if session and session.doctor else (visit.consulting_room or "Doctor")
+        personal_tv.notify_patient_personal(pt_sess, title="Placed for Doctor", body=f"{patient.full_name} — now waiting for {doctor_name}", data={"stage": "WAIT_DOCTOR"})
+    except Exception:
+        pass
     audit("PATIENT_TRIAGED", "patient_visit", visit.id,
           {"clinic": clinic, "room": visit.consulting_room,
            "doctor": session.doctor.name if session and session.doctor else None})

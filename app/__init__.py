@@ -108,13 +108,15 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     from .views.attendance import bp as attendance_bp
     from .views.native_voice import bp as native_voice_bp
     from .views.native_voice import api_bp as voice_api_bp
+    from .views.personal_tv import bp as personal_tv_bp
+    from .views.push_api import bp as push_api_bp
 
     for blueprint in (auth_bp, mfa_bp, main_bp, insp_bp, comp_bp, book_bp, queue_bp, fb_bp,
                       chat_bp, ref_bp, roster_bp, hims_bp, reception_bp, triage_bp, consulting_bp, tracking_bp, cashdesk_bp,
                       lahsma_bp,
                       admin_bp, rolesadmin_bp, deptdesk_bp, svcpts_bp, tv_bp, hospstruct_bp,
                       reports_bp, api_bp, twilio_diag_bp, fasttrack_bp, onboard_bp, attendance_bp,
-                      native_voice_bp, voice_api_bp):
+                      native_voice_bp, voice_api_bp, personal_tv_bp, push_api_bp):
         app.register_blueprint(blueprint)
 
     from .timefmt import fmt_hm, say_hm
@@ -127,6 +129,15 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     # level. Registered AFTER the security hooks so login has already resolved.
     from .rls import register as register_rls
     register_rls(app)
+
+    # Import v2 models so create_all sees them — no breaking changes
+    try:
+        from . import models_v2 as _models_v2  # noqa: F401
+        from . import queue_estimator as _qe  # noqa: F401
+        from . import push as _push  # noqa: F401
+        from . import personal_tv as _ptv  # noqa: F401
+    except Exception:
+        pass
 
     with app.app_context():
         # SQLite hardening: WAL lets the scheduler thread and web requests write
@@ -235,10 +246,24 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
         hospital = None
         try:
             from .models import Organization
+            from .services import current_org
             if u is not None:
                 hospital = db.session.get(Organization, u.org_id)
             if hospital is None:
-                hospital = db.session.query(Organization).order_by(Organization.id).first()
+                # Try host-based org resolution first — multi-hospital isolation, no leak
+                try:
+                    hospital = current_org()
+                except Exception:
+                    hospital = None
+            if hospital is None:
+                # Fallback to first org only for single-tenant backward compat, not multi-tenant leak
+                # In multi-tenant, current_org() should have resolved, so this only hits single-org setups
+                try:
+                    # Only fallback if single org in DB
+                    if db.session.query(Organization).count() <= 1:
+                        hospital = db.session.query(Organization).order_by(Organization.id).first()
+                except Exception:
+                    hospital = None
         except Exception:
             hospital = None
         if u is not None:
@@ -268,7 +293,7 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
         except Exception:
             branch = None
         return dict(csrf_token=csrf_token, settings=bundle,
-                    app_version=app.config.get("APP_VERSION", "1.7.22"),
+                    app_version=app.config.get("APP_VERSION", "1.8.0"),
                     _=i18n.translate, lang=lang, langs=i18n.LANGS,
                     speech_lang=i18n.speech_tag(lang), hospital=hospital,
                     current_branch=branch,

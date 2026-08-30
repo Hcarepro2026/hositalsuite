@@ -25,7 +25,13 @@ def _folder(client, **over):
         "nok_name": "Mr Abatan", "nok_relationship": "husband",
         "nok_phone": "08033901140", "payer_type": "SELF",
     }
+    # Auto-add assistance consent if assistance provided (NDPA sensitive data)
+    if over.get("assistance") and "assistance_consent" not in over:
+        data["assistance_consent"] = "1"
     data.update(over)
+    # If assistance in final data, ensure consent present
+    if data.get("assistance") and not data.get("assistance_consent"):
+        data["assistance_consent"] = "1"
     return client.post("/hims/register", data=data, follow_redirects=True)
 
 

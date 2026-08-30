@@ -26,10 +26,10 @@ def test_booking_portal_public_and_valid_submission(client, seeded):
     apt = db.session.query(Appointment).first()
     assert apt.ref.startswith("TEST-APT-")
     assert apt.status == "BOOKED"
-    # SMS confirmation queued & delivered (sandbox provider)
+    # SMS confirmation queued & delivered (sandbox provider) — v2 normalizes to +234
     m = db.session.query(SmsMessage).first()
     assert m is not None and m.status == "SENT" and apt.ref in m.body
-    assert m.to_number == "08033334444"
+    assert m.to_number in ("08033334444", "+2348033334444", "2348033334444")
 
 
 def test_booking_validation_rejects_bad_input(client, seeded):

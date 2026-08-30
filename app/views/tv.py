@@ -7,7 +7,7 @@ from flask_login import current_user
 
 from ..models import TvScreen, db
 from .. import tv as tv_engine
-from ..security import rate_limit, require_role
+from ..security import csrf_exempt, rate_limit, require_role
 
 bp = Blueprint("tv", __name__)
 
@@ -15,25 +15,31 @@ SUPER = ("SUPER_ADMIN",)
 
 
 def _resolve_org():
-    """Org for public TV: from screen code or from logged-in user or default org."""
+    """Org for public TV: from screen code or from logged-in user or host mapping.
+    
+    Multi-hospital fix: NO fallback to first org (security loophole closed).
+    Returns None if org cannot be resolved — caller must 503, not leak other hospital data.
+    Feature phone / USSD / voice provision: TV is per-org, never cross-org.
+    """
     from ..services import current_org
     from flask_login import current_user
 
-    # If logged in, use user's org
+    # If logged in, use user's org — admin viewing TV config
     try:
         if current_user and current_user.is_authenticated:
             return current_user.org_id
     except Exception:
         pass
-    # Otherwise use default org (public portal tenant)
-    org = current_org()
-    if org:
-        return org.id
-    # Fallback: first org
-    from ..models import Organization
-
-    first = db.session.query(Organization).order_by(Organization.id).first()
-    return first.id if first else None
+    # Public portal: resolve via host/domain mapping (multi-tenant)
+    try:
+        org = current_org()
+        if org:
+            return org.id
+    except Exception:
+        pass
+    # No fallback to first org — security loophole closed for multi-hospital isolation
+    # Caller should 503 if no org resolved, not show first org's data
+    return None
 
 
 @bp.get("/tv")
@@ -71,101 +77,130 @@ def screen_by_code(code: str):
     return render_template(template, feed=feed, screen=screen, rotation=rotation, is_main=is_main)
 
 
+@csrf_exempt("tv.api_volume")
 @bp.post("/api/tv/volume")
 @rate_limit(limit=60, window=60.0)
 def api_volume():
-    """Save volume per TV — public, per-tenant, best effort. No auth needed for TV remote, but scoped to org."""
+    """Save volume per TV — public, per-tenant, best effort. No auth needed for TV remote, but scoped to org. Hardened."""
     org_id = _resolve_org()
     if not org_id:
         return jsonify({"error": "no org"}), 503
-    code = (request.args.get("code") or request.form.get("code") or "").strip().upper()[:20]
-    vol = request.args.get("volume", type=int)
-    if vol is None:
-        vol = request.form.get("volume", type=int)
-    bright = request.args.get("brightness", type=int)
-    if bright is None:
-        bright = request.form.get("brightness", type=int)
-    if not code:
-        return jsonify({"ok": False}), 400
-    screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
-    if not screen:
-        return jsonify({"ok": False}), 404
-    if vol is not None:
-        vol = max(0, min(100, vol))
-        screen.voice_volume = vol
-    if bright is not None:
-        bright = max(10, min(100, bright))
-        screen.brightness = bright
-    db.session.commit()
-    return jsonify({"ok": True, "code": code, "volume": screen.voice_volume, "brightness": getattr(screen, 'brightness', 100)})
+    try:
+        code = (request.args.get("code") or request.form.get("code") or "").strip().upper()[:20]
+        vol = request.args.get("volume", type=int)
+        if vol is None:
+            vol = request.form.get("volume", type=int)
+        bright = request.args.get("brightness", type=int)
+        if bright is None:
+            bright = request.form.get("brightness", type=int)
+        if not code:
+            return jsonify({"ok": False, "error": "code required"}), 400
+        screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
+        if not screen:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        if vol is not None:
+            try:
+                vol = max(0, min(100, int(vol)))
+                screen.voice_volume = vol
+            except Exception:
+                pass
+        if bright is not None:
+            try:
+                bright = max(10, min(100, int(bright)))
+                screen.brightness = bright
+            except Exception:
+                pass
+        db.session.commit()
+        return jsonify({"ok": True, "code": code, "volume": getattr(screen, 'voice_volume', 100), "brightness": getattr(screen, 'brightness', 100)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "server error"}), 500
 
 
+@csrf_exempt("tv.api_brightness")
 @bp.post("/api/tv/brightness")
 @rate_limit(limit=60, window=60.0)
 def api_brightness():
-    """Save brightness + night mode per TV — public, per-tenant."""
+    """Save brightness + night mode per TV — public, per-tenant. Hardened."""
     org_id = _resolve_org()
     if not org_id:
         return jsonify({"error": "no org"}), 503
-    code = (request.args.get("code") or request.form.get("code") or "").strip().upper()[:20]
-    bright = request.args.get("brightness", type=int)
-    if bright is None:
-        bright = request.form.get("brightness", type=int)
-    night = request.args.get("night_mode")
-    if night is None:
-        night = request.form.get("night_mode")
-    if not code:
-        return jsonify({"ok": False}), 400
-    screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
-    if not screen:
-        return jsonify({"ok": False}), 404
-    if bright is not None:
-        screen.brightness = max(10, min(100, bright))
-    if night is not None:
-        # Accept 0/1, true/false, on/off
-        if isinstance(night, str):
-            night = night.lower() in ("1", "true", "on", "yes")
-        screen.night_mode = bool(night)
-    db.session.commit()
-    return jsonify({"ok": True, "code": code, "brightness": getattr(screen, 'brightness', 100), "night_mode": bool(getattr(screen, 'night_mode', False))})
+    try:
+        code = (request.args.get("code") or request.form.get("code") or "").strip().upper()[:20]
+        bright = request.args.get("brightness", type=int)
+        if bright is None:
+            bright = request.form.get("brightness", type=int)
+        night = request.args.get("night_mode")
+        if night is None:
+            night = request.form.get("night_mode")
+        if not code:
+            return jsonify({"ok": False, "error": "code required"}), 400
+        screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code).first()
+        if not screen:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        if bright is not None:
+            try:
+                screen.brightness = max(10, min(100, int(bright)))
+            except Exception:
+                pass
+        if night is not None:
+            try:
+                if isinstance(night, str):
+                    night = night.lower() in ("1", "true", "on", "yes")
+                screen.night_mode = bool(night)
+            except Exception:
+                pass
+        db.session.commit()
+        return jsonify({"ok": True, "code": code, "brightness": getattr(screen, 'brightness', 100), "night_mode": bool(getattr(screen, 'night_mode', False))})
+    except Exception:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "server error"}), 500
 
 
+@csrf_exempt("tv.api_feed")
 @bp.get("/api/tv/feed")
 def api_feed():
-    """JSON feed for TV auto-refresh — public, per-tenant."""
+    """JSON feed for TV auto-refresh — public, per-tenant. Hardened, never crashes TV."""
     org_id = _resolve_org()
     if not org_id:
         return jsonify({"error": "no org"}), 503
-    code = (request.args.get("code") or "MAIN").strip().upper()[:20]
-    screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code, active=True).first()
-    if not screen:
-        screen = db.session.query(TvScreen).filter_by(org_id=org_id, code="MAIN", active=True).first()
-    feed = tv_engine.tv_feed(org_id, screen)
-    rotation = tv_engine.voice_rotation_for_today(org_id, screen.id if screen else None)
+    try:
+        code = (request.args.get("code") or "MAIN").strip().upper()[:20]
+        screen = db.session.query(TvScreen).filter_by(org_id=org_id, code=code, active=True).first()
+        if not screen:
+            screen = db.session.query(TvScreen).filter_by(org_id=org_id, code="MAIN", active=True).first()
+        try:
+            feed = tv_engine.tv_feed(org_id, screen)
+        except Exception:
+            # Never crash TV feed — return minimal safe payload
+            feed = {"now_serving": [], "next_up": [], "stats": {}, "clinic_counts": {}, "now": __import__("datetime").datetime.utcnow()}
+        try:
+            rotation = tv_engine.voice_rotation_for_today(org_id, screen.id if screen else None)
+        except Exception:
+            rotation = {"slot": 0, "slot_name": "Female Voice 1", "languages": ["en-NG", "en"]}
 
-    # Serialize for JSON — only safe fields, no EMR
-    def ser_patient(p):
-        return {"code": p.hospital_number, "name": p.full_name, "spoken": p.spoken_name} if p else None
-
-    return jsonify(
-        {
-            "screen": {
-                "code": screen.code,
-                "name": screen.name,
-                "type": screen.screen_type,
-                "clinic": screen.clinic_code,
-                "voice_languages": getattr(screen, 'voice_languages', 'en,yo,ha,ig'),
-                "brightness": getattr(screen, 'brightness', 100),
-                "night_mode": bool(getattr(screen, 'night_mode', False)),
-            } if screen else None,
-            "now_serving": feed["now_serving"],
-            "next_up": feed["next_up"],
-            "stats": feed["stats"],
-            "clinic_counts": feed["clinic_counts"],
-            "rotation": rotation,
-            "timestamp": feed["now"].isoformat(),
-        }
-    )
+        return jsonify(
+            {
+                "screen": {
+                    "code": getattr(screen, 'code', 'MAIN') if screen else 'MAIN',
+                    "name": getattr(screen, 'name', 'Main TV') if screen else 'Main TV',
+                    "type": getattr(screen, 'screen_type', 'WAITING_MAIN') if screen else 'WAITING_MAIN',
+                    "clinic": getattr(screen, 'clinic_code', None) if screen else None,
+                    "voice_languages": getattr(screen, 'voice_languages', 'en,yo,ha,ig') if screen else 'en,yo,ha,ig',
+                    "brightness": getattr(screen, 'brightness', 100) if screen else 100,
+                    "night_mode": bool(getattr(screen, 'night_mode', False)) if screen else False,
+                } if screen else None,
+                "now_serving": feed.get("now_serving", []) if isinstance(feed, dict) else [],
+                "next_up": feed.get("next_up", []) if isinstance(feed, dict) else [],
+                "stats": feed.get("stats", {}) if isinstance(feed, dict) else {},
+                "clinic_counts": feed.get("clinic_counts", {}) if isinstance(feed, dict) else {},
+                "rotation": rotation,
+                "timestamp": feed.get("now").isoformat() if isinstance(feed, dict) and hasattr(feed.get("now"), 'isoformat') else __import__("datetime").datetime.utcnow().isoformat(),
+            }
+        )
+    except Exception as e:
+        # Absolute fallback — TV must never show 500
+        return jsonify({"error": "feed error", "now_serving": [], "next_up": [], "stats": {}, "clinic_counts": {}, "screen": None}), 200
 
 
 # ------------------------------------------------------------------ admin CRUD for TV screens
@@ -364,9 +399,10 @@ def admin_poster_one(code: str):
     return render_template("admin/tv_poster_single.html", screen=s, url=url, qr=qr, rotation=rotation, base_url=base)
 
 
+@csrf_exempt("tv.api_qr_url")
 @bp.get("/api/tv/qr-url")
 def api_qr_url():
-    """Public QR for TV ↔ patient page linking — returns data URI, no auth, per-tenant safe."""
+    """Public QR for TV ↔ patient page linking — returns data URI, no auth, per-tenant safe. Hardened."""
     code = (request.args.get("code") or "MAIN").strip().upper()[:20]
     text = (request.args.get("text") or "").strip()[:500]
     if not text:

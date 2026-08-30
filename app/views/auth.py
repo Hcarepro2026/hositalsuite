@@ -211,8 +211,20 @@ def enforce_pending_password_change():
 
 # ================================================================ request access + activate email
 def _home_org() -> Organization | None:
+    """Home org for public pages — tries host-based current_org first, then first org only if single-tenant.
+    Multi-hospital fix: no leak of first org when multiple orgs exist and host not mapped."""
     try:
-        return db.session.query(Organization).order_by(Organization.id).first()
+        from ..services import current_org
+        org = current_org()
+        if org:
+            return org
+    except Exception:
+        pass
+    try:
+        # Only fallback to first org if single org — avoids cross-hospital leak
+        if db.session.query(Organization).count() <= 1:
+            return db.session.query(Organization).order_by(Organization.id).first()
+        return None
     except Exception:
         return None
 

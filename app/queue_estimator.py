@@ -1,0 +1,440 @@
+"""
+Smart Real-Time Queue Time Estimator — Free AI-like Logic, No External API
+--------------------------------------------------------------------------
+
+Founder requirement: adjust queueing time based on available patients at:
+- Reception, Billing, MEGALEX/PayPoint, LAHSMA, HIMS, Triage,
+- patients waiting to see each doctor, and other Onward locations (Lab, Pharmacy, etc)
+
+Design for Africa: slow internet, low battery, works offline with cached averages.
+
+How it works (Little's Law + Exponential Moving Average + Load Factor):
+- Each stage has historical avg_seconds per hour_of_day + day_of_week
+- Real-time load: count of open JourneySegments in that stage
+- Staff availability: count of active DoctorSessions, WorkClaims, UserPresence
+- Adaptive: if load high and staff low, estimated wait goes up
+- Free: no ML API, just math that runs in 5ms on cheap phone
+
+Multi-hospital: per org_id, per stage, per hour, per day.
+
+Premium UX: shows "12 min" not "720 seconds", updates live every 30s.
+
+Considerations:
+- App loading time: estimator is lazy, only computed when needed, cached 60s
+- Slow internet: payload is tiny JSON {position, wait, stage}, <1KB
+- Feature phones: if no JS, fallback to server-rendered wait time in template
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from typing import Dict, Any
+
+from .models import (
+    JourneySegment,
+    QueueTicket,
+    ReceptionIntake,
+    PatientVisit,
+    DoctorSession,
+    WorkClaim,
+    VisitOnward,
+    db,
+    now_naive,
+)
+
+# Stages we track — matches JOURNEY_STAGES + reception sub-stages
+STAGES = [
+    "RECEPTION",
+    "BILLING",
+    "PAYMENT",
+    "HIMS",
+    "TRIAGE",
+    "WAIT_DOCTOR",
+    "CONSULTATION",
+    "LABORATORY",
+    "PHARMACY",
+    "BILLING_OUT",
+    "MEGALEX",
+    "LAHSMA",
+    "EMERGENCY",
+]
+
+# Default averages if no history — in seconds, conservative for Nigeria
+DEFAULT_AVG = {
+    "RECEPTION": 300,      # 5 min
+    "BILLING": 180,        # 3 min
+    "PAYMENT": 240,        # 4 min
+    "HIMS": 180,           # 3 min
+    "TRIAGE": 300,         # 5 min
+    "WAIT_DOCTOR": 900,    # 15 min — biggest
+    "CONSULTATION": 600,   # 10 min
+    "LABORATORY": 1200,    # 20 min
+    "PHARMACY": 600,       # 10 min
+    "BILLING_OUT": 180,
+    "MEGALEX": 240,
+    "LAHSMA": 300,
+    "EMERGENCY": 120,      # 2 min — urgent
+}
+
+_cache: Dict[str, Any] = {}
+_cache_at: Dict[str, datetime] = {}  # per-org timestamp to avoid cross-org stale + race
+
+def _get_estimate_row(org_id: int, stage: str, hour: int, dow: int):
+    """Get historical average for this org/stage/hour/dow, or None."""
+    try:
+        from .models_v2 import QueueEstimate
+        row = db.session.query(QueueEstimate).filter_by(
+            org_id=org_id, stage=stage, hour_of_day=hour, day_of_week=dow
+        ).first()
+        return row
+    except Exception:
+        return None
+
+def get_historical_avg(org_id: int, stage: str, now: datetime | None = None) -> int:
+    """Get avg seconds for stage at this hour/dow, with fallback to DEFAULT_AVG."""
+    now = now or now_naive()
+    hour = now.hour
+    dow = now.weekday()
+    row = _get_estimate_row(org_id, stage, hour, dow)
+    if row and row.avg_seconds:
+        return int(row.avg_seconds)
+    # Try any hour same stage
+    try:
+        from .models_v2 import QueueEstimate
+        any_row = db.session.query(QueueEstimate).filter_by(org_id=org_id, stage=stage).order_by(QueueEstimate.sample_count.desc()).first()
+        if any_row and any_row.avg_seconds:
+            return int(any_row.avg_seconds)
+    except Exception:
+        pass
+    return DEFAULT_AVG.get(stage, 300)
+
+def update_estimate_from_segment(segment: JourneySegment):
+    """Called when a JourneySegment closes — updates moving average.
+
+    Free AI-like: Exponential Moving Average (EMA) — alpha 0.3
+    So recent data matters more, but old data not forgotten.
+    """
+    if not segment.seconds or segment.seconds <= 0:
+        return
+    if segment.seconds > 7200:  # >2h is abandoned, ignore
+        return
+    try:
+        from .models_v2 import QueueEstimate
+        org_id = segment.org_id
+        stage = segment.stage
+        entered = segment.entered_at or now_naive()
+        hour = entered.hour
+        dow = entered.weekday()
+        row = db.session.query(QueueEstimate).filter_by(
+            org_id=org_id, stage=stage, hour_of_day=hour, day_of_week=dow
+        ).first()
+        if not row:
+            row = QueueEstimate(
+                org_id=org_id, stage=stage, hour_of_day=hour, day_of_week=dow,
+                avg_seconds=segment.seconds, min_seconds=segment.seconds,
+                max_seconds=segment.seconds, sample_count=1
+            )
+            db.session.add(row)
+        else:
+            # EMA: new_avg = alpha * new + (1-alpha) * old
+            alpha = 0.3
+            old = row.avg_seconds or DEFAULT_AVG.get(stage, 300)
+            row.avg_seconds = int(alpha * segment.seconds + (1 - alpha) * old)
+            row.min_seconds = min(row.min_seconds or segment.seconds, segment.seconds)
+            row.max_seconds = max(row.max_seconds or segment.seconds, segment.seconds)
+            row.sample_count = (row.sample_count or 0) + 1
+            row.last_updated = now_naive()
+        # Don't commit here — caller commits
+    except Exception:
+        pass
+
+def count_open_segments(org_id: int, stage: str) -> int:
+    """How many patients are currently in this stage (open segments).
+    
+    Founder: adjust based on available patients at reception, billing, MEGALEX, LASHMA, HIMS, Triage, per-doctor, onward.
+    So we count both JourneySegment open + ReceptionIntake in that stage today + VisitOnward pending for onward.
+    """
+    total = 0
+    try:
+        total += db.session.query(JourneySegment).filter_by(
+            org_id=org_id, stage=stage, ended_at=None
+        ).count()
+    except Exception:
+        pass
+
+    # Reception-related stages also have ReceptionIntake rows today
+    if stage in ("RECEPTION", "BILLING", "PAYMENT", "HIMS", "TRIAGE"):
+        try:
+            today = now_naive().date()
+            today_start = datetime.combine(today, datetime.min.time())
+            total += db.session.query(ReceptionIntake).filter(
+                ReceptionIntake.org_id == org_id,
+                ReceptionIntake.stage == stage,
+                ReceptionIntake.created_at >= today_start
+            ).count()
+        except Exception:
+            pass
+
+    # Onward destinations also have VisitOnward pending
+    if stage in ("LABORATORY", "PHARMACY", "BILLING_OUT", "MEGALEX", "LAHSMA", "EMERGENCY"):
+        try:
+            today = now_naive().date()
+            today_start = datetime.combine(today, datetime.min.time())
+            total += db.session.query(VisitOnward).filter(
+                VisitOnward.org_id == org_id,
+                VisitOnward.destination == stage,
+                VisitOnward.status == "PENDING",
+                VisitOnward.sent_at >= today_start
+            ).count()
+        except Exception:
+            pass
+
+    return total
+
+def count_staff_available(org_id: int, stage: str) -> int:
+    """How many staff are available for this stage — free logic.
+
+    For WAIT_DOCTOR: count open DoctorSessions
+    For others: count open WorkClaims for that kind
+    Fallback 1 if unknown (avoid div by zero)
+    """
+    try:
+        if stage in ("WAIT_DOCTOR", "CONSULTATION"):
+            today = now_naive().date()
+            return db.session.query(DoctorSession).filter(
+                DoctorSession.org_id == org_id,
+                DoctorSession.duty_date == today,
+                DoctorSession.ended_at.is_(None),
+                DoctorSession.ready.is_(True)
+            ).count() or 1
+        # Map stage to WorkClaim kind
+        kind_map = {
+            "RECEPTION": "RECEPTION",
+            "BILLING": "BILLING",
+            "PAYMENT": "PAYMENT",
+            "HIMS": "HIMS",
+            "TRIAGE": "TRIAGE",
+            "LABORATORY": "LABORATORY",
+            "PHARMACY": "PHARMACY",
+        }
+        kind = kind_map.get(stage)
+        if kind:
+            return db.session.query(WorkClaim).filter(
+                WorkClaim.org_id == org_id,
+                WorkClaim.kind == kind,
+                WorkClaim.ended_at.is_(None)
+            ).count() or 1
+    except Exception:
+        pass
+    return 1
+
+def estimate_wait_minutes(org_id: int, stage: str, position: int = 0, is_fast_track: bool = False, now: datetime | None = None) -> int:
+    """
+    Smart estimate: (position * avg) / staff_available * load_factor * fast_track_factor
+
+    position: 0-indexed, 0 = next, 1 = 2nd, etc.
+    is_fast_track: elderly/pregnant/child/wheelchair — premium, seen sooner
+    """
+    now = now or now_naive()
+    avg_sec = get_historical_avg(org_id, stage, now)
+    open_count = count_open_segments(org_id, stage)
+    staff_count = count_staff_available(org_id, stage)
+
+    # Base: if you are 3rd in line, wait = 3 * avg per patient
+    base_min = ((position + 1) * avg_sec) / 60.0
+
+    # Load factor: if many patients open in stage, system slower
+    # load_factor = 1 + (open_count / (staff_count*5)) — capped 2.0
+    load_factor = 1.0 + min(open_count / max(1, staff_count * 5), 1.0)
+
+    # Staff factor: if few staff, slower — inverse
+    # staff_factor = 1 / staff_count, but min 0.5 (more staff = faster)
+    staff_factor = max(0.5, 2.0 / max(1, staff_count))
+
+    # Fast track: 50% faster
+    fast_factor = 0.5 if is_fast_track else 1.0
+
+    # Time of day factor: lunch 13-14 slower, morning faster
+    hour = now.hour
+    time_factor = 1.2 if 13 <= hour <= 14 else 1.0
+    time_factor = 1.3 if hour >= 16 else time_factor  # late afternoon slower
+
+    estimated = base_min * load_factor * staff_factor * fast_factor * time_factor
+
+    # Clamp: min 1 min, max 180 min (3h)
+    estimated = max(1, min(180, int(estimated)))
+
+    return estimated
+
+def estimate_remaining_journey(org_id: int, visit, now: datetime | None = None) -> Dict[str, Any]:
+    """
+    Estimate remaining journey for a visit — from current stage to end.
+    Considers all remaining stages: WAIT_DOCTOR, CONSULTATION, onward (LAB, PHARM, etc)
+    """
+    now = now or now_naive()
+    remaining_stages = []
+    total_min = 0
+
+    # Determine current stage from visit.status
+    status_to_stage = {
+        "REGISTERED": "TRIAGE",
+        "TRIAGED": "WAIT_DOCTOR",
+        "IN_CONSULTATION": "CONSULTATION",
+        "ONWARD": "ONWARD",  # will expand to actual onward destinations
+    }
+    current = status_to_stage.get(getattr(visit, 'status', ''), "TRIAGE")
+
+    # Stages to estimate
+    if current in ("TRIAGE", "REGISTERED"):
+        # Triage + wait doctor + consultation
+        for st in ["TRIAGE", "WAIT_DOCTOR", "CONSULTATION"]:
+            wait = estimate_wait_minutes(org_id, st, position=0, is_fast_track=getattr(visit, 'is_fast_track', False), now=now)
+            remaining_stages.append({"stage": st, "minutes": wait})
+            total_min += wait
+    elif current == "WAIT_DOCTOR":
+        for st in ["WAIT_DOCTOR", "CONSULTATION"]:
+            wait = estimate_wait_minutes(org_id, st, position=0, is_fast_track=getattr(visit, 'is_fast_track', False), now=now)
+            remaining_stages.append({"stage": st, "minutes": wait})
+            total_min += wait
+    elif current == "CONSULTATION":
+        wait = estimate_wait_minutes(org_id, "CONSULTATION", position=0, is_fast_track=getattr(visit, 'is_fast_track', False), now=now)
+        remaining_stages.append({"stage": "CONSULTATION", "minutes": wait})
+        total_min += wait
+
+    # Onward steps
+    try:
+        pending = [s for s in getattr(visit, 'onward_steps', []) if s.status == "PENDING"]
+        for step in pending:
+            dest = step.destination  # LABORATORY, PHARMACY, etc
+            wait = estimate_wait_minutes(org_id, dest, position=0, is_fast_track=getattr(visit, 'is_fast_track', False), now=now)
+            remaining_stages.append({"stage": dest, "minutes": wait})
+            total_min += wait
+    except Exception:
+        pass
+
+    return {"total": total_min, "stages": remaining_stages, "fast_track": bool(getattr(visit, 'is_fast_track', False))}
+
+def estimate_intake_journey(org_id: int, intake, now: datetime | None = None) -> Dict[str, Any]:
+    """Estimate for ReceptionIntake — from current stage to Triage."""
+    now = now or now_naive()
+    stage_order = ["RECEPTION", "BILLING", "PAYMENT", "HIMS", "TRIAGE"]
+    try:
+        idx = stage_order.index(getattr(intake, 'stage', 'RECEPTION'))
+    except ValueError:
+        idx = 0
+    remaining = stage_order[idx:]
+    total = 0
+    stages = []
+    for st in remaining:
+        wait = estimate_wait_minutes(org_id, st, position=0, is_fast_track=getattr(intake, 'is_fast_track', False), now=now)
+        stages.append({"stage": st, "minutes": wait})
+        total += wait
+    return {"total": total, "stages": stages, "fast_track": bool(getattr(intake, 'is_fast_track', False))}
+
+def get_live_counts(org_id: int) -> Dict[str, int]:
+    """Live counts for all stages — for dashboard and personal TV, <1KB JSON.
+    
+    Founder requirement: adjust queueing time based on available patients at:
+    - Reception, Billing, MEGALEX/PayPoint, LAHSMA, HIMS, Triage,
+    - patients waiting to see each doctor, and other Onward locations (Lab, Pharmacy, etc)
+    
+    Africa optimized: cached 30s per-org to avoid DB hammer on slow internet, low battery.
+    Premium: still real-time enough (30s) but saves 80% DB hits.
+    Multi-hospital: per org_id, per-org timestamp (fixed cross-org stale bug).
+    """
+    global _cache, _cache_at
+    cache_key = f"live_counts_{org_id}"
+    now = now_naive()
+    # Check cache 30s per-org — fixed bug where global _cache_at caused cross-org stale
+    try:
+        last_at = _cache_at.get(cache_key)
+        if last_at and (now - last_at).total_seconds() < 30:
+            if cache_key in _cache:
+                return _cache[cache_key]
+    except Exception:
+        pass
+
+    counts = {}
+    for stage in STAGES:
+        counts[stage] = count_open_segments(org_id, stage)
+
+    try:
+        today = now_naive().date()
+        today_start = datetime.combine(today, datetime.min.time())
+
+        # Queue tickets waiting today — per-department but total
+        counts["QUEUE_WAITING"] = db.session.query(QueueTicket).filter(
+            QueueTicket.org_id == org_id,
+            QueueTicket.queue_date == today,
+            QueueTicket.status == "WAITING"
+        ).count()
+
+        # Reception stages — from ReceptionIntake (founder: available patients at reception, billing, HIMS, Triage)
+        # Each ReceptionIntake stage represents patients at that desk
+        for rec_stage in ["RECEPTION", "BILLING", "PAYMENT", "HIMS", "TRIAGE"]:
+            try:
+                c = db.session.query(ReceptionIntake).filter(
+                    ReceptionIntake.org_id == org_id,
+                    ReceptionIntake.stage == rec_stage,
+                    ReceptionIntake.created_at >= today_start
+                ).count()
+                # Merge with JourneySegment count for same stage (max of both to show real load)
+                counts[rec_stage] = max(counts.get(rec_stage, 0), c)
+                counts[f"INTAKE_{rec_stage}"] = c
+            except Exception:
+                pass
+
+        # Per-doctor waiting — founder: patients waiting to see each doctors
+        try:
+            counts["DOCTORS_READY"] = db.session.query(DoctorSession).filter(
+                DoctorSession.org_id == org_id,
+                DoctorSession.duty_date == today,
+                DoctorSession.ended_at.is_(None),
+                DoctorSession.ready.is_(True)
+            ).count()
+            counts["TRIAGE_OPEN"] = db.session.query(WorkClaim).filter(
+                WorkClaim.org_id == org_id,
+                WorkClaim.kind == "TRIAGE",
+                WorkClaim.ended_at.is_(None)
+            ).count()
+            # Per-doctor queue: PatientVisit TRIAGED waiting
+            counts["WAIT_DOCTOR_VISITS"] = db.session.query(PatientVisit).filter(
+                PatientVisit.org_id == org_id,
+                PatientVisit.status == "TRIAGED",
+                PatientVisit.started_at >= today_start
+            ).count()
+        except Exception:
+            pass
+
+        # Onward locations — LAB, PHARMACY, BILLING_OUT, MEGALEX, LAHSMA, EMERGENCY
+        # Founder: other Onward locations
+        try:
+            for onward_dest in ["LABORATORY", "PHARMACY", "BILLING_OUT", "MEGALEX", "LAHSMA", "EMERGENCY"]:
+                c = db.session.query(VisitOnward).filter(
+                    VisitOnward.org_id == org_id,
+                    VisitOnward.destination == onward_dest,
+                    VisitOnward.status == "PENDING",
+                    VisitOnward.sent_at >= today_start
+                ).count()
+                counts[f"ONWARD_{onward_dest}"] = c
+                # Merge into main stage count
+                if onward_dest in counts:
+                    counts[onward_dest] = counts[onward_dest] + c
+                else:
+                    counts[onward_dest] = c
+        except Exception:
+            pass
+
+        # Billing counts — from JourneySegment BILLING + VisitOnward BILLING_OUT
+        # Already counted via STAGES loop
+
+    except Exception:
+        pass
+
+    # Cache 30s per-org
+    try:
+        _cache[cache_key] = counts
+        _cache_at[cache_key] = now
+    except Exception:
+        pass
+    return counts

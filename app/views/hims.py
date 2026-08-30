@@ -198,11 +198,12 @@ def open_folder_from_intake(intake_id: int):
                 setattr(patient, field, new_value)
         db.session.flush()
     else:
+        # values already contains consent_at and assistance_consent_at from validate()
+        # Do not pass consent_at explicitly to avoid duplicate keyword
         patient = Patient(
             org_id=current_user.org_id,
             hospital_number=hims.next_hospital_number(org),
             created_by=current_user.id,
-            consent_at=now_naive(),
             branch_id=getattr(current_user, "branch_id", None)
             or getattr(row, "branch_id", None),
             **values,
@@ -216,7 +217,6 @@ def open_folder_from_intake(intake_id: int):
                 org_id=current_user.org_id,
                 hospital_number=hims.next_hospital_number(org),
                 created_by=current_user.id,
-                consent_at=now_naive(),
                 branch_id=getattr(current_user, "branch_id", None)
                 or getattr(row, "branch_id", None),
                 **values,
@@ -309,9 +309,10 @@ def register_save():
             form=form, errors=errors, duplicates=dupes,
             next_number=hims.next_hospital_number(org))), (400 if errors else 200)
 
+    # values already contains consent_at from validate() — do not duplicate
     patient = Patient(org_id=current_user.org_id,
                       hospital_number=hims.next_hospital_number(org),
-                      created_by=current_user.id, consent_at=now_naive(),
+                      created_by=current_user.id,
                       branch_id=getattr(current_user, "branch_id", None),
                       **values)
     db.session.add(patient)
@@ -322,7 +323,7 @@ def register_save():
         db.session.rollback()
         patient = Patient(org_id=current_user.org_id,
                           hospital_number=hims.next_hospital_number(org),
-                          created_by=current_user.id, consent_at=now_naive(),
+                          created_by=current_user.id,
                           branch_id=getattr(current_user, "branch_id", None),
                           **values)
         db.session.add(patient)

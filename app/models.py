@@ -725,19 +725,28 @@ class CorrectiveAction(db.Model):
     verified_by = db.relationship("User", foreign_keys=[verified_by_id])
 
 
-# ---------------------------------------------------------------- notifications
+# ---------------------------------------------------------------- notifications v2 — premium, smart, cost-saving
 class AppNotification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
-    channel = db.Column(db.String(12), nullable=False)          # inapp | email | whatsapp | sms
+    channel = db.Column(db.String(12), nullable=False)          # inapp | email | whatsapp | sms | push | station | personal_tv
     template_key = db.Column(db.String(60), nullable=False)
     subject = db.Column(db.String(200))
     body = db.Column(db.Text, nullable=False)
     entity_type = db.Column(db.String(20))
     entity_id = db.Column(db.Integer)
-    status = db.Column(db.String(12), default="SENT")           # SENT | FAILED | READ
+    status = db.Column(db.String(12), default="SENT")           # SENT | FAILED | READ | QUEUED
     error = db.Column(db.String(300))
+    # v2 fields — premium, smart routing, alarm-like
+    priority = db.Column(db.String(10), default="NORMAL")  # LOW, NORMAL, HIGH, CRITICAL, EMERGENCY
+    category = db.Column(db.String(20), default="general")  # queue, booking, complaint, flow, roster, tracking
+    actions = db.Column(db.Text)  # JSON [{"action":"view","title":"View"}]
+    personal_tv_url = db.Column(db.String(300))
+    voice_key = db.Column(db.String(80))
+    require_interaction = db.Column(db.Boolean, default=False)  # alarm-like stays until acted
+    vibrate = db.Column(db.String(50))  # JSON array
+    ttl = db.Column(db.Integer, default=86400)  # seconds
     created_at = db.Column(db.DateTime, default=now_naive, index=True)
 
 

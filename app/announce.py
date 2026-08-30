@@ -286,11 +286,13 @@ def to_station(org_id: int, kind: str, *, department_id: int | None = None,
     so one tablet can cover a whole area without being signed in as anybody.
     """
     urgency, subject = PATIENT_ALERTS.get(kind, (STANDARD, "Announcement"))
-    spoken = phrase(kind, **kw)
+    phrase_kw = {k: v for k, v in kw.items() if k not in ("entity_type", "entity_id")}
+    spoken = phrase(kind, **phrase_kw)
     row = AppNotification(
         org_id=org_id, user_id=None, channel="station",
         template_key=kind, subject=subject, body=spoken,
-        entity_type="department", entity_id=department_id, status="SENT")
+        entity_type=kw.get("entity_type", "department"),
+        entity_id=kw.get("entity_id", department_id), status="SENT")
     db.session.add(row)
     return row
 

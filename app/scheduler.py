@@ -205,6 +205,64 @@ def job_whatsapp_queue(app):
     whatsapp.process_queue(limit=20)
     from . import sms as sms_engine
     sms_engine.process_sms_queue(limit=30)
+    # v2 push queue — free, works closed like alarm, cost saver
+    try:
+        from . import push as push_engine
+        push_engine.process_push_queue(limit=30)
+    except Exception:
+        pass
+
+def job_queue_estimator(app):
+    """Update queue estimates from closed JourneySegments — free AI-like logic."""
+    try:
+        from .models import JourneySegment
+        from . import queue_estimator
+        # Find recently closed segments not yet used for estimate (last 1h)
+        cutoff = now_naive() - timedelta(hours=1)
+        segs = db.session.query(JourneySegment).filter(
+            JourneySegment.ended_at.isnot(None),
+            JourneySegment.seconds.isnot(None),
+            JourneySegment.ended_at >= cutoff
+        ).limit(200).all()
+        for seg in segs:
+            queue_estimator.update_estimate_from_segment(seg)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+def job_personal_tv_updater(app):
+    """Keep PersonalTvSession live — update position/wait from tickets/intakes/visits."""
+    try:
+        from .models_v2 import PersonalTvSession
+        from . import personal_tv as ptv
+        # Update sessions seen in last 2h that are not DONE
+        cutoff = now_naive() - timedelta(hours=2)
+        sessions = db.session.query(PersonalTvSession).filter(
+            PersonalTvSession.updated_at >= cutoff,
+            PersonalTvSession.current_stage.notin_(["DONE", "CANCELLED"])
+        ).limit(100).all()
+        for sess in sessions:
+            try:
+                if sess.ticket_id:
+                    from .models import QueueTicket
+                    ticket = db.session.get(QueueTicket, sess.ticket_id)
+                    if ticket:
+                        ptv.update_session_from_ticket(sess, ticket)
+                if sess.intake_id:
+                    from .models import ReceptionIntake
+                    intake = db.session.get(ReceptionIntake, sess.intake_id)
+                    if intake:
+                        ptv.update_session_from_intake(sess, intake)
+                if sess.visit_id:
+                    from .models import PatientVisit
+                    visit = db.session.get(PatientVisit, sess.visit_id)
+                    if visit:
+                        ptv.update_session_from_visit(sess, visit)
+            except Exception:
+                continue
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def job_nightly_backup(app):
@@ -326,9 +384,10 @@ def job_patient_flow(app):
             db.session.rollback()
 
 
-# ------------------------------------------------------------------ tick
+# ------------------------------------------------------------------ tick v2 — push + queue estimator + personal TV
 JOB_SEQUENCE = (job_duty_reminders, job_overdue_inspection, job_complaint_sla,
-                job_corrective_actions, job_whatsapp_queue, job_patient_flow,
+                job_corrective_actions, job_whatsapp_queue, job_queue_estimator,
+                job_personal_tv_updater, job_patient_flow,
                 job_retention_purge)
 
 

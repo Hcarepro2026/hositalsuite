@@ -29,9 +29,11 @@ def _good_form(**over):
 class _Form(dict):
     """Mimics a Werkzeug MultiDict closely enough for clean_form."""
 
-    def __init__(self, data, assistance=None):
+    def __init__(self, data, assistance=None, assistance_consent=None):
         super().__init__(data)
         self._assistance = assistance or []
+        if assistance_consent:
+            self["assistance_consent"] = assistance_consent
 
     def getlist(self, key):
         return self._assistance if key == "assistance" else []
@@ -63,15 +65,15 @@ def test_a_stated_age_is_accepted_without_inventing_a_birthday(app, seeded):
 
 
 def test_special_needs_are_captured_at_reception(app, seeded):
-    form = _Form(dict(_good_form()), assistance=["WHEELCHAIR", "HEARING"])
+    form = _Form(dict(_good_form()), assistance=["WHEELCHAIR", "HEARING"], assistance_consent="1")
     values, errors = reception.clean_form(form)
-    assert not errors
+    assert not errors, errors
     assert "WHEELCHAIR" in values["assistance"]
     assert "HEARING" in values["assistance"]
 
 
 def test_rubbish_assistance_codes_are_ignored(app, seeded):
-    form = _Form(dict(_good_form()), assistance=["WHEELCHAIR", "'; DROP TABLE--"])
+    form = _Form(dict(_good_form()), assistance=["WHEELCHAIR", "'; DROP TABLE--"], assistance_consent="1")
     values, _ = reception.clean_form(form)
     assert values["assistance"] == "WHEELCHAIR"
 
@@ -106,7 +108,7 @@ def test_the_walk_runs_reception_to_triage(app, seeded, client):
 def test_folder_values_carry_everything_so_nothing_is_asked_twice(app, seeded):
     """The whole point of Reception: HIMS must not re-ask the patient."""
     with app.app_context():
-        form = _Form(dict(_good_form()), assistance=["WHEELCHAIR"])
+        form = _Form(dict(_good_form()), assistance=["WHEELCHAIR"], assistance_consent="1")
         values, _ = reception.clean_form(form)
         intake = reception.create_intake(seeded["org"], values)
         db.session.commit()
@@ -142,7 +144,7 @@ def test_arrival_is_announced_and_special_needs_get_their_own_urgent_call(app, s
     """A wheelchair request buried inside a routine line is a request nobody acts on."""
     from app.models import AppNotification
     with app.app_context():
-        form = _Form(dict(_good_form()), assistance=["WHEELCHAIR"])
+        form = _Form(dict(_good_form()), assistance=["WHEELCHAIR"], assistance_consent="1")
         values, _ = reception.clean_form(form)
         intake = reception.create_intake(seeded["org"], values)
         reception.announce_arrival(intake)
@@ -226,6 +228,7 @@ def _post_new(client, **over):
         "nok_phone": "08039876543", "nok_relationship": "Husband",
         "payer_type": "LAHSMA", "payer_number": "LAS/2026/771",
         "date_of_birth": "", "preferred_lang": "yo", "assistance": "WHEELCHAIR",
+        "assistance_consent": "1",
         "care_note": "Travels from Ikorodu", "needs_blood_sugar": "1",
     }
     data.update(over)

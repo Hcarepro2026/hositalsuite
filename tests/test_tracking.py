@@ -358,13 +358,15 @@ def test_uneven_doctor_load_produces_a_suggestion(app, seeded):
         free.set_password("Passw0rd!x")
         db.session.add_all([busy, free])
         db.session.flush()
+        # Use now_naive().date() not date.today() — timezone safe (Lagos vs UTC)
+        duty_day = now_naive().date()
         for u in (busy, free):
-            db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+            db.session.add(RosterEntry(org_id=org_id, duty_date=duty_day,
                                        user_id=u.id, kind="DUTY", shift="DAY",
                                        scope="DEPARTMENT"))
         db.session.flush()
-        triage.open_session(org_id, busy, "OPD", "Room 1")
-        triage.open_session(org_id, free, "OPD", "Room 2")
+        triage.open_session(org_id, busy, "OPD", "Room 1", day=duty_day)
+        triage.open_session(org_id, free, "OPD", "Room 2", day=duty_day)
         for i in range(4):
             p = _patient(org_id, f"Load{i}", "X")
             v = _visit(org_id, p)

@@ -732,6 +732,28 @@
     }
   };
 
+  /* ------------------------------------------------ feature phone / future phone detection */
+  window.hmsFeaturePhoneCheck = function(){
+    try{
+      var ua = (navigator.userAgent||'').toLowerCase();
+      var isFeature = /kaios|nokia|opera mini|opera mobi|ucbrowser|uc browser|j2me|midp|alcatel|micromax|itel|tecno/.test(ua);
+      var noFetch = typeof fetch === 'undefined';
+      var noPromise = typeof Promise === 'undefined';
+      var smallScreen = window.screen && window.screen.width < 320;
+      if(isFeature || noFetch || noPromise){
+        var banner = document.getElementById('feature-phone-banner');
+        if(banner) banner.style.display='block';
+      }
+      // Also detect if push not supported — show provision note
+      if(window.hmsPush && !window.hmsPush.isSupported()){
+        var banner2 = document.getElementById('feature-phone-banner');
+        if(banner2) banner2.style.display='block';
+      }
+    }catch(e){}
+  };
+  // Auto-run on load for all browsers
+  try{ window.hmsFeaturePhoneCheck(); }catch(e){}
+
   /* ------------------------------------------------ draft autosave for inspection form */
   window.hmsDraft = function (form, key) {
     if (!form) return;

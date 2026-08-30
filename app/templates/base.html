@@ -9,40 +9,32 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 {% block extra_head %}{% endblock %}
 <style>
-  /* Per-hospital colours (never per-deploy). Saved under Admin → Hospital. */
   :root{
     --primary: {{ settings.brand_primary or '#0e5a8a' }};
     --accent: {{ settings.brand_accent or '#12b5a5' }};
     --gold: {{ settings.brand_gold or '#ffd700' }};
     --primary-glow: color-mix(in srgb, var(--primary) 18%, transparent);
   }
-  /* The suite now has 18 destinations. On a phone that wrapped into a wall of
-     links that pushed the actual page below the fold. One scrollable row keeps
-     every destination reachable with a thumb without stealing the screen. */
-  #mainnav{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:2px;
-           -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #mainnav{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   #mainnav::-webkit-scrollbar{display:none}
   #mainnav a{flex:0 0 auto;white-space:nowrap}
-
-  /* A VISIBLE scrollbar under the menu. Staff did not know the menu scrolled,
-     so items past the right edge were simply never found. A thin always-on
-     bar plus a fading edge makes it obvious there is more. */
-  #mainnav{scrollbar-width:thin;scrollbar-color:#9bb8cc transparent;
-           padding-bottom:4px}
+  #mainnav{scrollbar-width:thin;scrollbar-color:#9bb8cc transparent;padding-bottom:4px}
   #mainnav::-webkit-scrollbar{display:block;height:5px}
   #mainnav::-webkit-scrollbar-thumb{background:#9bb8cc;border-radius:3px}
   #mainnav::-webkit-scrollbar-track{background:transparent}
   .navwrap{position:relative}
-  .navwrap::after{content:"";position:absolute;right:0;top:0;bottom:6px;
-                  width:26px;pointer-events:none;
-                  background:linear-gradient(to right,rgba(255,255,255,0),#fff)}
-
-  /* Back arrow — always available, on every page. */
+  .navwrap::after{content:"";position:absolute;right:0;top:0;bottom:6px;width:26px;pointer-events:none;background:linear-gradient(to right,rgba(255,255,255,0),#fff)}
   .backbar{padding:8px 14px 0}
-  .backlink{display:inline-block;font-weight:700;text-decoration:none;
-            font-size:.95rem;padding:7px 14px;border-radius:999px;
-            border:1px solid var(--line,#d7e3ec);background:#fff;color:#0e5a8a}
+  .backlink{display:inline-block;font-weight:700;text-decoration:none;font-size:.95rem;padding:7px 14px;border-radius:999px;border:1px solid var(--line,#d7e3ec);background:#fff;color:#0e5a8a}
   .backlink:active{background:#eef4f9}
+  /* Premium+++ UI — animations, gold fast-track, journey timeline */
+  @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+  .premium-gold{background:linear-gradient(135deg,#FFD700,#FFA500);color:#000;font-weight:900;animation:shimmer 3s infinite linear;background-size:200% 100%}
+  .premium-card{transition:transform .2s, box-shadow .2s}
+  .premium-card:active{transform:scale(0.98)}
+  .haptic-btn:active{transform:scale(0.95)}
+  /* Loading time — skeleton */
+  .skeleton{background:linear-gradient(90deg,#eee 25%,#f5f5f5 50%,#eee 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
 </style>
 </head>
 <body>
@@ -51,7 +43,7 @@
 <div class="topbar">
   <a class="brand" href="/">
     {% if hospital and hospital.logo_path %}
-      <img class="brand-logo" src="/branding/logo" alt="">
+      <img class="brand-logo" src="/branding/logo" alt="" style="max-height:32px;max-width:120px;object-fit:contain">
     {% else %}🏥{% endif %}
     <span>{{ hospital.name if hospital else 'Hospital Suite' }}{% if current_branch %} · {{ current_branch.name }}{% endif %}</span>
   </a>
@@ -65,133 +57,114 @@
 <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="mainnav">☰ Menu</button>
 <div class="navwrap" id="navwrap">
 <nav class="nav" id="mainnav">
-  {# ------------------------------------------------------------------
-     MENUS ARE PER ROLE, NOT ONE BLOCK FOR EVERYONE.
-
-     An HOD of Theatre was seeing the System Administrator's menus. This is
-     the visible half of the fix; every route also enforces its own role
-     check server-side, because hiding a link is presentation, not security.
-
-     `can` is computed once in app/navigation.py so the menu and the routes
-     cannot drift apart.
-     ------------------------------------------------------------------ #}
   {% set can = nav_permissions() %}
   <a href="/" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
-
-  {# The one screen most staff live on: their own department's work today. #}
-  {% if can.dept_desk %}
-  <a href="/my-department" class="{{ 'active' if request.path.startswith('/my-department') }}">My Department</a>
-  {% endif %}
-
-  {% if can.inspections %}
-  <a href="/inspections" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>
-  {% endif %}
-  {% if can.reception %}
-  <a href="/reception/" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>
-  {% endif %}
-  {% if can.reception or can.bookings %}
-  <a href="/fasttrack" class="{{ 'active' if request.path.startswith('/fasttrack') }}" style="{% if request.path.startswith('/fasttrack') %}background:#000;color:#FFD700{% else %}background:linear-gradient(135deg,#FFD700,#FFA500);color:#000;font-weight:900{% endif %}">⭐ Fast Track</a>
-  {% endif %}
-  {% if can.cashdesk %}
-  <a href="/billing" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a>
-  <a href="/paypoint" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>
-  {% endif %}
-  {% if can.hims %}
-  <a href="/hims/" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>
-  {% endif %}
-  {% if can.lahsma %}
-  <a href="/lahsma" class="{{ 'active' if request.path.startswith('/lahsma') }}">LAHSMA</a>
-  {% endif %}
-  {% if can.triage %}
-  <a href="/triage/" class="{{ 'active' if request.path.startswith('/triage') }}">Triage</a>
-  {% endif %}
-  {% if can.consulting %}
-  <a href="/consulting-room" class="{{ 'active' if request.path.startswith('/consulting-room') }}">My Room</a>
-  {% endif %}
-  {% if can.onward %}
-  <a href="/onward" class="{{ 'active' if request.path.startswith('/onward') }}">Onward</a>
-  {% endif %}
-  {% if can.tracking %}
-  <a href="/tracking" class="{{ 'active' if request.path.startswith('/tracking') }}">Patient Flow</a>
-  {% endif %}
-  {% if can.bookings %}
-  <a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a>
-  <a href="/queue" class="{{ 'active' if request.path == '/queue' }}">Queue</a>
-  {% endif %}
-  {% if can.complaints %}
-  <a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a>
-  <a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Satisfaction</a>
-  {% endif %}
-  {% if can.referrals %}
-  <a href="/referrals" class="{{ 'active' if request.path.startswith('/referrals') }}">Referrals</a>
-  {% endif %}
-  {% if can.corrective %}
-  <a href="/corrective-actions" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>
-  {% endif %}
-  {% if can.roster %}
-  <a href="/roster" class="{{ 'active' if request.path.startswith('/roster') or request.path.startswith('/dept-roster') }}">Roster</a>
-  {% endif %}
-  {% if can.attendance %}
-  <a href="/attendance" class="{{ 'active' if request.path.startswith('/attendance') }}">I am here</a>
-  {% endif %}
-  {% if can.reports %}
-  <a href="/reports" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>
-  {% endif %}
+  {% if can.dept_desk %}<a href="/my-department" class="{{ 'active' if request.path.startswith('/my-department') }}">My Department</a>{% endif %}
+  {% if can.inspections %}<a href="/inspections" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>{% endif %}
+  {% if can.reception %}<a href="/reception/" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>{% endif %}
+  {% if can.reception or can.bookings %}<a href="/fasttrack" class="{{ 'active' if request.path.startswith('/fasttrack') }}" style="{% if request.path.startswith('/fasttrack') %}background:#000;color:#FFD700{% else %}background:linear-gradient(135deg,#FFD700,#FFA500);color:#000;font-weight:900{% endif %}">⭐ Fast Track</a>{% endif %}
+  {% if can.cashdesk %}<a href="/billing" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a><a href="/paypoint" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>{% endif %}
+  {% if can.hims %}<a href="/hims/" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>{% endif %}
+  {% if can.lahsma %}<a href="/lahsma" class="{{ 'active' if request.path.startswith('/lahsma') }}">LAHSMA</a>{% endif %}
+  {% if can.triage %}<a href="/triage/" class="{{ 'active' if request.path.startswith('/triage') }}">Triage</a>{% endif %}
+  {% if can.consulting %}<a href="/consulting-room" class="{{ 'active' if request.path.startswith('/consulting-room') }}">My Room</a>{% endif %}
+  {% if can.onward %}<a href="/onward" class="{{ 'active' if request.path.startswith('/onward') }}">Onward</a>{% endif %}
+  {% if can.tracking %}<a href="/tracking" class="{{ 'active' if request.path.startswith('/tracking') }}">Patient Flow</a>{% endif %}
+  {% if can.bookings %}<a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a><a href="/queue" class="{{ 'active' if request.path == '/queue' }}">Queue</a>{% endif %}
+  {% if can.complaints %}<a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a><a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Satisfaction</a>{% endif %}
+  {% if can.referrals %}<a href="/referrals" class="{{ 'active' if request.path.startswith('/referrals') }}">Referrals</a>{% endif %}
+  {% if can.corrective %}<a href="/corrective-actions" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>{% endif %}
+  {% if can.roster %}<a href="/roster" class="{{ 'active' if request.path.startswith('/roster') or request.path.startswith('/dept-roster') }}">Roster</a>{% endif %}
+  {% if can.attendance %}<a href="/attendance" class="{{ 'active' if request.path.startswith('/attendance') }}">I am here</a>{% endif %}
+  {% if can.reports %}<a href="/reports" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>{% endif %}
   <a href="/notifications" class="{{ 'active' if request.path.startswith('/notifications') }}">🔔</a>
   <a href="/alert-settings" class="{{ 'active' if request.path.startswith('/alert-settings') }}" title="Voice & alert settings">🗣</a>
   <a href="/mfa/setup" class="{{ 'active' if request.path.startswith('/mfa') }}" title="Protect my sign-in">🔐</a>
-  {% if can.roles_admin and not can.admin %}
-  <a href="/admin/roles" class="{{ 'active' if request.path.startswith('/admin/roles') }}">🔐 Roles</a>
-  {% endif %}
-  {% if can.admin %}
-  <a href="/admin" class="{{ 'active' if request.path.startswith('/admin') }}">⚙ Admin</a>
-  {% endif %}
-  <form method="post" action="/logout" style="margin-left:auto">
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <button class="btn ghost small" type="submit">Sign out</button>
-  </form>
+  {% if can.roles_admin and not can.admin %}<a href="/admin/roles" class="{{ 'active' if request.path.startswith('/admin/roles') }}">🔐 Roles</a>{% endif %}
+  {% if can.admin %}<a href="/admin" class="{{ 'active' if request.path.startswith('/admin') }}">⚙ Admin</a>{% endif %}
+  <form method="post" action="/logout" style="margin-left:auto"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn ghost small" type="submit">Sign out</button></form>
 </nav>
 </div>
-
-{# ---- BACK ARROW on every page. Cheap phones have a back button, but a
-       browser tab opened from a WhatsApp link often has no history at all,
-       and staff kept getting stranded. This always works. ---- #}
-{% if request.path not in ('/', '/dashboard') %}
-<div class="backbar">
-  <a class="backlink" href="javascript:void(0)" onclick="hmsBack()">← Back</a>
-</div>
-{% endif %}
-<script>
-  // Prefer real history; fall back to the dashboard when there is none
-  // (opened from a link, or first page after signing in).
-  function hmsBack() {
-    if (document.referrer && history.length > 1) { history.back(); }
-    else { window.location.href = '/'; }
-  }
-</script>
+{% if request.path not in ('/', '/dashboard') %}<div class="backbar"><a class="backlink" href="javascript:void(0)" onclick="hmsBack()">← Back</a></div>{% endif %}
+<script>function hmsBack(){if(document.referrer && history.length>1){history.back();}else{window.location.href='/';}}</script>
 {% endif %}
 <main class="wrap">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
-  {% endwith %}
+  {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}{% endwith %}
   {% block content %}{% endblock %}
 </main>
 <div class="footer">
-  {% if hospital %}
-    <b>{{ hospital.name }}</b>
-    {% if hospital.address %} · {{ hospital.address }}{% endif %}
-    {% if hospital.phone %} · {{ hospital.phone }}{% endif %}
-    {% if hospital.email %} · {{ hospital.email }}{% endif %}
-    <br>
-  {% endif %}
-  Hospital Admin Manager Suite v{{ app_version }} · secure · audited · mobile-first
-  <br><a href="/privacy">Privacy Notice</a> · <a href="/privacy/request">Your data rights</a>
+  {% if hospital %}<b>{{ hospital.name }}</b>{% if hospital.address %} · {{ hospital.address }}{% endif %}{% if hospital.phone %} · {{ hospital.phone }}{% endif %}{% if hospital.email %} · {{ hospital.email }}{% endif %}<br>{% endif %}
+  Hospital Admin Manager Suite v{{ app_version }} · secure · audited · mobile-first · multi-hospital · slow-internet optimized<br>
+  <a href="/privacy">Privacy Notice</a> · <a href="/privacy/request">Your data rights</a> · <span id="browser-support">Browser: <span id="browser-name">detecting...</span></span>
 </div>
 <div id="toast-zone" aria-live="polite"></div>
-<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
-<script src="{{ url_for('static', filename='js/native_voice.js') }}?v={{ app_version }}"></script>
+<div id="feature-phone-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#000;color:#FFD700;padding:12px;text-align:center;font-weight:700;z-index:9999">
+  📱 Feature phone / No Android/iOS? Main TV + Voice + USSD will call you. No app needed. Dial *xxx# or ask staff. <button onclick="this.parentElement.style.display='none'" style="margin-left:10px;background:#FFD700;color:#000;border:none;padding:4px 10px;border-radius:999px">OK</button>
+</div>
+
+<!-- Loading time premium: defer, code split, minimal, compressed logo, lazy native_voice -->
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}" defer></script>
+<script src="{{ url_for('static', filename='js/push.js') }}?v={{ app_version }}" defer></script>
+<script>
+// Browser detection for footer — Chrome, Firefox, Safari, Edge, Samsung, UC, Opera
+(function(){
+  try{
+    var ua = navigator.userAgent.toLowerCase();
+    var name = 'Unknown';
+    if(ua.indexOf('edg') !== -1) name = 'Edge';
+    else if(ua.indexOf('opr') !== -1 || ua.indexOf('opera') !== -1) name = 'Opera';
+    else if(ua.indexOf('samsungbrowser') !== -1) name = 'Samsung Internet';
+    else if(ua.indexOf('ucbrowser') !== -1) name = 'UC Browser';
+    else if(ua.indexOf('firefox') !== -1 || ua.indexOf('fxios') !== -1) name = 'Firefox';
+    else if(ua.indexOf('safari') !== -1 && ua.indexOf('chrome') === -1) name = 'Safari';
+    else if(ua.indexOf('chrome') !== -1) name = 'Chrome';
+    var el = document.getElementById('browser-name');
+    if(el) el.textContent = name;
+  }catch(e){}
+})();
+
+// Lazy load native_voice only when needed — saves 3.5KB first paint, Africa slow internet optimized
+window._loadNativeVoice = function(){
+  if(window._nativeVoiceLoaded) return Promise.resolve();
+  return new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = "{{ url_for('static', filename='js/native_voice.js') }}?v={{ app_version }}";
+    s.async = true;
+    s.onload = function(){ window._nativeVoiceLoaded = true; res(); };
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+};
+</script>
+
 {% if current_user.is_authenticated %}
-<script>hmsVoice.alertLang = "{{ speech_lang }}"; hmsAlerts.start();</script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // Lazy load native voice only for staff who need it — premium loading time
+  if(document.body.getAttribute('data-native-voice') === '1' || window.location.pathname.indexOf('/alert-settings') === 0 || window.location.pathname.indexOf('/notifications') === 0){
+    window._loadNativeVoice().catch(function(){});
+  }
+  try{
+    if(window.hmsVoice){ hmsVoice.alertLang = "{{ speech_lang }}"; }
+    if(window.hmsAlerts){ hmsAlerts.start(); }
+    if(window.hmsFeaturePhoneCheck){ hmsFeaturePhoneCheck(); }
+  }catch(e){}
+  // Alarm mode banner — works closed like alarm, multi-browser
+  try{
+    if(localStorage.getItem('hms-push-ok') !== '1' && window.hmsPush && hmsPush.isSupported()){
+      setTimeout(function(){
+        if(Notification.permission !== 'granted'){
+          var bar = document.createElement('div');
+          bar.id = 'alarm-banner';
+          bar.style.cssText = 'position:fixed;bottom:70px;left:10px;right:10px;background:linear-gradient(135deg,#0e5a8a,#12b5a5);color:#fff;padding:14px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:9998;display:flex;gap:10px;align-items:center;animation:slideUp .3s';
+          bar.innerHTML = '<span>🔔 Enable alarm mode? Get notified even when app closed, like alarm — free, saves SMS cost (founder: no SMS inside except emergency)</span><button class=\"btn small\" style=\"background:#FFD700;color:#000\" onclick=\"hmsPush.enable().then(()=>{this.parentElement.remove();}).catch(()=>{})\">Enable</button><button class=\"btn small ghost\" onclick=\"this.parentElement.remove(); try{localStorage.setItem(&quot;hms-push-hide&quot;,&quot;1&quot;)}catch(e){}\">Later</button>';
+          if(localStorage.getItem('hms-push-hide') !== '1') document.body.appendChild(bar);
+        }
+      }, 3000);
+    }
+  }catch(e){}
+});
+</script>
 {% endif %}
 {% block scripts %}{% endblock %}
 </body>

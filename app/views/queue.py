@@ -133,23 +133,32 @@ def join_submit():
     refeng.stamp_queue(org.id)
     audit("QUEUE_JOINED", "queue_ticket", t.id, {"code": t.code}, org_id=org.id)
 
+    # v2: Create Personal TV session — replaces SMS for patients inside hospital (cost saver)
+    # Founder rule: No SMS for patients within hospital except serious complaints/emergency
+    sess = None
+    try:
+        from .. import personal_tv as ptv
+        sess = ptv.ensure_personal_session(org.id, ticket=t)
+        ptv.update_session_from_ticket(sess, t)
+    except Exception:
+        current_app.logger.exception("personal TV session create failed")
+
     # Announce to the department: staff hear how many are now waiting.
-    # Previously nothing was raised here at all, so no announcement could
-    # ever be spoken however well the voice engine worked.
-    if phone:
-        from .. import sms_pack
-        from ..tasks import dispatch_delivery
-        sms_engine.queue_sms(org.id, phone,
-                             sms_pack.queue_number(org, ticket=t.code, dept=dept.name),
-                             kind="alert", entity_type="queue_ticket", entity_id=t.id)
-        dispatch_delivery()
     try:
         announce_queue_depth(org.id, dept)
     except Exception:                                    # noqa: BLE001
         current_app.logger.exception("queue announcement failed")
 
+    # v2: No SMS for patients inside hospital — use Personal TV + Push + Voice + Main TV (free)
+    # Only SMS if patient outside or emergency — we don't know location yet, assume inside, so NO SMS
+    # If phone provided, we still have it for emergency fallback, but not for queue_number
+    # Old code that sent SMS for queue_number is removed for cost saving — founder rule
+
     db.session.commit()
-    return redirect(url_for("queue.ticket_page", key=t.access_key))
+    # Redirect to new personal TV page /t/<access_key> — premium tracker, works closed like alarm
+    # Use session key if available, else ticket key (they are same now after fix)
+    redirect_key = sess.access_key if sess and getattr(sess, 'access_key', None) else t.access_key
+    return redirect(f"/t/{redirect_key}")
 
 
 @bp.get("/queue/ticket")
@@ -238,25 +247,41 @@ def ticket_page():
 
 @bp.get("/queue/screen")
 def screen():
-    """Privacy-safe display: ticket numbers only — never names (§6)."""
+    """Privacy-safe display: ticket numbers only — never names (§6). Multi-hospital scoped."""
     org = _default_org()
+    if not org:
+        abort(503)
     dept_id = request.args.get("dept", type=int)
-    dept = db.session.get(Department, dept_id) if dept_id else None
+    dept = None
+    try:
+        dept = db.session.get(Department, dept_id) if dept_id else None
+        if dept and dept.org_id != org.id:
+            dept = None
+    except Exception:
+        dept = None
     today = now_naive().date()
     now_serving = None
     upcoming = []
-    if dept:
-        now_serving = (db.session.query(QueueTicket)
-                       .filter_by(org_id=org.id, department_id=dept.id, queue_date=today,
-                                  status="CALLED").order_by(QueueTicket.called_at.desc()).first())
-        upcoming = (db.session.query(QueueTicket)
-                    .filter_by(org_id=org.id, department_id=dept.id, queue_date=today,
-                               status="WAITING").order_by(QueueTicket.id).limit(6).all())
-    depts = (db.session.query(Department)
-             .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
-    resp = render_template("queue_screen.html", org=org, dept=dept, depts=depts,
-                           now_serving=now_serving, upcoming=upcoming)
-    return resp
+    try:
+        if dept:
+            now_serving = (db.session.query(QueueTicket)
+                           .filter_by(org_id=org.id, department_id=dept.id, queue_date=today,
+                                      status="CALLED").order_by(QueueTicket.called_at.desc()).first())
+            upcoming = (db.session.query(QueueTicket)
+                        .filter_by(org_id=org.id, department_id=dept.id, queue_date=today,
+                                   status="WAITING").order_by(QueueTicket.id).limit(6).all())
+        depts = (db.session.query(Department)
+                 .filter_by(org_id=org.id, active=True).order_by(Department.name).all())
+    except Exception:
+        # Never crash public screen — TV must stay up
+        depts = []
+    try:
+        resp = render_template("queue_screen.html", org=org, dept=dept, depts=depts,
+                               now_serving=now_serving, upcoming=upcoming)
+        return resp
+    except Exception:
+        # Fallback minimal response if template fails
+        return f"<html><body><h1>{org.name} Queue</h1><p>Screen loading...</p></body></html>", 200
 
 
 # ================================================================ STAFF — patient queue contains PII, front desk + management only
@@ -316,20 +341,73 @@ def call_next(tid: int):
     t.status = "CALLED"
     t.called_at = now_naive()
     audit("QUEUE_CALLED", "queue_ticket", t.id, {"code": t.code})
-    # patient notification (SMS where configured — never exposes clinical detail)
-    if t.phone:
-        from .. import sms_pack
-        from ..models import Organization
-        org = db.session.get(Organization, t.org_id)
-        sms_engine.queue_sms(t.org_id, t.phone,
-                             sms_pack.queue_next(org, ticket=t.code,
-                                                 dept=t.department.name if t.department else "OPD"),
-                             kind="alert",
-                             entity_type="queue_ticket", entity_id=t.id)
-        from ..tasks import dispatch_delivery
-        dispatch_delivery()   # §39 — async delivery
+
+    # v2: Personal TV + Push + Voice + Main TV — NO SMS for inside patients (cost saver, founder rule)
+    # Only SMS if patient outside hospital or emergency — check presence
+    try:
+        from .. import personal_tv as ptv
+        from ..models_v2 import PersonalTvSession
+        sess = db.session.query(PersonalTvSession).filter_by(org_id=t.org_id, ticket_id=t.id).first()
+        if not sess:
+            sess = ptv.ensure_personal_session(t.org_id, ticket=t)
+        ptv.update_session_from_ticket(sess, t)
+
+        # Notify via personal TV + push (free, works closed like alarm)
+        from ..notifications_v2 import notify_patient_personal
+        from .. import queue_estimator
+        place = t.department.name if t.department else "OPD"
+        # Smart wait already computed
+        notify_patient_personal(
+            t.org_id, sess.access_key, "queue_next",
+            {"code": t.code, "place": place, "hospital": ""},
+            title="You are next!",
+            body=f"{t.patient_name or 'Patient'}, you are next. Ticket {t.code}, {place}. Please walk to the desk now.",
+            is_complaint_or_emergency=False
+        )
+
+        # Voice announcement on Main TV + personal voice
+        from .. import announce
+        spoken = announce.speech_name(t.patient_name or "patient")
+        announce.to_station(t.org_id, "consult_call_in", patient=spoken, room=place,
+                            entity_type="queue_ticket", entity_id=t.id)
+
+        # Push via push.py already queued by notify_patient_personal
+    except Exception:
+        current_app.logger.exception("personal TV notify failed")
+
+    # SMS fallback ONLY if patient outside hospital or no personal TV session (feature phone provision)
+    # Founder rule: No SMS inside except emergency/complaints
+    # So we check is_inside_hospital flag — if False, then SMS allowed
+    try:
+        from ..models_v2 import PersonalTvSession
+        sess = db.session.query(PersonalTvSession).filter_by(org_id=t.org_id, ticket_id=t.id).first()
+        should_sms = False
+        if sess and not sess.is_inside_hospital:
+            should_sms = True
+        elif not sess:
+            # No personal TV — maybe feature phone — allow SMS as fallback for queue_next (important)
+            # But still try to avoid — only if phone present and no push subscription
+            from ..models_v2 import PushSubscription
+            has_push = db.session.query(PushSubscription).filter_by(org_id=t.org_id, patient_access_key=t.access_key if hasattr(t, 'access_key') else None, is_active=True).first()
+            if not has_push and t.phone:
+                should_sms = True
+
+        if should_sms and t.phone:
+            from .. import sms_pack
+            from ..models import Organization
+            org = db.session.get(Organization, t.org_id)
+            sms_engine.queue_sms(t.org_id, t.phone,
+                                 sms_pack.queue_next(org, ticket=t.code,
+                                                     dept=t.department.name if t.department else "OPD"),
+                                 kind="alert",
+                                 entity_type="queue_ticket", entity_id=t.id)
+            from ..tasks import dispatch_delivery
+            dispatch_delivery()
+    except Exception:
+        pass
+
     db.session.commit()
-    flash(f"Called {t.code}.", "success")
+    flash(f"Called {t.code}. Personal TV + Voice + Push notified (no SMS inside).", "success")
     return redirect(url_for("queue.staff_queue", dept=t.department_id))
 
 

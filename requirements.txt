@@ -30,3 +30,7 @@ sentry-sdk[flask]>=2.20.0,<3
 # Object storage for file uploads (expert review D1) — optional, only needed if STORAGE_BACKEND=s3
 boto3>=1.35.0,<2
 botocore>=1.35.0,<2
+# v2 Push — Web Push VAPID, works closed like alarm, free, cost saver
+pywebpush>=1.14.0,<2
+# Cryptography for VAPID keys
+cryptography>=45.0.0,<46

@@ -95,7 +95,7 @@
       <input type="text" name="booking_slots" value="{{ s.booking_slots | join(', ') }}"></div>
   </div>
   <label class="row mt" style="gap:6px"><input type="checkbox" name="booking_confirmation_sms" value="1"
-    {{ 'checked' if s.booking_confirmation_sms }} style="width:auto"> Send SMS confirmation to patient when booked</label>
+    {{ 'checked' if s.booking_confirmation_sms }} style="width:auto"> Send SMS confirmation to patient when booked (outside hospital, founder rule: no SMS inside except emergency)</label>
 
   <h2 class="mt">🔔 Reminder channels</h2>
   <div class="row">
@@ -111,6 +111,15 @@
       <input type="number" name="retention_days" min="30" value="{{ s.retention_days }}">
       <div class="hint">Records older than this are eligible for purge. Default 2190 (6 years).</div></div>
   </div>
+
+  <h2 class="mt" style="background: linear-gradient(135deg,#0e5a8a,#12b5a5);color:#fff;padding:8px 12px;border-radius:8px">🔔 Push Notifications — Per-Hospital VAPID (Multi-Hospital, Works Closed Like Alarm)</h2>
+  <p class="hint">Each hospital can have own VAPID keys so push shows hospital name/logo on phone home screen when app closed like alarm. If empty, global env VAPID_PUBLIC_KEY/PRIVATE/SUBJECT used. Generate via: <code>python -m py_vapid --gen</code> or <code>npx web-push generate-vapid-keys</code>. Cost saver: push is FREE vs SMS ₦3-4 each, 80-90% saving. Works on Chrome, Firefox, Edge, Samsung, Opera, Safari 16.4+ (PWA installed). Loading time: push payload &lt;1KB, slow internet optimized. Manifest uses /branding/logo/192,512,maskable,apple — per-tenant logo shows on phone home screen.</p>
+  <div class="grid cols3">
+    <div><label>VAPID Public Key (per-org)</label><input type="text" name="vapid_public_key" value="{{ s.vapid_public_key or '' }}" placeholder="Leave empty to use global"></div>
+    <div><label>VAPID Private Key (per-org)</label><input type="text" name="vapid_private_key" value="{{ s.vapid_private_key or '' }}" placeholder="Secret, per hospital"></div>
+    <div><label>VAPID Subject (mailto)</label><input type="text" name="vapid_subject" value="{{ s.vapid_subject or '' }}" placeholder="mailto:admin@hospital.local"></div>
+  </div>
+  <div class="hint">Test push at /alert-settings → Enable push → Test alarm. Icon is /branding/logo (hospital logo). Works closed like alarm, no SMS inside except emergency/complaint.</div>
 
   <h2 class="mt" style="background: linear-gradient(135deg,#FFD700,#FFA500);color:#000;padding:8px 12px;border-radius:8px">👑 Fast Track — Quick, Calm, Private</h2>
   <p class="hint">Fast Track is our premium service. Patients are seen quickly in a quiet, comfortable lounge. No long queue. For anyone who values time and comfort. Price is per hospital and can be changed anytime.</p>

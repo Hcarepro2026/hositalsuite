@@ -1,17 +1,28 @@
 import os
 import tempfile
+import pathlib
 
 # The suite must pass on BOTH engines: SQLite (developer laptop) and PostgreSQL
 # (what production actually runs on Supabase). Set TEST_DATABASE_URL to run the
 # whole suite against a real PostgreSQL server, e.g.
 #   TEST_DATABASE_URL=postgresql://hms:pw@127.0.0.1:5432/hms_test pytest -q
-# Without it we fall back to a temporary SQLite file.
+# Without it we fall back to a temporary SQLite file with unique name per process
+# to avoid WAL locking issues with new v2 tables.
 #
-# This used to be hard-coded to SQLite, which meant a "PostgreSQL run" silently
-# tested SQLite again and proved nothing.
+# This used to be hard-coded to single file, causing flaky failures.
+_test_db_path = os.path.join(tempfile.gettempdir(), f"hms_test_{os.getpid()}.db")
+# Clean any leftover
+try:
+    for suf in ("", "-wal", "-shm"):
+        p = pathlib.Path(_test_db_path + suf) if suf else pathlib.Path(_test_db_path)
+        if p.exists():
+            p.unlink()
+except Exception:
+    pass
+
 os.environ["DATABASE_URL"] = (
     os.environ.get("TEST_DATABASE_URL")
-    or "sqlite:///" + os.path.join(tempfile.gettempdir(), "hms_test.db")
+    or f"sqlite:///{_test_db_path}"
 )
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["DISABLE_SCHEDULER"] = "1"
@@ -40,7 +51,7 @@ def app():
 
 
 @pytest.fixture()
-def client(app):
+def client(app, seeded):
     from app.security import _limiter
     _limiter.hits.clear()
     return app.test_client()
@@ -53,6 +64,20 @@ def seeded(app):
         org = Organization(code="TEST", name="Test Hospital", phone="08030001111")
         db.session.add(org)
         db.session.flush()
+
+        # Seed builtin roles for this org — otherwise ADMIN_MANAGER has no Role row and scope falls back to DEPARTMENT with empty visible
+        try:
+            from app.roles import ensure_builtin_roles
+            ensure_builtin_roles(org.id)
+            db.session.flush()
+        except Exception:
+            db.session.rollback()
+            # retry after adding org
+            org = db.session.query(Organization).filter_by(code="TEST").first()
+            if org:
+                from app.roles import ensure_builtin_roles
+                ensure_builtin_roles(org.id)
+                db.session.flush()
 
         def mk(username, name, role, phone=None):
             u = User(org_id=org.id, username=username, name=name, role=role, phone=phone)

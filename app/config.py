@@ -45,7 +45,7 @@ def _connect_args() -> dict:
 
 
 class Config:
-    APP_VERSION = "1.7.22"
+    APP_VERSION = "1.8.0"
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-key-change-me")
     SQLALCHEMY_DATABASE_URI = _data_uri("app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -121,6 +121,17 @@ class Config:
     # Load/capacity testing only: scales rate-limit thresholds (default 1 = production).
     # Set high (e.g. 100000) during load tests to measure raw serving capacity.
     RATE_LIMIT_SCALE = int(os.environ.get("RATE_LIMIT_SCALE", "1") or 1)
+
+    # Push — Web Push VAPID for alarm-like notifications when closed (free, cost saver)
+    VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+    VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+    VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@hospital.local")
+
+    # Smart queue estimator — free AI-like logic
+    QUEUE_ESTIMATOR_ENABLED = os.environ.get("QUEUE_ESTIMATOR_ENABLED", "1") == "1"
+
+    # Cost saving: No SMS for patients inside hospital except emergency/complaints
+    PATIENT_SMS_INSIDE_HOSPITAL = os.environ.get("PATIENT_SMS_INSIDE_HOSPITAL", "0") == "1"  # default OFF
 
     # SMS provider interface (§38): sandbox | termii | twilio | disabled
     SMS_MODE = os.environ.get("SMS_MODE", "sandbox")

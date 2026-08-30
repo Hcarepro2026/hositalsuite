@@ -108,11 +108,18 @@ def new_save():
     tracking.safely(tracking.enter, current_user.org_id, "RECEPTION", intake_id=intake.id,
                    staff_id=current_user.id)
     reception.announce_arrival(intake)
+    # v2: personal TV session for this intake — premium tracker like Domino's
+    try:
+        from .. import personal_tv
+        sess = personal_tv.ensure_personal_session(current_user.org_id, intake=intake)
+        personal_tv.update_session_from_intake(sess)
+    except Exception:
+        pass
     audit("RECEPTION_INTAKE_CREATED", "reception_intake", intake.id,
           {"ref": intake.ref, "name": intake.full_name})
     db.session.commit()
     flash(f"{intake.full_name} taken in ({intake.ref}). "
-          f"Now send them to Billing.", "success")
+          f"Now send them to Billing. Personal TV: /t/{sess.access_key if 'sess' in locals() and sess else intake.ref}", "success")
     return redirect(url_for("reception.desk"))
 
 
@@ -134,6 +141,13 @@ def to_billing(intake_id: int):
     tracking.safely(tracking.enter, intake.org_id, "BILLING", intake_id=intake.id,
                    staff_id=current_user.id)
     reception.announce_stage(intake)
+    try:
+        from .. import personal_tv
+        sess = personal_tv.ensure_personal_session(intake.org_id, intake=intake)
+        personal_tv.update_session_from_intake(sess)
+        personal_tv.notify_patient_personal(sess, title="Moved to Billing", body=f"{intake.full_name} — now at Billing Unit")
+    except Exception:
+        pass
     audit("RECEPTION_SENT_TO_BILLING", "reception_intake", intake.id,
           {"ref": intake.ref})
     db.session.commit()
@@ -150,6 +164,13 @@ def to_payment(intake_id: int):
     tracking.safely(tracking.enter, intake.org_id, "PAYMENT", intake_id=intake.id,
                    staff_id=current_user.id)
     reception.announce_stage(intake)
+    try:
+        from .. import personal_tv
+        sess = personal_tv.ensure_personal_session(intake.org_id, intake=intake)
+        personal_tv.update_session_from_intake(sess)
+        personal_tv.notify_patient_personal(sess, title="Moved to Pay Point", body=f"{intake.full_name} — now at Megalex Pay Point")
+    except Exception:
+        pass
     audit("RECEPTION_SENT_TO_PAYMENT", "reception_intake", intake.id,
           {"ref": intake.ref})
     db.session.commit()
@@ -166,6 +187,13 @@ def mark_paid(intake_id: int):
     tracking.safely(tracking.enter, intake.org_id, "HIMS", intake_id=intake.id,
                    staff_id=current_user.id)
     reception.announce_stage(intake)
+    try:
+        from .. import personal_tv
+        sess = personal_tv.ensure_personal_session(intake.org_id, intake=intake)
+        personal_tv.update_session_from_intake(sess)
+        personal_tv.notify_patient_personal(sess, title="Payment Done", body=f"{intake.full_name} — payment recorded, going to HIMS")
+    except Exception:
+        pass
     audit("RECEPTION_PAYMENT_RECORDED", "reception_intake", intake.id,
           {"ref": intake.ref, "receipt": intake.payment_ref})
     db.session.commit()
@@ -248,12 +276,17 @@ def open_folder(intake_id: int):
                 setattr(patient, field, new_value)
         db.session.flush()
     else:
+        # v2 fix: values contains consent_at from hims.validate, so don't duplicate
+        clean_vals = dict(values)
+        clean_vals.pop("consent_at", None)
+        clean_vals.pop("created_by", None)
+        clean_vals.pop("branch_id", None)
         patient = Patient(org_id=current_user.org_id,
                           hospital_number=hims.next_hospital_number(org),
                           created_by=current_user.id, consent_at=now_naive(),
                           branch_id=getattr(current_user, "branch_id", None)
                           or getattr(intake, "branch_id", None),
-                          **values)
+                          **clean_vals)
         db.session.add(patient)
         try:
             db.session.flush()
@@ -266,7 +299,7 @@ def open_folder(intake_id: int):
                               consent_at=now_naive(),
                               branch_id=getattr(current_user, "branch_id", None)
                               or getattr(intake, "branch_id", None),
-                              **values)
+                              **clean_vals)
             db.session.add(patient)
             db.session.flush()
 
@@ -304,6 +337,15 @@ def open_folder(intake_id: int):
                    staff_id=current_user.id)
     reception.advance(intake, "REGISTERED")
     reception.announce_stage(intake)
+    # v2 personal TV — now linked to visit
+    try:
+        from .. import personal_tv
+        sess = personal_tv.ensure_personal_session(current_user.org_id, intake=intake, visit=visit)
+        personal_tv.update_session_from_intake(sess)
+        personal_tv.update_session_from_visit(sess)
+        personal_tv.notify_patient_personal(sess, title="Folder Opened", body=f"{patient.full_name} — folder {patient.hospital_number}, going to Triage")
+    except Exception:
+        pass
     audit("PATIENT_FOLDER_OPENED", "patient", patient.id,
           {"intake": intake.ref, "number": patient.hospital_number,
            "name": patient.full_name, "via": "reception"})

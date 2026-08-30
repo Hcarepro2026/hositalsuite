@@ -627,7 +627,12 @@ ONWARD_TARGET_MINUTES = {
 
 
 def _avg_for_stage(org_id, stage_code: str, days: int = 14) -> int:
-    """Real average for this stage if reliable, else target."""
+    """Real average for this stage if reliable, else target — delegates to smart estimator v2."""
+    try:
+        from . import queue_estimator as qe
+        return qe.get_historical_avg(org_id, stage_code)
+    except Exception:
+        pass
     try:
         perf = stage_performance(org_id, days)
         for s in perf:
@@ -639,13 +644,18 @@ def _avg_for_stage(org_id, stage_code: str, days: int = 14) -> int:
 
 
 def estimate_wait_minutes(org_id, *, stage: str, position: int = 0, is_fast_track: bool = False) -> int:
-    """How many minutes before this patient is seen at this stage.
+    """Smart adaptive wait — Little's Law + EMA + load factor + staff availability.
 
-    position = number of patients ahead in same queue.
-    Fast-track halves the wait (priority lane).
+    Uses queue_estimator v2 if available — free AI-like logic, considers reception,
+    billing, megalex, lahsma, hims, triage, doctor availability, onward.
+    Falls back to simple calc for backward compat.
     """
+    try:
+        from . import queue_estimator as qe
+        return qe.estimate_wait_minutes(org_id, stage, position=position, is_fast_track=is_fast_track)
+    except Exception:
+        pass
     base = _avg_for_stage(org_id, stage)
-    # Queue ahead * average per patient (conservative: 70% of stage time is per patient)
     per_patient = max(5, int(base * 0.7))
     estimated = position * per_patient + int(base * 0.3)
     if is_fast_track:
@@ -654,17 +664,17 @@ def estimate_wait_minutes(org_id, *, stage: str, position: int = 0, is_fast_trac
 
 
 def estimate_remaining_journey(org_id, visit) -> dict:
-    """Total remaining minutes for this visit to finish.
-
-    Walks through remaining stages based on visit.status.
-    Returns {total, stages: [{stage, minutes, label}], fast_track}
-    """
+    """Smart remaining journey — uses queue_estimator v2 adaptive logic."""
+    try:
+        from . import queue_estimator as qe
+        return qe.estimate_remaining_journey(org_id, visit)
+    except Exception:
+        pass
+    # Fallback old logic
     stages = []
     total = 0
     status = getattr(visit, "status", "") or ""
     is_fast = bool(getattr(visit, "is_fast_track", False))
-
-    # Map visit status to remaining stages
     if status in ("REGISTERED",):
         seq = ["TRIAGE", "WAIT_DOCTOR", "CONSULTATION"]
     elif status in ("TRIAGED",):
@@ -672,30 +682,25 @@ def estimate_remaining_journey(org_id, visit) -> dict:
     elif status in ("IN_CONSULTATION",):
         seq = ["CONSULTATION"]
     elif status in ("ONWARD",):
-        # Onward steps still pending
         try:
             pending = [s.destination for s in getattr(visit, "onward_steps", []) if getattr(s, "status", "") != "DONE"]
             for dest in pending:
-                key = dest
-                # Map onward destination to tracking stage
                 stage_map = {"LABORATORY": "LABORATORY", "PHARMACY": "PHARMACY",
                              "BILLING": "BILLING_OUT", "MEGALEX": "MEGALEX",
                              "LAHSMA": "LAHSMA", "EMERGENCY": "EMERGENCY"}
-                sc = stage_map.get(key, "PHARMACY")
-                mins = ONWARD_TARGET_MINUTES.get(key, 15)
+                sc = stage_map.get(dest, "PHARMACY")
+                mins = ONWARD_TARGET_MINUTES.get(dest, 15)
                 if is_fast:
                     mins = max(1, mins // 2)
-                stages.append({"stage": sc, "label": JOURNEY_STAGE_LABELS.get(sc, key), "minutes": mins})
+                stages.append({"stage": sc, "label": JOURNEY_STAGE_LABELS.get(sc, dest), "minutes": mins})
                 total += mins
             return {"total": total, "stages": stages, "fast_track": is_fast, "reason": getattr(visit, "fast_track_reason", None)}
         except Exception:
             seq = ["PHARMACY"]
     else:
         seq = []
-
     for sc in seq:
         mins = _avg_for_stage(org_id, sc)
-        # For wait stages, add queue position estimate
         if sc == "WAIT_DOCTOR":
             try:
                 from .triage import waiting as triage_waiting
@@ -708,23 +713,23 @@ def estimate_remaining_journey(org_id, visit) -> dict:
             mins = max(1, mins // 2)
         stages.append({"stage": sc, "label": JOURNEY_STAGE_LABELS.get(sc, sc), "minutes": mins})
         total += mins
-
-    # Add typical onward if not yet known (patient will likely need at least pharmacy)
-    # Only for early stages, show full journey estimate including typical onward
     if status in ("REGISTERED", "TRIAGED"):
-        # Assume lab + pharmacy typical
         for extra in ["LABORATORY", "PHARMACY"]:
             mins = _avg_for_stage(org_id, extra)
             if is_fast:
                 mins = max(1, mins // 2)
             stages.append({"stage": extra, "label": JOURNEY_STAGE_LABELS.get(extra, extra), "minutes": mins, "typical": True})
             total += mins
-
     return {"total": total, "stages": stages, "fast_track": is_fast, "reason": getattr(visit, "fast_track_reason", None)}
 
 
 def estimate_intake_journey(org_id, intake) -> dict:
-    """Estimate for a ReceptionIntake still at front desks."""
+    """Smart intake journey — uses queue_estimator v2."""
+    try:
+        from . import queue_estimator as qe
+        return qe.estimate_intake_journey(org_id, intake)
+    except Exception:
+        pass
     is_fast = bool(getattr(intake, "is_fast_track", False))
     reason = getattr(intake, "fast_track_reason", None)
     stage = getattr(intake, "stage", "RECEPTION")

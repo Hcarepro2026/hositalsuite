@@ -77,14 +77,72 @@ def hospital_save():
     org.address = (request.form.get("address") or "").strip() or None
     file = request.files.get("logo")
     if file and file.filename:
-        path, err = save_upload(file, "logos", org_id=org.id)
+        # Premium loading time: compress logo to max 512x512, <100KB, for fast home screen icon
+        # Multi-hospital: per-org logo stored as logos/org_<id>.png, used in manifest for PWA home screen
+        try:
+            from PIL import Image
+            import io as _io
+            file.seek(0)
+            raw = file.read()
+            img = Image.open(_io.BytesIO(raw))
+            # Convert to RGBA if needed, keep transparency
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA")
+            # Resize to max 512x512 preserving aspect, for PWA icons 192/512/maskable
+            w, h = img.size
+            max_size = 512
+            if max(w, h) > max_size:
+                ratio = max_size / max(w, h)
+                new_w = int(w * ratio)
+                new_h = int(h * ratio)
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+            # Compress: save as PNG optimized, <100KB
+            out_buf = _io.BytesIO()
+            img.save(out_buf, format="PNG", optimize=True, compress_level=9)
+            compressed = out_buf.getvalue()
+            # If still >100KB, try JPEG with white bg
+            if len(compressed) > 100*1024 and img.mode == "RGBA":
+                bg = Image.new("RGB", img.size, (255, 255, 255))
+                bg.paste(img, mask=img.split()[3])
+                out_buf = _io.BytesIO()
+                bg.save(out_buf, format="JPEG", quality=85, optimize=True)
+                compressed = out_buf.getvalue()
+            # Use compressed data for upload
+            file.seek(0)
+            # Create a file-like object with compressed data
+            class _CompressedFile:
+                def __init__(self, data, filename):
+                    self._data = data
+                    self.filename = filename
+                    self._pos = 0
+                def read(self, size=-1):
+                    if size == -1:
+                        d = self._data[self._pos:]
+                        self._pos = len(self._data)
+                        return d
+                    d = self._data[self._pos:self._pos+size]
+                    self._pos += len(d)
+                    return d
+                def seek(self, pos, whence=0):
+                    if whence == 0:
+                        self._pos = pos
+                    elif whence == 1:
+                        self._pos += pos
+                    elif whence == 2:
+                        self._pos = len(self._data) + pos
+                def tell(self):
+                    return self._pos
+            compressed_file = _CompressedFile(compressed, file.filename)
+            path, err = save_upload(compressed_file, "logos", org_id=org.id)
+        except Exception:
+            # Fallback to original if compression fails
+            file.seek(0)
+            path, err = save_upload(file, "logos", org_id=org.id)
+
         if err:
             flash(err, "error")
         else:
-            org.logo_path = path   # relative path so every page can serve it
-            # The logo is now displayed much larger, so warn if the uploaded
-            # file is too small to look sharp — a stretched 40px image looks
-            # unprofessional on a hospital's login screen.
+            org.logo_path = path
             try:
                 from .. import storage
                 from PIL import Image
@@ -92,12 +150,12 @@ def hospital_save():
                 data = storage.get(path)
                 if data:
                     w, h = Image.open(_io.BytesIO(data)).size
+                    size_kb = len(data)//1024
                     if min(w, h) < 200:
-                        flash(f"Logo uploaded, but it is small ({w}x{h} pixels) and may look "
-                              "blurry. For a sharp result upload a square image of at least "
-                              "400x400 pixels (PNG with a transparent background is best).",
-                              "info")
-            except Exception:                            # noqa: BLE001 - never block the save
+                        flash(f"Logo uploaded ({w}x{h}, {size_kb}KB), but small — may look blurry on phone home screen. Upload 400x400 PNG for sharp PWA icon.", "info")
+                    else:
+                        flash(f"Logo uploaded ({w}x{h}, {size_kb}KB) — will show on phone home screen when PWA installed. Optimized for fast loading.", "success")
+            except Exception:
                 current_app.logger.exception("logo dimension check failed")
     # Colours — per hospital, never per-deploy. Only accept #RRGGBB.
     import re as _re
@@ -907,6 +965,26 @@ def settings_save():
     services.set_setting(org_id, "fast_track_price_note", (f.get("fast_track_price_note") or "").strip()[:300])
     services.set_setting(org_id, "fast_track_enabled", bool(f.get("fast_track_enabled")))
     services.set_setting(org_id, "fast_track_booking_requires_payment", bool(f.get("fast_track_booking_requires_payment")))
+    # ---- Per-org VAPID for push — multi-hospital, shows hospital name/logo on phone home screen
+    # If set per org, overrides global env VAPID_PUBLIC_KEY/PRIVATE/SUBJECT
+    # Founder rule: Main App Logo upload shown on phone home screen + push works closed like alarm
+    vapid_pub = (f.get("vapid_public_key") or "").strip()
+    vapid_priv = (f.get("vapid_private_key") or "").strip()
+    vapid_subj = (f.get("vapid_subject") or "").strip()
+    # Only save if provided, allow clearing by empty? Save if length >10 to avoid accidental clear
+    if vapid_pub and len(vapid_pub) > 20:
+        services.set_setting(org_id, "vapid_public_key", vapid_pub)
+    elif f.get("vapid_public_key") == "":
+        # Explicit clear
+        services.set_setting(org_id, "vapid_public_key", "")
+    if vapid_priv and len(vapid_priv) > 20:
+        services.set_setting(org_id, "vapid_private_key", vapid_priv)
+    elif f.get("vapid_private_key") == "":
+        services.set_setting(org_id, "vapid_private_key", "")
+    if vapid_subj:
+        services.set_setting(org_id, "vapid_subject", vapid_subj)
+    elif f.get("vapid_subject") == "":
+        services.set_setting(org_id, "vapid_subject", "")
     # ---- Staff clock-in fence (per hospital)
     from .. import attendance as att
     mode = (f.get("attendance_mode") or "off").strip()
