@@ -476,7 +476,9 @@ def dashboard():
                 try:
                     flow = {"head": _tracking.headline(org_id, 7), "advice": _tracking.suggest_allocation(org_id)[:2]}
                 except Exception:
-                    flow = {"head": {"total_visits": 0, "avg_total_minutes": 0}, "advice": []}
+                    flow = {"head": {"median_journey": None, "average_journey": None, "longest_journey": None,
+                                     "patients_completed": 0, "in_hospital_now": 0, "stuck_now": 0,
+                                     "reliable": False, "days": 7}, "advice": []}
         except Exception:
             current_app.logger.exception("patient-flow summary unavailable")
             flow = None
