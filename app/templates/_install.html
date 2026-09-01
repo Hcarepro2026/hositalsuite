@@ -1,18 +1,26 @@
-<div class="install-bar" id="install-bar" hidden>
-  <div>
-    <b>Put this hospital on your phone</b>
-    <div class="hint" style="margin:0;color:inherit;opacity:.85">One tap. Opens like an app. No Play Store.</div>
+<div class="install-bar" id="install-bar" hidden style="background:linear-gradient(135deg,#0e5a8a,#12b5a5);color:#fff;padding:14px 16px;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.25);margin:12px;display:flex;gap:12px;align-items:center">
+  <div style="flex:1">
+    <b style="display:block;font-size:1rem">📲 Put {{ hospital.name if hospital else 'this hospital' }} on your phone — faster, works offline</b>
+    <div class="hint" style="margin:4px 0 0;color:#e0f2f1;opacity:1;font-size:.82rem;line-height:1.35">One tap. Hospital logo on home screen like WhatsApp. Opens fast even on slow internet. Works offline. Free alarm when it's your turn — even when app closed. No Play Store needed.</div>
   </div>
-  <button type="button" class="btn small" id="install-btn">Add</button>
-  <button type="button" class="install-x" id="install-dismiss" aria-label="Hide">×</button>
+  <button type="button" class="btn small" id="install-btn" style="background:#FFD700;color:#000;font-weight:900;min-height:40px;padding:8px 16px;border-radius:999px;white-space:nowrap">Add to Phone</button>
+  <button type="button" class="install-x" id="install-dismiss" aria-label="Hide" style="background:rgba(255,255,255,0.2);color:#fff;border:none;width:28px;height:28px;border-radius:50%;font-size:1.2rem">×</button>
 </div>
-<div class="install-how" id="install-how" hidden>
-  <b>Add to your home screen</b>
-  <ol>
-    <li>Tap the Chrome menu (three dots).</li>
-    <li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li>
-    <li>Tap Add. The hospital icon appears with your other apps.</li>
+<div class="install-how" id="install-how" hidden style="background:#fff;padding:16px;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.2);margin:12px;border:1px solid #dbe4ec">
+  <b style="font-size:1.05rem">📲 Add to your home screen — benefits:</b>
+  <ul style="margin:10px 0 0;padding-left:18px;font-size:.88rem;line-height:1.5;color:#334155">
+    <li><b>Faster</b> — opens in 1 second, even on slow internet</li>
+    <li><b>Hospital logo</b> on home screen like WhatsApp</li>
+    <li><b>Works offline</b> — shows your queue even without internet</li>
+    <li><b>Free alarm</b> — buzzes even when app closed, like alarm, saves SMS cost</li>
+    <li>No Play Store, no update needed</li>
+  </ul>
+  <ol style="margin:12px 0 0;padding-left:18px;font-size:.85rem;line-height:1.5">
+    <li>Tap Chrome menu (three dots top right)</li>
+    <li>Tap <b>Add to Home screen</b> or <b>Install app</b></li>
+    <li>Tap Add. Hospital icon appears with your other apps.</li>
+    <li>iPhone: Safari → Share (square arrow) → Add to Home Screen</li>
   </ol>
-  <button type="button" class="btn small" id="install-how-ok">Got it</button>
+  <button type="button" class="btn small" id="install-how-ok" style="margin-top:12px;background:#0e5a8a;color:#fff">Got it, thanks</button>
 </div>
 <script src="{{ url_for('static', filename='js/pwa.js') }}?v={{ app_version }}" defer></script>

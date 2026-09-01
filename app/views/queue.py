@@ -81,11 +81,20 @@ def join_page():
     if not org:
         abort(503)
     from ..patient_places import public_departments
-    depts = public_departments(org.id)
+    # Founder: Link queue only to Reception + Fast Track, show as Patient on Queue with priority for today's date only
+    is_emergency = request.args.get("emergency") == "1"
+    if is_emergency:
+        # Emergency goes straight to Accident & Emergency
+        depts = public_departments(org.id, only_reception=False)
+        # Pre-select Accident & Emergency if exists
+        emergency_dept = next((d for d in depts if "emergency" in d.name.lower() or "accident" in d.name.lower()), None)
+        pre = emergency_dept.id if emergency_dept else None
+    else:
+        depts = public_departments(org.id, only_reception=True)
+        pre = request.args.get("dept", type=int)
     db.session.commit()
-    pre = request.args.get("dept", type=int)
     loc = (request.args.get("loc") or "").strip().upper()
-    return render_template("queue_join.html", org=org, depts=depts, pre=pre, loc=loc)
+    return render_template("queue_join.html", org=org, depts=depts, pre=pre, loc=loc, is_emergency=is_emergency)
 
 
 @bp.post("/queue/join")

@@ -133,6 +133,12 @@ const SHELL = [
   "/my-visit/offline",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",
+  "/static/icons/icon-maskable.png",
+  "/branding/logo",
+  "/branding/logo/192",
+  "/branding/logo/512",
+  "/branding/logo/maskable",
+  "/branding/logo/apple",
   "/static/css/app.css",
   "/static/js/app.js"
 ];

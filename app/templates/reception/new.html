@@ -146,16 +146,12 @@
         👑 Fast Track — Quick, calm, private — seen first
       </label>
       <p class="hint" style="margin:6px 0 8px">Tick if patient chose Fast Track premium — quick, calm, private. Seen first at every desk. Voice will announce them.</p>
-      <label>Priority reason</label>
+      <label>Fast Track reason</label>
       <select name="fast_track_reason">
-        <option value="">— Auto-detect —</option>
-        <option value="PREMIUM" selected>Premium — Quick and comfortable</option>
-        <option value="ELDERLY_DISABLED" style="display:none" {{ 'selected' if form.get('fast_track_reason')=='ELDERLY' }}>Elderly (60+)</option>
-        <option value="PREGNANT" {{ 'selected' if form.get('fast_track_reason')=='PREGNANT' }}>Pregnant / Antenatal</option>
-        <option value="CHILD" {{ 'selected' if form.get('fast_track_reason')=='CHILD' }}>Child under 5</option>
-        <option value="WHEELCHAIR" {{ 'selected' if form.get('fast_track_reason')=='WHEELCHAIR' }}>Wheelchair / Mobility</option>
-        <option value="PRIORITY" {{ 'selected' if form.get('fast_track_reason')=='PRIORITY' }}>Other priority</option>
+        <option value="PREMIUM" selected>Premium — Fast service, comfortable lounge</option>
+        <option value="BUSINESS">Busy — I have little time today</option>
       </select>
+      <p class="hint" style="margin-top:8px">Elderly 60+, pregnant, child under 5, wheelchair — seen first automatically via Priority Lane, no need for Fast Track. Tick assistance above and we prioritize with care.</p>
     </div>
   </div>
 
