@@ -34,7 +34,17 @@
   {% if is_emergency %}
   <div class="hero" style="background:linear-gradient(135deg,#fdecec,#fff3cd);border:2px solid #c62828">
     <h1 style="color:#8c1d1d">🚨 Emergency — Go to Accident & Emergency Now</h1>
-    <p style="color:#8c1d1d">Do not wait online. Go straight to Accident & Emergency Unit — open 24/7. Tell reception it's an emergency. You will be seen immediately. If you are outside hospital, call help desk below or go to nearest hospital. You can still get an emergency number below to show at desk.</p>
+    <p style="color:#8c1d1d">Do not wait online. Go straight to <b>Accident & Emergency Unit — open 24/7</b>. Tell reception it's an emergency. You will be seen immediately. If you are outside hospital, call help desk below or go to nearest hospital. You can still get an emergency number below to show at desk.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <a href="/chat?q=emergency" class="btn small" style="background:#fff;border:1px solid #c62828;color:#8c1d1d;border-radius:999px;padding:7px 12px;text-decoration:none;font-size:.82rem">💬 Directions to A&E</a>
+      {% if hospital and hospital.phone %}
+      <a href="tel:{{ hospital.phone | replace(' ', '') }}" class="btn small" style="background:#c62828;color:#fff;border-radius:999px;padding:7px 12px;text-decoration:none;font-size:.82rem;font-weight:900">📞 Call Help Desk — {{ hospital.phone }}</a>
+      {% else %}
+      <a href="#help-desk" onclick="document.querySelector('.help-desk')?.scrollIntoView({behavior:'smooth'});return false;" class="btn small secondary" style="border-radius:999px;padding:7px 12px;font-size:.82rem;text-decoration:none">📞 Help Desk</a>
+      {% endif %}
+      <button type="button" class="btn small" style="background:#fff3cd;border:1px solid #ffe69c;color:#664d03;border-radius:999px;padding:7px 12px;font-size:.8rem" onclick="try{if(window.hmsVoice&&hmsVoice.speak){hmsVoice.speak('Emergency — Go straight to Accident and Emergency now. It is open twenty four seven. Tell reception it is an emergency, you will be seen immediately. Do not wait online.');}}catch(e){}">🔊 Voice guidance</button>
+    </div>
+    <div style="margin-top:8px;font-size:.75rem;color:#8c1d1d">🔗 Linked to A&E · Help desk · Chatbot · Emergency number below → shows at desk</div>
   </div>
   {% else %}
   <div class="hero">
