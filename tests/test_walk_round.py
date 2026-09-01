@@ -2,7 +2,7 @@
 from app import scoring
 from app.inspection_areas import (AREA_KEYS, INSPECTION_AREAS,
                                   match_department)
-from app.models import Department, Inspection, InspectionScore, db
+from app.models import Department, Inspection, InspectionScore, db, now_naive
 from tests.conftest import csrf, login
 
 
