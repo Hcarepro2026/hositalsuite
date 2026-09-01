@@ -127,7 +127,7 @@ def manifest_response(org, settings: dict) -> Response:
 
 
 SW_JS = r"""/* Hospital Suite v2 — alarm-like, works closed, multi-browser, slow internet optimized, premium */
-const CACHE = "hs-shell-v2-__VERSION__";
+const CACHE = "hs-shell-__VERSION__";
 const SHELL = [
   "/offline",
   "/my-visit/offline",

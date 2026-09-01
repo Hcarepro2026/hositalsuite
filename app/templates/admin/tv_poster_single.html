@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}TV Poster {{ screen.code }}{% endblock %}
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
 @media print {
   .no-print { display:none !important; }
   body { background:white; }

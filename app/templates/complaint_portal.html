@@ -82,7 +82,7 @@
     <button class="btn big mt" type="submit" style="width:100%">{{ _('btn_complaint') }}</button>
   </form>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
   // Anonymous mode: the phone field becomes irrelevant, so stop the browser
   // demanding it and make the consent box unnecessary (nothing personal is kept).
   (function () {
@@ -115,7 +115,7 @@
   {% include "_help_desk.html" %}
 </main>
 <div class="footer">{{ _('no_account') }} · Hospital Admin Manager Suite · <a href="/privacy">Privacy</a></div>
-<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}" nonce="{{ csp_nonce }}"></script>
 {% include "_install.html" %}
 </body>
 </html>

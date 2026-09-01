@@ -181,7 +181,7 @@
   <a class="btn secondary" href="/reception/">Cancel</a>
 </form>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 async function lookupPatient(){
   const q = document.getElementById('returning-search').value.trim();
   if(!q){ alert('Type hospital number or phone first'); return; }

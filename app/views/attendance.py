@@ -127,13 +127,22 @@ def save_gate():
     v1.7.18: ADMIN_MANAGER only on duty TODAY can pin gate.
     """
     can = permissions_for(current_user)
-    if not (can.get("admin") or can.get("attendance_admin")):
-        abort(403)
-    # v1.7.18 extra: if ADMIN_MANAGER, must be on duty
-    if getattr(current_user, "role", "") == "ADMIN_MANAGER":
-        from ..security import is_admin_manager_on_duty
-        if not is_admin_manager_on_duty(current_user):
-            abort(403, description="Only on-duty Admin Manager can pin gate.")
+    # v1.7.18: only SUPER_ADMIN / system admin may pin gate; ADMIN_MANAGER on duty may; HOD may NOT
+    # attendance_admin allows viewing board & signing flagged, but NOT pinning gate
+    if not can.get("admin"):
+        # Allow ADMIN_MANAGER on duty even without admin (has attendance_admin)
+        if getattr(current_user, "role", "") == "ADMIN_MANAGER":
+            from ..security import is_admin_manager_on_duty
+            if not is_admin_manager_on_duty(current_user):
+                abort(403, description="Only on-duty Admin Manager can pin gate.")
+        else:
+            abort(403)
+    else:
+        # Even admin role ADMIN_MANAGER must be on duty for gate
+        if getattr(current_user, "role", "") == "ADMIN_MANAGER":
+            from ..security import is_admin_manager_on_duty
+            if not is_admin_manager_on_duty(current_user):
+                abort(403, description="Only on-duty Admin Manager can pin gate.")
     site = engine.site_for(current_user)
     fence = engine.save_gate(
         current_user.org_id,

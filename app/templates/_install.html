@@ -37,4 +37,4 @@
     </div>
   </div>
 </div>
-<script src="{{ url_for('static', filename='js/pwa.js') }}?v={{ app_version }}" defer></script>
+<script src="{{ url_for('static', filename='js/pwa.js') }}?v={{ app_version }}" defer nonce="{{ csp_nonce }}"></script>

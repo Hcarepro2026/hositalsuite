@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Notifications — Premium{% endblock %}
 {% block extra_head %}
-<style>
+<style nonce="{{ csp_nonce }}">
 .notif-center { max-width: 720px; margin: 0 auto; }
 .notif-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
 .notif-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid #ddd; background: #fff; cursor: pointer; white-space: nowrap; font-weight: 600; }
@@ -112,7 +112,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function filterNotifs(cat, btn){
   document.querySelectorAll(".notif-tab").forEach(function(b){b.classList.remove("active")});
   if(btn) btn.classList.add("active");

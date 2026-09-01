@@ -282,7 +282,7 @@ department, section and unit, and staff leave, all on this page. Leave now has r
 </div>
 {% endif %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function rosterScope(form){
   var v = form.scope.value;
   document.getElementById('pick-dept').style.display    = (v === 'ORG') ? 'none' : '';

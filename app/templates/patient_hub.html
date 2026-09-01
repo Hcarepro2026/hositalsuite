@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0e5a8a">
 <title>{{ _('tagline') }} — {{ org.name if org else 'Hospital' }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
-<style>
+<style nonce="{{ csp_nonce }}">
   .hub-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:10px}
   @media (min-width:620px){.hub-grid{grid-template-columns:1fr 1fr}}
   .hub-tile{display:flex;align-items:center;gap:14px;text-decoration:none;
@@ -194,7 +194,7 @@
   </div>
 </main>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   var tile = document.getElementById('share-tile');
   var box  = document.getElementById('share-box');

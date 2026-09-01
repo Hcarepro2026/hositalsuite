@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 {% include "_pwa_head.html" %}
 <title>Queue Display — {{ org.name if org else '' }}</title>
-<style>
+<style nonce="{{ csp_nonce }}">
   body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#0a4468;color:#fff}
   .bar{background:#083a58;padding:14px 22px;display:flex;justify-content:space-between;align-items:center}
   .bar b{font-size:1.15rem}
@@ -53,7 +53,7 @@
   <p class="muted">Screen refreshes automatically · Privacy-safe: ticket numbers only</p>
 </div>
 {% if now_serving %}
-<script>
+<script nonce="{{ csp_nonce }}">
 /* Zero-cost voice announcement via browser speech (§19) — falls back silently to text. */
 try {
   var n = document.getElementById('serving-num').textContent.trim();

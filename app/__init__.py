@@ -147,6 +147,9 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
     app.jinja_env.filters["mask_phone"] = mask_phone
     app.jinja_env.filters["first_name"] = first_name_only
     app.jinja_env.filters["privacy_initials"] = privacy_initials
+    # Templates like notifications.html use getattr/hasattr — expose them safely
+    app.jinja_env.globals["getattr"] = getattr
+    app.jinja_env.globals["hasattr"] = hasattr
 
     register_security_hooks(app)
 
@@ -330,13 +333,18 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                 _ = lambda x, **kw: x
                 langs = ["en"]
                 speech_lang = "en-NG"
+            try:
+                csp_nonce = getattr(g, "csp_nonce", "") or ""
+            except Exception:
+                csp_nonce = ""
             return dict(csrf_token=csrf_token, settings=bundle,
                         app_version=app.config.get("APP_VERSION", "1.8.0"),
                         _=_, lang=lang, langs=langs,
                         speech_lang=speech_lang, hospital=hospital,
                         current_branch=branch,
                         nav_permissions=nav_permissions,
-                        onboard_guide=bool(bundle.get("onboard_guide")))
+                        onboard_guide=bool(bundle.get("onboard_guide")),
+                        csp_nonce=csp_nonce)
         except Exception:
             # Ultimate fallback — never crash rendering
             try:
@@ -344,11 +352,16 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
                 ct = _ct
             except Exception:
                 ct = lambda: ""
+            try:
+                csp_nonce = getattr(g, "csp_nonce", "") or ""
+            except Exception:
+                csp_nonce = ""
             return dict(csrf_token=ct, settings={}, app_version="1.8.0",
                         _=lambda x, **kw: x, lang="en", langs=["en"],
                         speech_lang="en-NG", hospital=None,
                         current_branch=None,
-                        nav_permissions=lambda: {}, onboard_guide=False)
+                        nav_permissions=lambda: {}, onboard_guide=False,
+                        csp_nonce=csp_nonce)
 
     @app.errorhandler(404)
     def not_found(e):

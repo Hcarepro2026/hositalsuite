@@ -2,7 +2,7 @@
 {% block title %}Configuration{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<style>
+<style nonce="{{ csp_nonce }}">
   .fence-map{height:280px;border-radius:12px;border:1px solid #d7e3ec;margin:10px 0}
   .leaflet-container{font-family:inherit}
 </style>
@@ -191,9 +191,9 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
-<script src="{{ url_for('static', filename='js/fence-map.js') }}"></script>
-<script>
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/fence-map.js') }}" nonce="{{ csp_nonce }}"></script>
+<script nonce="{{ csp_nonce }}">
 if (window.hmsFenceMap) {
   window.hmsFenceMap.boot({
     latId: "cfg-lat", lngId: "cfg-lng", radId: "cfg-rad",
