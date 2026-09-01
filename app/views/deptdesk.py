@@ -85,11 +85,14 @@ def desk():
                 for k, v in grouped.items()]
     together.sort(key=lambda t: (-len(t["workers"]), t["label"]))
 
+    from ..models import default_work_for_dept
+    is_hod = getattr(current_user, "role", "") in ("HOD", "SUPER_ADMIN", "HEAD_ADMIN_HR") or getattr(current_user, "is_super", False)
     return render_template(
         "deptdesk/desk.html", dept=dept, flow=flow, effort=effort,
         together=together, mine=mine, kinds=WORK_KINDS,
         switchable=_switchable(), note=R.scope_note(current_user),
-        min_sample=deptwork.MIN_SAMPLE, now=now_naive())
+        min_sample=deptwork.MIN_SAMPLE, now=now_naive(),
+        default_work_for_dept=default_work_for_dept, is_hod=is_hod)
 
 
 # ------------------------------------------------------------------ teamwork
@@ -137,3 +140,58 @@ def done(cid: int):
     db.session.commit()
     flash("Marked as done. Your time on it has been recorded.", "success")
     return redirect(url_for("deptdesk.desk", dept=row.department_id or None))
+
+@bp.post("/claim/<int:cid>/edit")
+@R.require("dept_claim")
+def edit_claim(cid: int):
+    row = db.session.get(WorkClaim, cid)
+    if row is None or row.org_id != current_user.org_id:
+        abort(404)
+    if row.user_id != current_user.id and not R.has_permission(current_user, "dept_manage"):
+        abort(403)
+    new_kind = request.form.get("kind") or row.kind
+    new_note = (request.form.get("note") or "").strip()[:200]
+    if new_kind in WORK_KIND_LABELS:
+        row.kind = new_kind
+    row.note = new_note
+    audit("WORK_EDITED", "work_claim", row.id, {"kind": row.kind, "note": new_note})
+    db.session.commit()
+    flash(f"Updated work to '{WORK_KIND_LABELS.get(row.kind, row.kind)}'.", "success")
+    return redirect(url_for("deptdesk.desk", dept=row.department_id or None))
+
+
+@bp.post("/claim/<int:cid>/suspend")
+@R.require("dept_manage")
+def suspend_claim(cid: int):
+    row = db.session.get(WorkClaim, cid)
+    if row is None or row.org_id != current_user.org_id:
+        abort(404)
+    row.suspended = not row.suspended
+    if row.suspended:
+        from ..models import now_naive
+        row.suspended_at = now_naive()
+        row.suspended_by = current_user.id
+        audit("WORK_SUSPENDED", "work_claim", row.id, {"by": current_user.id})
+        flash(f"Suspended '{row.label}' — team will see it paused.", "info")
+    else:
+        row.suspended_at = None
+        row.suspended_by = None
+        audit("WORK_RESUMED", "work_claim", row.id, {})
+        flash(f"Resumed '{row.label}'.", "success")
+    db.session.commit()
+    return redirect(url_for("deptdesk.desk", dept=row.department_id or None))
+
+
+@bp.post("/claim/<int:cid>/delete")
+@R.require("dept_manage")
+def delete_claim(cid: int):
+    row = db.session.get(WorkClaim, cid)
+    if row is None or row.org_id != current_user.org_id:
+        abort(404)
+    dept_id = row.department_id
+    audit("WORK_DELETED", "work_claim", row.id, {"kind": row.kind, "user": row.user_id})
+    db.session.delete(row)
+    db.session.commit()
+    flash("Work entry deleted.", "info")
+    return redirect(url_for("deptdesk.desk", dept=dept_id or None))
+

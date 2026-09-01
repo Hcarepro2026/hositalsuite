@@ -460,19 +460,30 @@ def leave_list():
     """My leave requests + pending approvals for HOD/HR."""
     from ..models import LeaveRequest, LeaveBalance, now_naive
     org_id = current_user.org_id
-    # My requests
-    my_reqs = (db.session.query(LeaveRequest)
-               .filter_by(org_id=org_id, user_id=current_user.id)
-               .order_by(LeaveRequest.requested_at.desc()).limit(100).all())
-    # Pending for approval: if HOD/HR/SUPER_ADMIN, show all pending in visible depts
+    # My requests — resilient if table not yet migrated (avoid 500)
+    try:
+        my_reqs = (db.session.query(LeaveRequest)
+                   .filter_by(org_id=org_id, user_id=current_user.id)
+                   .order_by(LeaveRequest.requested_at.desc()).limit(100).all())
+    except Exception:
+        my_reqs = []
+        db.session.rollback()
     pending = []
-    if current_user.role in ("HOD", "HEAD_ADMIN_HR", "SUPER_ADMIN", "ADMIN_MANAGER") or getattr(current_user, "is_super", False):
-        q = db.session.query(LeaveRequest).filter_by(org_id=org_id, status="PENDING")
-        pending = q.order_by(LeaveRequest.requested_at.asc()).limit(100).all()
-    # Balances for current user this year
-    year = now_naive().date().year
-    balances = (db.session.query(LeaveBalance)
-                .filter_by(org_id=org_id, user_id=current_user.id, year=year).all())
+    try:
+        if current_user.role in ("HOD", "HEAD_ADMIN_HR", "SUPER_ADMIN", "ADMIN_MANAGER") or getattr(current_user, "is_super", False):
+            q = db.session.query(LeaveRequest).filter_by(org_id=org_id, status="PENDING")
+            pending = q.order_by(LeaveRequest.requested_at.asc()).limit(100).all()
+    except Exception:
+        pending = []
+        db.session.rollback()
+    try:
+        year = now_naive().date().year
+        balances = (db.session.query(LeaveBalance)
+                    .filter_by(org_id=org_id, user_id=current_user.id, year=year).all())
+    except Exception:
+        year = now_naive().date().year
+        balances = []
+        db.session.rollback()
     return render_template("roster/leave.html", my_reqs=my_reqs, pending=pending,
                            balances=balances, year=year, leave_types=LEAVE_TYPES)
 

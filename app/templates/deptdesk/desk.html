@@ -98,14 +98,70 @@
   <form method="post" action="/my-department/claim" class="mt">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="department_id" value="{{ dept.id }}">
-    <label>I am working on</label>
+    <label>I am working on — {{ dept.name }} defaults first</label>
     <select name="kind" required>
-      {% for code, label in kinds %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+      {% set defaults = default_work_for_dept(dept.name) if default_work_for_dept is defined else [] %}
+      {% if defaults %}
+        <optgroup label="📌 {{ dept.name }} — usual work">
+          {% for code in defaults %}
+            {% for c,l in kinds %}{% if c==code %}<option value="{{ c }}">{{ l }}</option>{% endif %}{% endfor %}
+          {% endfor %}
+        </optgroup>
+        <optgroup label="Other work">
+          {% for code, label in kinds %}{% if code not in defaults %}<option value="{{ code }}">{{ label }}</option>{% endif %}{% endfor %}
+        </optgroup>
+      {% else %}
+        {% for code, label in kinds %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+      {% endif %}
     </select>
     <label class="mt">Anything the others should know (optional)</label>
-    <input name="note" maxlength="200" placeholder="e.g. taking the left-hand queue">
+    <input name="note" maxlength="200" placeholder="e.g. taking the left-hand queue, fast track patient">
     <button class="btn mt">✋ Put my name on it</button>
   </form>
+</div>
+
+{# edit/suspend/delete for open claims #}
+<div class="card mb">
+  <h2>✏️ Edit, pause or remove work</h2>
+  <p class="hint">HOD can edit, pause (suspend) or delete any work. Staff can edit own and mark done. Paused work shows as paused, not deleted — audit kept.</p>
+  {% if together %}
+  <table>
+    <tr><th>Task</th><th>Who</th><th>Note</th><th>Actions</th></tr>
+    {% for t in together %}
+      {% for w in t.workers %}
+      <tr>
+        <td>{{ t.label }} {% if w.suspended %}<span class="pill red">PAUSED</span>{% endif %}</td>
+        <td>{{ w.user.name if w.user else '' }}</td>
+        <td>{{ w.note or '' }}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">
+          {% if w.user_id == current_user.id or is_hod %}
+          <form method="post" action="/my-department/claim/{{ w.id }}/edit" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <select name="kind" style="width:120px">
+              {% for code,label in kinds %}<option value="{{ code }}" {{ 'selected' if code==w.kind }}>{{ label }}</option>{% endfor %}
+            </select>
+            <input name="note" value="{{ w.note or '' }}" style="width:100px" maxlength="200">
+            <button class="btn small">Save</button>
+          </form>
+          {% endif %}
+          {% if is_hod %}
+          <form method="post" action="/my-department/claim/{{ w.id }}/suspend" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="btn small ghost">{{ 'Resume' if w.suspended else 'Pause' }}</button>
+          </form>
+          <form method="post" action="/my-department/claim/{{ w.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this work entry?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="btn small ghost" style="color:#c0262c">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No work to edit.</p>
+  {% endif %}
 </div>
 
 {# ================= effort, never a league table ================= #}

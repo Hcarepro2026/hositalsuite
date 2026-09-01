@@ -567,6 +567,45 @@ def view_photo(pid: int):
 
 
 
+
+@bp.get("/api/lookup")
+@require_role(*VIEWERS)
+@require_permission("hims")
+def api_lookup():
+    """JSON lookup for returning patient — used by Reception/HIMS auto-fill."""
+    from flask import jsonify
+    term = (request.args.get("q") or "").strip()
+    if not term or len(term) < 2:
+        return jsonify([])
+    try:
+        results = hims.search(current_user.org_id, term, limit=5)
+        out = []
+        for p in results:
+            out.append({
+                "id": p.id,
+                "hospital_number": p.hospital_number,
+                "surname": p.surname,
+                "first_name": p.first_name,
+                "other_names": p.other_names or "",
+                "sex": p.sex,
+                "phone": p.phone or "",
+                "age_years": p.age_years,
+                "date_of_birth": p.date_of_birth.isoformat() if p.date_of_birth else "",
+                "address": p.address or "",
+                "lga": p.lga or "",
+                "state": p.state or "",
+                "nok_name": p.nok_name or "",
+                "nok_phone": p.nok_phone or "",
+                "nok_relationship": p.nok_relationship or "",
+                "payer_type": p.payer_type,
+                "full_name": p.full_name,
+            })
+        return jsonify(out)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+
 # ================================================================ bulk import paper register
 @bp.get("/import")
 @require_role("SUPER_ADMIN", "HEAD_ADMIN_HR", "HOD")
