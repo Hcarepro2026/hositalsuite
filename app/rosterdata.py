@@ -754,6 +754,74 @@ def commit_rows(org_id: int, rows: list[dict], *, place: dict, created_by_id: in
     return {"added": added, "skipped": skipped}
 
 
+def autofill_next_week(org_id: int, place: dict, *, source_start: date, target_start: date, created_by_id: int) -> dict:
+    """Copy one week of roster to the next week — saves typing.
+
+    Why: HODs often repeat same pattern weekly. Auto-fill copies DUTY rows
+    from source week (7 days) to target week (7 days), skipping leave days
+    and existing slots. Returns {added, skipped}.
+    """
+    from datetime import timedelta
+    source_end = source_start + timedelta(days=6)
+    target_end = target_start + timedelta(days=6)
+
+    # Load source week
+    src_rows = (db.session.query(RosterEntry)
+                .filter(RosterEntry.org_id == org_id,
+                        RosterEntry.duty_date >= source_start,
+                        RosterEntry.duty_date <= source_end,
+                        RosterEntry.kind == "DUTY")
+                .all())
+    # Filter by place
+    if place.get("scope") and place["scope"] != "ORG":
+        src_rows = [r for r in src_rows if r.scope == place["scope"]]
+        for col in ("department_id", "section_id", "unit_id"):
+            if place.get(col):
+                src_rows = [r for r in src_rows if getattr(r, col) == place[col]]
+    elif place.get("scope") == "ORG":
+        src_rows = [r for r in src_rows if r.scope == "ORG"]
+
+    leave_days = _existing_leave(org_id)
+    existing = _existing_slots(org_id, place)
+    org_dates = {r.duty_date for r in db.session.query(DutyRoster).filter_by(org_id=org_id).all()}
+
+    added = skipped = 0
+    for src in src_rows:
+        offset = (src.duty_date - source_start).days
+        target_date = target_start + timedelta(days=offset)
+        # Skip if target is leave day
+        if (src.user_id, target_date) in leave_days:
+            skipped += 1
+            continue
+        if place["scope"] == "ORG":
+            if target_date in org_dates:
+                skipped += 1
+                continue
+            db.session.add(DutyRoster(org_id=org_id, duty_date=target_date,
+                                      user_id=src.user_id, source="autofill",
+                                      note=f"Auto-filled from {src.duty_date}",
+                                      created_by=created_by_id))
+            org_dates.add(target_date)
+            added += 1
+            continue
+        key = (target_date, src.user_id, src.shift)
+        if key in existing:
+            skipped += 1
+            continue
+        db.session.add(RosterEntry(
+            org_id=org_id, duty_date=target_date, user_id=src.user_id,
+            kind="DUTY", shift=src.shift, scope=src.scope,
+            department_id=src.department_id, section_id=src.section_id,
+            unit_id=src.unit_id, note=f"Auto-filled from {src.duty_date}",
+            source="autofill", created_by=created_by_id))
+        existing.add(key)
+        added += 1
+    return {"added": added, "skipped": skipped}
+
+
+# ------------------------------------------------------------------ reading
+
+
 # ------------------------------------------------------------------ reading
 def load_roster(org_id: int, start: date, end: date, *, place: dict | None = None,
                 include_org: bool = True) -> list[dict]:

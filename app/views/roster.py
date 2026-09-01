@@ -608,7 +608,35 @@ def leave_reject(rid: int):
     flash(f"Rejected leave request for {req.user.name}.", "info")
     return redirect(url_for("roster.leave_list"))
 
+
+@bp.post("/roster/autofill")
+@require_role(*EDITORS)
+def roster_autofill():
+    """Auto-fill next week from previous week."""
+    from datetime import timedelta
+    place, errs = _place_from_request(request.form)
+    if errs:
+        flash("Choose where this roster belongs first.", "error")
+        return redirect(url_for("roster.roster_view"))
+    _require_edit(place)
+    src_raw = (request.form.get("source_start") or "").strip()
+    tgt_raw = (request.form.get("target_start") or "").strip()
+    src = rd.parse_date(src_raw)
+    tgt = rd.parse_date(tgt_raw)
+    if not src or not tgt:
+        flash("Pick source week start and target week start dates.", "error")
+        return redirect(_back(place))
+    result = rd.autofill_next_week(current_user.org_id, place,
+                                   source_start=src, target_start=tgt,
+                                   created_by_id=current_user.id)
+    audit("ROSTER_AUTOFILL", "roster", None,
+          {"source": str(src), "target": str(tgt), "added": result["added"], "place": place})
+    db.session.commit()
+    flash(f"Auto-filled {result['added']} duty slots from week of {src} to week of {tgt}. {result['skipped']} skipped (leave or already rostered).", "success")
+    return redirect(_back(place))
+
 # ------------------------------------------------------------------ export
+
 
 
 # ------------------------------------------------------------------ export

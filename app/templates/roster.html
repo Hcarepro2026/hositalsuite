@@ -210,6 +210,24 @@ department, section and unit, and staff leave, all on this page. Leave now has r
     <p class="hint mt">{{ nominal_hint }}</p>
   </div>
 
+  <!-- ------------------------------------------------ auto-fill next week -->
+  <div class="card">
+    <h2>🔁 Auto-fill next week</h2>
+    <p class="hint">Copy last week's roster to next week — saves typing same pattern. Skips leave days and already-rostered slots.</p>
+    <form method="post" action="{{ url_for('roster.roster_autofill') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="scope" value="{{ place.scope }}">
+      <input type="hidden" name="department_id" value="{{ place.department_id or '' }}">
+      <input type="hidden" name="section_id" value="{{ place.section_id or '' }}">
+      <input type="hidden" name="unit_id" value="{{ place.unit_id or '' }}">
+      <label>Source week start (copy FROM)</label>
+      <input type="date" name="source_start" required>
+      <label class="mt">Target week start (copy TO)</label>
+      <input type="date" name="target_start" required>
+      <button class="btn mt">Auto-fill next week</button>
+    </form>
+  </div>
+
   <!-- ------------------------------------------------ admin manager quick add -->
   {% if current_user.is_super or current_user.role == 'HEAD_ADMIN_HR' %}
   <div class="card">

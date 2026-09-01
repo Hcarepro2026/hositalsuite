@@ -1190,6 +1190,7 @@ class Patient(db.Model):
     care_note = db.Column(db.String(200))         # anything else the desk should know
 
     # --- housekeeping
+    photo_path = db.Column(db.String(300))
     notes = db.Column(db.Text)
     active = db.Column(db.Boolean, default=True, nullable=False)
     # NDPA: the patient consented to the hospital holding these details.

@@ -101,6 +101,74 @@ def _digits(raw: str) -> str:
     return re.sub(r"\D", "", raw or "")
 
 
+def _lev(a: str, b: str) -> int:
+    """Edit distance — tolerates 1-2 letter misspellings in HIMS search."""
+    if a == b:
+        return 0
+    if len(a) < len(b):
+        a, b = b, a
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            ins = prev[j] + 1
+            dele = cur[j-1] + 1
+            sub = prev[j-1] + (0 if ca == cb else 1)
+            cur.append(min(ins, dele, sub))
+        prev = cur
+    return prev[-1]
+
+
+def _fuzzy_surname_matches(org_id: int, term: str, limit: int = 10) -> list:
+    """Fallback: when exact LIKE finds nothing, look for close spellings.
+
+    Real HIMS desks get "Abatan" typed as "Abathan" or "Ogunleye" as
+    "Ogunlewe". A 1-2 letter edit distance catches those without needing
+    PostgreSQL pg_trgm (not available on Render free).
+    """
+    term_l = term.lower().strip()
+    if len(term_l) < 3:
+        return []
+    # Load candidate surnames — limited to 500 most recent to keep it fast
+    # on low-bandwidth mobile.
+    candidates = (db.session.query(Patient)
+                  .filter(Patient.org_id == org_id, Patient.active.is_(True))
+                  .order_by(Patient.last_visit_at.desc().nullslast())
+                  .limit(500).all())
+    scored = []
+    for p in candidates:
+        # Check surname, first_name, full_name
+        for field in (p.surname, p.first_name, p.hospital_number):
+            if not field:
+                continue
+            fl = field.lower()
+            # Quick length filter
+            if abs(len(fl) - len(term_l)) > 2:
+                continue
+            # Exact substring already handled, so check edit distance
+            if _lev(term_l, fl) <= 2 or _lev(term_l, fl[:len(term_l)]) <= 1:
+                scored.append(p)
+                break
+            # Also try parts
+            for part in fl.split():
+                if _lev(term_l, part) <= 2:
+                    scored.append(p)
+                    break
+    # Deduplicate
+    seen = set()
+    out = []
+    for p in scored:
+        if p.id not in seen:
+            seen.add(p.id)
+            out.append(p)
+        if len(out) >= limit:
+            break
+    return out
+
+
+
 def search(org_id: int, term: str, limit: int = MAX_SEARCH_RESULTS) -> list[Patient]:
     """Find a returning patient's folder.
 
@@ -134,9 +202,16 @@ def search(org_id: int, term: str, limit: int = MAX_SEARCH_RESULTS) -> list[Pati
                              func.lower(Patient.first_name).like(f"%{parts[1]}%")))
         conds.append(db.and_(func.lower(Patient.surname).like(f"%{parts[1]}%"),
                              func.lower(Patient.first_name).like(f"%{parts[0]}%")))
-    return (q.filter(or_(*conds))
+    results = (q.filter(or_(*conds))
             .order_by(Patient.last_visit_at.desc().nullslast(), Patient.surname)
             .limit(limit).all())
+    # If nothing found, try fuzzy matching for misspellings
+    if not results and len(term) >= 3:
+        try:
+            results = _fuzzy_surname_matches(org_id, term, limit=limit)
+        except Exception:
+            results = []
+    return results
 
 
 def possible_duplicates(org_id: int, surname: str, first_name: str,

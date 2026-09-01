@@ -4,9 +4,14 @@
 
 <div class="spread mb">
   <h1 style="margin:0">📁 HIMS Register</h1>
-  {% if current_user.role in ('SUPER_ADMIN','HEAD_ADMIN_HR','MD_CEO') %}
-  <a class="btn small ghost" href="/hims/export">⬇ Download register</a>
-  {% endif %}
+  <div style="display:flex;gap:8px">
+    {% if current_user.role in ('SUPER_ADMIN','HEAD_ADMIN_HR','MD_CEO','HOD') %}
+    <a class="btn small" href="{{ url_for('hims.import_form') }}">📚 Import paper register</a>
+    {% endif %}
+    {% if current_user.role in ('SUPER_ADMIN','HEAD_ADMIN_HR','MD_CEO') %}
+    <a class="btn small ghost" href="/hims/export">⬇ Download register</a>
+    {% endif %}
+  </div>
 </div>
 
 <div class="grid cols4 mb">
