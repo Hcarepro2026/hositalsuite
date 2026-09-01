@@ -22,13 +22,111 @@ from flask import current_app
 
 from .models import db, now_naive
 
+def _generate_vapid_keys() -> tuple[str, str]:
+    """Generate VAPID keypair base64url — no external CLI needed, premium out-of-box."""
+    try:
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives import serialization
+        import base64
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        private_numbers = private_key.private_numbers()
+        private_bytes = private_numbers.private_value.to_bytes(32, 'big')
+        def b64url(b: bytes) -> str:
+            return base64.urlsafe_b64encode(b).decode().rstrip('=')
+        public_key = private_key.public_key()
+        public_numbers = public_key.public_numbers()
+        x = public_numbers.x.to_bytes(32, 'big')
+        y = public_numbers.y.to_bytes(32, 'big')
+        uncompressed = b'\x04' + x + y
+        return b64url(uncompressed), b64url(private_bytes)
+    except Exception:
+        # Fallback via py_vapid if cryptography path fails
+        try:
+            from py_vapid import Vapid
+            import base64
+            v = Vapid()
+            v.generate_keys()
+            # v.public_key and private_key are objects, need to encode
+            # Use Vapid's own encoding via save? Simpler: use pem then convert
+            # For fallback, try to get raw
+            from cryptography.hazmat.primitives import serialization
+            priv_pem = v.private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            pub_pem = v.public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+            # Re-parse via cryptography to get base64url
+            from cryptography.hazmat.backends import default_backend
+            priv_key = serialization.load_pem_private_key(priv_pem, password=None, backend=default_backend())
+            priv_nums = priv_key.private_numbers()
+            priv_b = priv_nums.private_value.to_bytes(32, 'big')
+            pub_key = priv_key.public_key()
+            pub_nums = pub_key.public_numbers()
+            xb = pub_nums.x.to_bytes(32, 'big')
+            yb = pub_nums.y.to_bytes(32, 'big')
+            uncomp = b'\x04' + xb + yb
+            def b64url2(b): return base64.urlsafe_b64encode(b).decode().rstrip('=')
+            return b64url2(uncomp), b64url2(priv_b)
+        except Exception:
+            return "", ""
+
+def _ensure_global_vapid():
+    """Auto-generate global VAPID if missing — ensures push works out-of-box, premium.
+    Saves to instance/vapid_keys.json for persistence across restarts (when volume exists).
+    On Render ephemeral, still works until next deploy, but logs warning to set env for persistence.
+    """
+    try:
+        cfg = current_app.config
+        if cfg.get("VAPID_PUBLIC_KEY") and cfg.get("VAPID_PRIVATE_KEY"):
+            return
+        # Try instance file
+        import os, json, pathlib
+        inst_path = pathlib.Path(current_app.instance_path) / "vapid_keys.json"
+        if inst_path.exists():
+            try:
+                data = json.loads(inst_path.read_text())
+                pub = data.get("public", "")
+                priv = data.get("private", "")
+                subj = data.get("subject", "mailto:admin@hospital.local")
+                if pub and priv:
+                    cfg["VAPID_PUBLIC_KEY"] = pub
+                    cfg["VAPID_PRIVATE_KEY"] = priv
+                    if not cfg.get("VAPID_SUBJECT") or cfg.get("VAPID_SUBJECT") == "mailto:admin@hospital.local":
+                        cfg["VAPID_SUBJECT"] = subj
+                    return
+            except Exception:
+                pass
+        # Generate new
+        pub, priv = _generate_vapid_keys()
+        if pub and priv:
+            subj = cfg.get("VAPID_SUBJECT", "mailto:admin@hospital.local")
+            cfg["VAPID_PUBLIC_KEY"] = pub
+            cfg["VAPID_PRIVATE_KEY"] = priv
+            # Save to instance file for next boot
+            try:
+                inst_path.parent.mkdir(parents=True, exist_ok=True)
+                inst_path.write_text(json.dumps({"public": pub, "private": priv, "subject": subj}, indent=2))
+                current_app.logger.info("VAPID auto-generated and saved to %s — set VAPID_PUBLIC_KEY/PRIVATE_KEY env on Render for persistence", inst_path)
+            except Exception:
+                current_app.logger.warning("VAPID auto-generated but could not save to file — set env for persistence")
+    except Exception:
+        pass
+
 def _get_vapid_for_org(org_id: int | None = None) -> tuple[str, str, str]:
     """Per-org VAPID if set in settings, else global env — multi-hospital.
 
     Each hospital can have own VAPID keys via /admin/settings → VAPID_PUBLIC/PRIVATE/SUBJECT
     This allows per-org branding + push that shows hospital name/logo on home screen.
+    Auto-generates global keys if missing so push works out-of-box (premium).
     """
     cfg = current_app.config
+    # Ensure global exists — premium out-of-box
+    if not cfg.get("VAPID_PUBLIC_KEY") or not cfg.get("VAPID_PRIVATE_KEY"):
+        _ensure_global_vapid()
     # Try per-org settings first
     if org_id:
         try:
