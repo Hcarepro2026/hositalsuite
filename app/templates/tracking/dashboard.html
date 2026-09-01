@@ -87,7 +87,7 @@
   <tr><th>Patient</th><th>Where</th><th>Waiting</th><th></th></tr>
   {% for x in live %}
   <tr {% if x.stuck %}style="background:#fff6f6"{% endif %}>
-    <td>{{ x.name }}</td>
+    <td>{{ x.name|first_name }}</td>
     <td>{{ x.label }}</td>
     <td><b>{{ (x.waited)|hm }}</b></td>
     <td>

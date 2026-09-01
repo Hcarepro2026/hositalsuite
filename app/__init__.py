@@ -27,14 +27,36 @@ def _configure_logging(app: Flask) -> None:
     Gunicorn captures stdout on Render; bare print() statements lose level and
     timestamp, which makes post-incident diagnosis guesswork.
     FIX: expert review flagged remaining print() — now all via logger.
+    Privacy: filter masks access_key / personal_tv secrets in log lines.
     """
     import logging
     import sys
+    import re
 
     level = getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO)
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter(
         "%(asctime)s %(levelname)s [%(name)s] %(message)s", "%Y-%m-%d %H:%M:%S"))
+
+    # Mask personal TV access_key and phone numbers in logs — privacy hardening
+    _KEY_RE = re.compile(r'([a-z_]*access_key[\"\'=\s:]+)([A-Za-z0-9_\-]{8,})', re.IGNORECASE)
+    _T_RE = re.compile(r'(/t/)([A-Za-z0-9_\-]{8,})')
+    class _PrivacyFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            try:
+                msg = record.getMessage()
+                # mask /t/<key> and access_key=xxx
+                msg = _T_RE.sub(r'\1****', msg)
+                msg = _KEY_RE.sub(r'\1****', msg)
+                # Store masked version back as msg to avoid double formatting
+                # We override args to make getMessage return masked
+                record.msg = msg
+                record.args = ()
+            except Exception:
+                pass
+            return True
+
+    handler.addFilter(_PrivacyFilter())
     app.logger.handlers = [handler]
     app.logger.setLevel(level)
     app.logger.propagate = False

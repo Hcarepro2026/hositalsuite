@@ -38,6 +38,7 @@ COLUMNS = [
     ("department", "roster_mode", "VARCHAR(10) DEFAULT 'two_12h'"),
     ("department", "roster_staff_per_shift", "INTEGER DEFAULT 1"),
     ("appointment", "referral_id", "INTEGER"),
+    ("appointment", "patient_id", "INTEGER"),
     ("appointment", "is_repeat", _bool_sql),
     ("patient_feedback", "referral_id", "INTEGER"),
     ("organization", "email", "VARCHAR(160)"),
@@ -74,6 +75,7 @@ COLUMNS = [
     # --- HIMS patient folder: patient-CARE fields (this app is not an EMR).
     # Belt and braces behind migration b3f81a9d5c22: if Alembic is ever skipped
     # or fails, /hims/ must still not 500 on a missing column.
+    ("patient", "photo_path", "VARCHAR(300)"),
     ("patient", "preferred_lang", "VARCHAR(4)"),
     ("patient", "assistance", "VARCHAR(200)"),
     ("patient", "care_note", "VARCHAR(200)"),
