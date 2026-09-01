@@ -186,6 +186,7 @@ self.addEventListener("fetch", function (event) {
   }
   if (url.pathname.indexOf("/admin") === 0) return;
 
+  // CSS/JS must be network-first — prevents old UI freeze, versioned cache, offline fallback
   // CSS/JS network-first, cache fallback — prevents old UI freeze
   if (url.pathname.indexOf("/static/") === 0) {
     event.respondWith(
