@@ -159,7 +159,12 @@
   </div>
   {% endif %}
 
-  <a class="emerg" href="/chat{{ q }}">🚑 {{ _('hub_emergency') }}</a>
+  <a class="emerg" href="/queue/join{{ q }}{% if q %}&{% else %}?{% endif %}emergency=1" style="display:block;margin:16px 0 4px;padding:13px 14px;border-radius:12px;background:#fdecec;border:1px solid #f3c2c2;border-left:6px solid #c62828;color:#8c1d1d;font-weight:700;font-size:.9rem;text-decoration:none">
+    🚑 In an emergency, go straight to Accident & Emergency — do not wait online. Tap here to get emergency number and go to A&E now.
+  </a>
+  <div style="margin:8px 0 12px;padding:10px 12px;border-radius:10px;background:#fff3cd;border:1px solid #ffe69c;font-size:.84rem;line-height:1.4;color:#664d03">
+    <b>🚨 Emergency?</b> Go straight to Accident & Emergency Unit now — open 24/7. Tell reception it's an emergency. You will be seen immediately. Do not wait for online queue. If outside hospital, call help desk below or go to nearest hospital.
+  </div>
 
   {% include "_help_desk.html" %}
 
