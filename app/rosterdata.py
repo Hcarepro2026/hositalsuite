@@ -507,6 +507,18 @@ def build_preview(org_id: int, raw_rows: list[dict], *, place: dict,
                           db.session.query(DutyRoster).filter_by(org_id=org_id).all()} \
         if place.get("scope") == "ORG" else set()
     leave_days = _existing_leave(org_id)
+    # Cross-dept clash: where is this person already rostered today (any dept)?
+    anywhere = _existing_anywhere(org_id)
+    # Current place label for comparison
+    try:
+        current_label = ""
+        if place.get("scope") == "ORG":
+            current_label = "Hospital-wide (Admin Manager)"
+        else:
+            dept = db.session.get(Department, place.get("department_id")) if place.get("department_id") else None
+            current_label = dept.name if dept else f"dept {place.get('department_id')}"
+    except Exception:
+        current_label = ""
     seen: set[tuple] = set()
     out: list[dict] = []
 
@@ -585,6 +597,15 @@ def build_preview(org_id: int, raw_rows: list[dict], *, place: dict,
                         errors.append(f"{person.name} is on {LEAVE_LABELS.get(leave_days[(person.id, d)], 'leave')} "
                                       f"on {d} — they cannot be on duty that day.")
                         break
+                    # Cross-department clash warning
+                    if (person.id, d) in anywhere:
+                        other_places = [p for p in anywhere[(person.id, d)] if p != current_label]
+                        if other_places:
+                            warnings.append(
+                                f"⚠️ {person.name} is already rostered on {d} at "
+                                f"{', '.join(other_places[:2])}. "
+                                "Check with that HOD — same person cannot be in two places same night."
+                            )
                 else:
                     key = (d, person.id, "LEAVE")
                     if key in seen or (person.id, d) in leave_days:
@@ -619,6 +640,23 @@ def _existing_slots(org_id: int, place: dict) -> set[tuple]:
 def _existing_leave(org_id: int) -> dict[tuple, str]:
     rows = db.session.query(RosterEntry).filter_by(org_id=org_id, kind="LEAVE").all()
     return {(r.user_id, r.duty_date): (r.leave_type or "OFF") for r in rows}
+
+
+def _existing_anywhere(org_id: int) -> dict[tuple, list[str]]:
+    """Map (user_id, date) -> list of place labels where already rostered (any dept).
+    
+    Used for cross-department clash warning: same nurse rostered by two HODs
+    on same night — each only sees own list, so we warn.
+    """
+    rows = db.session.query(RosterEntry).filter_by(org_id=org_id, kind="DUTY").all()
+    out: dict[tuple, list[str]] = {}
+    for r in rows:
+        key = (r.user_id, r.duty_date)
+        label = r.place_label
+        out.setdefault(key, [])
+        if label not in out[key]:
+            out[key].append(label)
+    return out
 
 
 # ------------------------------------------------------------------ preview store

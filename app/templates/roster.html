@@ -4,11 +4,14 @@
 
 <div class="spread mb">
   <h1 style="margin:0">🗓 Roster</h1>
-  <a class="btn small ghost" href="/roster/export?range={{ range_key }}&from={{ start }}&to={{ end }}&scope={{ place.scope }}{% if place.department_id %}&department_id={{ place.department_id }}{% endif %}{% if place.section_id %}&section_id={{ place.section_id }}{% endif %}{% if place.unit_id %}&unit_id={{ place.unit_id }}{% endif %}">⬇ Download / print list</a>
+  <div style="display:flex;gap:8px">
+    <a class="btn small" href="{{ url_for('roster.leave_list') }}">🌴 Leave Requests</a>
+    <a class="btn small ghost" href="/roster/export?range={{ range_key }}&from={{ start }}&to={{ end }}&scope={{ place.scope }}{% if place.department_id %}&department_id={{ place.department_id }}{% endif %}{% if place.section_id %}&section_id={{ place.section_id }}{% endif %}{% if place.unit_id %}&unit_id={{ place.unit_id }}{% endif %}">⬇ Download / print list</a>
+  </div>
 </div>
 
 <p class="muted">One roster for the whole hospital — the Admin Manager duty roster, every
-department, section and unit, and staff leave, all on this page.</p>
+department, section and unit, and staff leave, all on this page. Leave now has request → approval → balance tracking.</p>
 
 <!-- ---------------------------------------------------------- choose what to see -->
 <form class="card mb" method="get">

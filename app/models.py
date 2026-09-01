@@ -539,7 +539,78 @@ class RosterEntry(db.Model):
         return self.shift
 
 
+
+# ---------------------------------------------------------------- leave requests
+LEAVE_REQUEST_STATUSES = ("PENDING", "APPROVED", "REJECTED", "CANCELLED")
+LEAVE_BALANCE_DEFAULTS = {
+    "ANNUAL": 30,
+    "CASUAL": 7,
+    "SICK": 14,
+    "STUDY": 10,
+    "MATERNITY": 84,
+    "COMPASSIONATE": 7,
+    "EXAM": 10,
+    "OFF": 0,
+}
+
+class LeaveRequest(db.Model):
+    """Leave request → approval → roster entry chain.
+
+    Why: recording leave directly skips approval. Hospital needs request,
+    HOD/HR approval, and balance tracking so annual leave doesn't exceed quota.
+    Plain English: staff asks, boss approves, roster updates automatically.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    leave_type = db.Column(db.String(16), nullable=False, index=True)
+    start_date = db.Column(db.Date, nullable=False, index=True)
+    end_date = db.Column(db.Date, nullable=False, index=True)
+    days_requested = db.Column(db.Integer, nullable=False)
+    reason = db.Column(db.String(300))
+    status = db.Column(db.String(12), default="PENDING", nullable=False, index=True)
+    requested_at = db.Column(db.DateTime, default=now_naive)
+    reviewed_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    reviewed_at = db.Column(db.DateTime)
+    review_note = db.Column(db.String(300))
+    # When approved, roster entries created
+    roster_created = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_naive)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    reviewer = db.relationship("User", foreign_keys=[reviewed_by])
+
+    @property
+    def label(self) -> str:
+        return LEAVE_LABELS.get(self.leave_type, self.leave_type)
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == "PENDING"
+
+
+class LeaveBalance(db.Model):
+    """Yearly leave balance per staff — how many days used / left."""
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False, index=True)
+    leave_type = db.Column(db.String(16), nullable=False, index=True)
+    entitled = db.Column(db.Integer, default=0, nullable=False)
+    used = db.Column(db.Integer, default=0, nullable=False)
+    remaining = db.Column(db.Integer, default=0, nullable=False)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "user_id", "year", "leave_type", name="uq_leave_balance"),
+    )
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+
 # ---------------------------------------------------------------- bookings
+
 APPOINTMENT_STATUSES = ("BOOKED", "ARRIVED", "CANCELLED", "NO_SHOW")
 
 
@@ -553,6 +624,7 @@ class Appointment(db.Model):
     appointment_time = db.Column(db.String(5), nullable=False, index=True)   # "HH:MM" slot
     patient_name = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(32), nullable=False)
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), index=True)
     status = db.Column(db.String(12), default="BOOKED", nullable=False, index=True)
     source = db.Column(db.String(12), default="link")       # qr | link | ussd | staff | referral
     qr_location_id = db.Column(db.Integer, db.ForeignKey("qr_location.id"))
@@ -574,6 +646,7 @@ class Appointment(db.Model):
     cancelled_at = db.Column(db.DateTime)
     department = db.relationship("Department")
     qr_location = db.relationship("QrLocation")
+    patient = db.relationship("Patient", foreign_keys=[patient_id])
 
 
 # ---------------------------------------------------------------- patient feedback (§7)

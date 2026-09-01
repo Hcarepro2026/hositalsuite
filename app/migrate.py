@@ -38,6 +38,7 @@ COLUMNS = [
     ("department", "roster_mode", "VARCHAR(10) DEFAULT 'two_12h'"),
     ("department", "roster_staff_per_shift", "INTEGER DEFAULT 1"),
     ("appointment", "referral_id", "INTEGER"),
+    ("appointment", "patient_id", "INTEGER"),
     ("appointment", "is_repeat", _bool_sql),
     ("patient_feedback", "referral_id", "INTEGER"),
     ("organization", "email", "VARCHAR(160)"),
