@@ -539,7 +539,78 @@ class RosterEntry(db.Model):
         return self.shift
 
 
+
+# ---------------------------------------------------------------- leave requests
+LEAVE_REQUEST_STATUSES = ("PENDING", "APPROVED", "REJECTED", "CANCELLED")
+LEAVE_BALANCE_DEFAULTS = {
+    "ANNUAL": 30,
+    "CASUAL": 7,
+    "SICK": 14,
+    "STUDY": 10,
+    "MATERNITY": 84,
+    "COMPASSIONATE": 7,
+    "EXAM": 10,
+    "OFF": 0,
+}
+
+class LeaveRequest(db.Model):
+    """Leave request → approval → roster entry chain.
+
+    Why: recording leave directly skips approval. Hospital needs request,
+    HOD/HR approval, and balance tracking so annual leave doesn't exceed quota.
+    Plain English: staff asks, boss approves, roster updates automatically.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    leave_type = db.Column(db.String(16), nullable=False, index=True)
+    start_date = db.Column(db.Date, nullable=False, index=True)
+    end_date = db.Column(db.Date, nullable=False, index=True)
+    days_requested = db.Column(db.Integer, nullable=False)
+    reason = db.Column(db.String(300))
+    status = db.Column(db.String(12), default="PENDING", nullable=False, index=True)
+    requested_at = db.Column(db.DateTime, default=now_naive)
+    reviewed_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    reviewed_at = db.Column(db.DateTime)
+    review_note = db.Column(db.String(300))
+    # When approved, roster entries created
+    roster_created = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_naive)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    reviewer = db.relationship("User", foreign_keys=[reviewed_by])
+
+    @property
+    def label(self) -> str:
+        return LEAVE_LABELS.get(self.leave_type, self.leave_type)
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == "PENDING"
+
+
+class LeaveBalance(db.Model):
+    """Yearly leave balance per staff — how many days used / left."""
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False, index=True)
+    leave_type = db.Column(db.String(16), nullable=False, index=True)
+    entitled = db.Column(db.Integer, default=0, nullable=False)
+    used = db.Column(db.Integer, default=0, nullable=False)
+    remaining = db.Column(db.Integer, default=0, nullable=False)
+    updated_at = db.Column(db.DateTime, default=now_naive, onupdate=now_naive)
+
+    __table_args__ = (
+        db.UniqueConstraint("org_id", "user_id", "year", "leave_type", name="uq_leave_balance"),
+    )
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+
 # ---------------------------------------------------------------- bookings
+
 APPOINTMENT_STATUSES = ("BOOKED", "ARRIVED", "CANCELLED", "NO_SHOW")
 
 
@@ -553,6 +624,7 @@ class Appointment(db.Model):
     appointment_time = db.Column(db.String(5), nullable=False, index=True)   # "HH:MM" slot
     patient_name = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(32), nullable=False)
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), index=True)
     status = db.Column(db.String(12), default="BOOKED", nullable=False, index=True)
     source = db.Column(db.String(12), default="link")       # qr | link | ussd | staff | referral
     qr_location_id = db.Column(db.Integer, db.ForeignKey("qr_location.id"))
@@ -574,6 +646,7 @@ class Appointment(db.Model):
     cancelled_at = db.Column(db.DateTime)
     department = db.relationship("Department")
     qr_location = db.relationship("QrLocation")
+    patient = db.relationship("Patient", foreign_keys=[patient_id])
 
 
 # ---------------------------------------------------------------- patient feedback (§7)
@@ -1117,6 +1190,7 @@ class Patient(db.Model):
     care_note = db.Column(db.String(200))         # anything else the desk should know
 
     # --- housekeeping
+    photo_path = db.Column(db.String(300))
     notes = db.Column(db.Text)
     active = db.Column(db.Boolean, default=True, nullable=False)
     # NDPA: the patient consented to the hospital holding these details.
@@ -1960,11 +2034,62 @@ WORK_KINDS = (
     ("TRIAGE",      "Placing patients with doctors"),
     ("CONSULT",     "Seeing patients in a consulting room"),
     ("LABORATORY",  "Laboratory work"),
+    ("LAB_SAMPLE",  "Collecting lab samples"),
+    ("LAB_RESULT",  "Entering lab results"),
     ("PHARMACY",    "Dispensing"),
+    ("PHARM_STOCK", "Pharmacy stock check"),
+    ("THEATER",     "Theater / Surgery"),
+    ("THEATER_PREP","Theater preparation"),
+    ("WARD_ROUND",  "Ward round"),
+    ("WARD_CARE",   "Ward patient care"),
+    ("ANC",         "Antenatal care"),
+    ("IMMUNIZATION","Immunization"),
+    ("FAST_TRACK",  "Fast Track — premium quick care"),
+    ("EMERGENCY",   "Accident & Emergency"),
+    ("RADIOLOGY",   "X-ray / Radiology"),
+    ("PHYSIO",      "Physiotherapy"),
+    ("DENTAL",      "Dental care"),
+    ("MORTUARY",    "Mortuary"),
+    ("RECORDS",     "Records & filing"),
     ("COMPLAINT",   "Answering a complaint"),
     ("CLEANING",    "Cleaning and environment"),
+    ("SECURITY",    "Security / Gate"),
+    ("MAINTENANCE", "Maintenance"),
     ("OTHER",       "Other department work"),
 )
+
+# Department-specific defaults — what work does this department usually do?
+DEPT_DEFAULT_WORK = {
+    "RECEPTION": ["RECEPTION", "FAST_TRACK"],
+    "BILLING": ["BILLING", "FAST_TRACK"],
+    "PAYMENT": ["PAYMENT", "FAST_TRACK"],
+    "MEGALEX": ["PAYMENT", "FAST_TRACK"],
+    "HIMS": ["HIMS", "RECORDS", "FAST_TRACK"],
+    "TRIAGE": ["TRIAGE", "WARD_CARE", "FAST_TRACK"],
+    "CONSULT": ["CONSULT", "WARD_ROUND", "FAST_TRACK"],
+    "LABORATORY": ["LABORATORY", "LAB_SAMPLE", "LAB_RESULT"],
+    "PHARMACY": ["PHARMACY", "PHARM_STOCK", "FAST_TRACK"],
+    "THEATER": ["THEATER", "THEATER_PREP", "WARD_CARE", "CLEANING"],
+    "WARD": ["WARD_CARE", "WARD_ROUND", "CLEANING"],
+    "ANC": ["ANC", "WARD_CARE"],
+    "ACCIDENT": ["EMERGENCY", "TRIAGE", "WARD_CARE"],
+    "EMERGENCY": ["EMERGENCY", "TRIAGE", "WARD_CARE"],
+    "RADIOLOGY": ["RADIOLOGY", "RECORDS"],
+    "PHYSIO": ["PHYSIO", "WARD_CARE"],
+    "DENTAL": ["DENTAL", "RECORDS"],
+    "MORTUARY": ["MORTUARY", "RECORDS"],
+    "ADMIN": ["OTHER", "RECORDS", "CLEANING"],
+    "CLEANING": ["CLEANING", "OTHER"],
+    "SECURITY": ["SECURITY", "OTHER"],
+}
+
+def default_work_for_dept(dept_name: str) -> list[str]:
+    name = (dept_name or "").upper()
+    for key, kinds in DEPT_DEFAULT_WORK.items():
+        if key in name:
+            return kinds
+    return ["OTHER", "CLEANING"]
+
 WORK_KIND_LABELS = dict(WORK_KINDS)
 WORK_KIND_CODES = tuple(c for c, _ in WORK_KINDS)
 
@@ -2004,6 +2129,9 @@ class WorkClaim(db.Model):
     started_at = db.Column(db.DateTime, default=now_naive, nullable=False, index=True)
     ended_at = db.Column(db.DateTime, index=True)
     seconds = db.Column(db.Integer)
+    suspended = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    suspended_at = db.Column(db.DateTime)
+    suspended_by = db.Column(db.Integer, db.ForeignKey("user.id"))
 
     user = db.relationship("User", foreign_keys=[user_id])
     department = db.relationship("Department")

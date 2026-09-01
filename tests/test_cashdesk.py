@@ -100,11 +100,21 @@ def test_the_payment_is_recorded_under_the_CASHIERS_name(app, client, seeded):
     entry. The audit trail must name the person who pressed "payment received".
     """
     with app.app_context():
+        from app.models import Department
         org_id = seeded["org"]
         iid = _intake(org_id, "PAYMENT").id
         # A second person, distinct from whoever took the details.
+        # v1.7.18: HOD needs a money department (Finance/Billing) to see cashdesk
+        dept = db.session.query(Department).filter_by(org_id=org_id).first()
+        if not dept:
+            dept = Department(org_id=org_id, name="Finance", code="FIN")
+            db.session.add(dept)
+            db.session.flush()
+        # Ensure department name matches money desk for permission
+        if "financ" not in dept.name.lower() and "bill" not in dept.name.lower():
+            dept.name = "Finance & Billing"
         cashier = User(org_id=org_id, username="cashier1",
-                       name="Ngozi Cashier", role="HOD")
+                       name="Ngozi Cashier", role="HOD", department_id=dept.id)
         cashier.set_password("Passw0rd!x")
         cashier.must_change_password = False
         db.session.add(cashier)

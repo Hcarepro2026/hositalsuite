@@ -61,11 +61,12 @@ def privacy_initials(full_name: str | None) -> str:
 def _minutes(value) -> int | None:
     if value is None or value == "":
         return None
-    if isinstance(value, str) and value.strip() in ("", "—", "-"):
-        return None
+    # Jinja Undefined (when a key is missing) must not crash the page — show —
     try:
+        if isinstance(value, str) and value.strip() in ("", "—", "-"):
+            return None
         n = int(round(float(value)))
-    except (TypeError, ValueError):
+    except Exception:
         return None
     return max(0, n)
 
