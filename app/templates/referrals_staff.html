@@ -108,7 +108,7 @@ this page shows who came. <b>No prizes, no coupons, no pressure</b> — just a k
   {% for a in stats.recent_books %}
   <div class="list-item">
     <div class="spread">
-      <span class="t">{{ a.patient_name }} · {{ a.department.name }}</span>
+      <span class="t">{{ a.patient_name|first_name }} · {{ a.department.name }}</span>
       <span class="pill blue">{{ a.ref }}</span>
     </div>
     <div class="muted">{{ a.appointment_date.strftime('%d %b %Y') }} at {{ a.appointment_time }}

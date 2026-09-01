@@ -25,6 +25,25 @@
 </div>
 {% endif %}
 
+{% if p.photo_path %}
+<div class="card mb" style="text-align:center">
+  <img src="{{ url_for('hims.view_photo', pid=p.id) }}" alt="Photo of {{ p.full_name }}" style="max-width:200px;max-height:240px;border-radius:12px;object-fit:cover">
+  <p class="hint">Folder photo — helps staff identify {{ p.first_name }} quickly.</p>
+</div>
+{% endif %}
+
+{% if can_edit and p.active %}
+<div class="card mb">
+  <h2>📷 Folder Photo</h2>
+  <p class="hint">Add a photo to this folder — helps identify patient at reception and prevents duplicate folders. Max 5MB, JPG/PNG.</p>
+  <form method="post" action="/hims/folder/{{ p.id }}/photo" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required>
+    <button class="btn small mt">Upload photo</button>
+  </form>
+</div>
+{% endif %}
+
 <div class="grid cols2 mb">
   <div class="card">
     <h2>Contact</h2>

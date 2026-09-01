@@ -407,6 +407,47 @@ def edit_save(pid: int):
     return redirect(url_for("hims.folder", pid=p.id))
 
 
+
+@bp.post("/folder/<int:pid>/photo")
+@require_role(*DESK)
+@require_permission("hims")
+def upload_photo(pid: int):
+    """Upload patient folder photograph — helps identify patient, premium care."""
+    p = db.session.get(Patient, pid)
+    if not p or p.org_id != current_user.org_id:
+        abort(404)
+    file = request.files.get("photo")
+    if not file or not file.filename:
+        flash("Choose a photo to upload.", "error")
+        return redirect(url_for("hims.folder", pid=pid))
+    # Validate image
+    from ..security import validate_upload
+    safe_name, err = validate_upload(file)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("hims.folder", pid=pid))
+    try:
+        from .. import storage
+        # Store as patient-photos/<org>/<hospital_number>.jpg
+        ext = safe_name.rsplit(".",1)[-1] if "." in safe_name else "jpg"
+        key = f"patient-photos/{p.org_id}/{p.hospital_number}.{ext}"
+        file.seek(0)
+        data = file.read()
+        if len(data) > 5*1024*1024:
+            flash("Photo too large — max 5MB.", "error")
+            return redirect(url_for("hims.folder", pid=pid))
+        storage.put(key, data, org_id=p.org_id, content_type=file.content_type or "image/jpeg")
+        p.photo_path = key
+        audit("PATIENT_PHOTO_UPLOADED", "patient", p.id, {"number": p.hospital_number})
+        db.session.commit()
+        flash("Photo saved.", "success")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Could not save photo: {exc}", "error")
+    return redirect(url_for("hims.folder", pid=pid))
+
+
+
 # ================================================================ visits
 @bp.post("/folder/<int:pid>/visit")
 @require_role(*DESK)
@@ -509,3 +550,116 @@ def export():
     return Response(buf.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition":
                              f"attachment; filename=patient-register-{now_naive().date()}.csv"})
+
+
+@bp.get("/folder/<int:pid>/photo/view")
+@require_role(*VIEWERS)
+@require_permission("hims")
+def view_photo(pid: int):
+    p = db.session.get(Patient, pid)
+    if not p or p.org_id != current_user.org_id or not p.photo_path:
+        abort(404)
+    try:
+        from .. import storage
+        return storage.send(p.photo_path, max_age=86400)
+    except FileNotFoundError:
+        abort(404)
+
+
+
+# ================================================================ bulk import paper register
+@bp.get("/import")
+@require_role("SUPER_ADMIN", "HEAD_ADMIN_HR", "HOD")
+@require_permission("hims")
+def import_form():
+    """Upload old paper register as CSV — creates folders in bulk."""
+    return render_template("hims/import.html")
+
+
+@bp.post("/import")
+@require_role("SUPER_ADMIN", "HEAD_ADMIN_HR", "HOD")
+@require_permission("hims")
+def import_submit():
+    """Parse CSV of paper register and create patient folders.
+
+    Expected columns: Surname, First Name, Other Names, Sex (M/F), Phone,
+    Age or DOB, Address, LGA, NOK Name, NOK Phone, Payer, etc.
+    Plain English errors, duplicate detection.
+    """
+    import csv, io
+    org = _org()
+    if not org:
+        abort(503)
+    file = request.files.get("file")
+    if not file or not file.filename.lower().endswith(".csv"):
+        flash("Please upload a .csv file of your paper register.", "error")
+        return redirect(url_for("hims.import_form"))
+    try:
+        text = file.read().decode("utf-8-sig", errors="replace")
+        rows = list(csv.DictReader(io.StringIO(text)))
+    except Exception as exc:
+        flash(f"Could not read file: {exc}", "error")
+        return redirect(url_for("hims.import_form"))
+    if not rows:
+        flash("File is empty.", "error")
+        return redirect(url_for("hims.import_form"))
+
+    created = 0
+    skipped = 0
+    errors = []
+    for i, row in enumerate(rows, start=2):
+        # Normalize keys lower
+        low = {k.lower().strip(): (v or "").strip() for k,v in row.items()}
+        surname = low.get("surname") or low.get("last name") or ""
+        first = low.get("first name") or low.get("firstname") or low.get("first_name") or ""
+        if not surname or not first:
+            skipped += 1
+            continue
+        sex = (low.get("sex") or "F").strip().upper()[:1]
+        if sex not in ("M","F"):
+            sex = "F"
+        phone = low.get("phone") or low.get("phone number") or low.get("phone_number") or ""
+        # Check duplicate by phone or name
+        dup = hims.possible_duplicates(current_user.org_id, surname, first, phone)
+        if dup:
+            skipped += 1
+            continue
+        try:
+            # Build minimal patient
+            pat = Patient(
+                org_id=current_user.org_id,
+                hospital_number=hims.next_hospital_number(org),
+                surname=surname[:80].upper(),
+                first_name=first[:80],
+                other_names=(low.get("other names") or low.get("other_names") or "")[:80],
+                sex=sex,
+                phone=phone[:32] or None,
+                address=(low.get("address") or "")[:300],
+                lga=(low.get("lga") or "")[:80],
+                nok_name=(low.get("nok name") or low.get("next of kin") or "")[:120],
+                nok_phone=(low.get("nok phone") or "")[:32],
+                payer_type=(low.get("payer") or "SELF")[:16].upper() or "SELF",
+                created_by=current_user.id,
+                branch_id=getattr(current_user, "branch_id", None),
+            )
+            # Age
+            age_raw = low.get("age") or low.get("age_years") or ""
+            if age_raw.isdigit():
+                pat.age_years = int(age_raw)
+            db.session.add(pat)
+            db.session.flush()
+            created += 1
+        except Exception as exc:
+            db.session.rollback()
+            errors.append(f"Row {i}: {exc}")
+            skipped += 1
+            continue
+    db.session.commit()
+    audit("PATIENT_BULK_IMPORTED", "patient", None,
+          {"created": created, "skipped": skipped, "errors": len(errors)})
+    flash(f"Imported {created} folders from paper register. {skipped} skipped (duplicate or incomplete).", "success")
+    if errors:
+        flash("Some rows had errors: " + "; ".join(errors[:5]), "warning")
+    return redirect(url_for("hims.desk"))
+
+

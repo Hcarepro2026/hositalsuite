@@ -16,7 +16,7 @@
     <p><b>Department:</b> {{ c.department.name }}<br>
        <b>Category:</b> {{ c.category }}<br>
        <b>Submitted:</b> {{ c.submitted_at.strftime('%d %b %Y %H:%M') }} ({{ c.source|upper }}{% if c.qr_location %} · {{ c.qr_location.name }}{% endif %})<br>
-       <b>Complainant phone:</b> {{ c.phone }} (prefers: {{ c.contact_method }})<br>
+       <b>Complainant phone:</b> {% if current_user.role == 'SUPER_ADMIN' %}{{ c.phone }}{% else %}{{ c.phone|mask_phone }}{% endif %} (prefers: {{ c.contact_method }})<br>
        <b>HOD responsible:</b> {{ hod.name if hod else '— not configured —' }}
        {% if c.attachment_path %}<br><b>Evidence:</b> <a href="/complaints/{{ c.id }}/attachment">📎 view attachment</a>{% endif %}
     </p>
