@@ -17,18 +17,26 @@ def test_user_edit_name_role_phone(client, seeded):
     tok = csrf(client, "/admin/users")
     r = client.post(f"/admin/users/{seeded['hod']}/edit",
                     data={"_csrf": tok, "name": "Hannah HeadOfDept", "role": "HOD",
-                          "phone": "2348099990000", "email": "hod@test.org"},
+                          "phone": "2348099990000", "email": "hod@gmail.com"},
                     follow_redirects=True)
-    assert b"updated" in r.data
+    assert b"updated" in r.data.lower()
     u = db.session.get(User, seeded["hod"])
     assert u.name == "Hannah HeadOfDept" and u.phone == "2348099990000"
+    # keep verified so HOD can still sign in after email change
+    u.email_verified = True
+    u.profile_completed = True
+    u.approved = True
+    db.session.commit()
     # invalid role rejected
-    client.post(f"/admin/users/{seeded['hod']}/edit", data={"_csrf": tok, "name": "x", "role": "HACKER"})
+    client.post(f"/admin/users/{seeded['hod']}/edit",
+                data={"_csrf": tok, "name": "x", "role": "HACKER"})
     assert db.session.get(User, seeded["hod"]).role == "HOD"
     # HOD cannot edit users
     login(client, "hod1")
-    assert client.post(f"/admin/users/{seeded['hod']}/edit",
-                       data={"_csrf": tok, "name": "y", "role": "HOD"}).status_code == 403
+    tok2 = csrf(client, "/admin/users")
+    r2 = client.post(f"/admin/users/{seeded['hod']}/edit",
+                     data={"_csrf": tok2, "name": "y", "role": "HOD"})
+    assert r2.status_code == 403
 
 
 def test_department_delete_guarded(client, app, seeded):

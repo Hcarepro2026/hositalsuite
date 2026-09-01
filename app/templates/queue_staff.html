@@ -2,11 +2,16 @@
 {% block title %}Queue control{% endblock %}
 {% block content %}
 <div class="spread mb">
-  <h1 style="margin:0">Queue Control — {{ today.strftime('%d %b %Y') }} — Priority first</h1>
+  <h1 style="margin:0">Patient on Queue — {{ today.strftime('%d %b %Y') }} — Today's priority</h1>
   <div class="row">
     <a class="btn small ghost" href="/queue/screen" target="_blank">📺 Public display</a>
     <a class="btn small secondary" href="/queue/join">➕ Public join page</a>
+    <span class="pill blue" style="background:#e7f0f8;color:#0e5a8a">Queue links only to Reception — all patients start at Reception</span>
   </div>
+</div>
+<div class="card pad mb" style="background:#e7f0f8;border-left:4px solid #0e5a8a;font-size:.88rem;line-height:1.4">
+  <b>📋 Patient on Queue — Today's date only, priority first</b><br>
+  All patients join via Reception (front desk). Priority lane: Elderly 60+, Pregnant, Child under 5, Wheelchair — seen first automatically at every desk. TV shows ⭐ badge, half wait time. Voice announces. Today's queue only — tomorrow starts fresh.
 </div>
 
 <div class="card pad-lg mb" style="background:#f3e8ff;border-left:4px solid #8b5cf6">

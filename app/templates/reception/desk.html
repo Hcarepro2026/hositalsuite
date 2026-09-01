@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Reception{% endblock %}
 {% block content %}
+{% include "_emergency_banner.html" %}
 <h1>🛎️ Reception</h1>
 <p class="muted">Welcome patients, take their details, and guide them to the next step. Fast Track patients are marked gold and seen first. <a href="/fasttrack" style="background:#000;color:#FFD700;padding:4px 10px;border-radius:999px;font-weight:900;text-decoration:none">👑 Fast Track Desk →</a></p>
 
@@ -48,10 +49,10 @@
   <div class="card pad-lg mb" style="border-left:6px solid {% if i.is_fast_track %}#FFD700{% else %}#e6edf3{% endif %}; {% if i.is_fast_track %}background:#FFFEF0{% endif %}">
     <div class="spread">
       <div>
-        <div style="font-size:1.05rem;font-weight:800">{% if i.is_fast_track %}👑 {% endif %}{{ i.full_name }} {% if i.is_fast_track %}<span class="pill" style="background:#000;color:#FFD700;font-size:.7rem;font-weight:900">FAST TRACK</span>{% endif %}</div>
+        <div style="font-size:1.05rem;font-weight:800">{% if i.is_fast_track %}👑 {% endif %}{{ i.full_name|first_name }} {% if i.is_fast_track %}<span class="pill" style="background:#000;color:#FFD700;font-size:.7rem;font-weight:900">FAST TRACK</span>{% endif %}</div>
         <div class="muted" style="font-size:.84rem">
           {{ i.ref }} · {{ payer_labels.get(i.payer_type, i.payer_type) }}{% if i.payer_number %} · {{ i.payer_number }}{% endif %}
-          {%- if i.phone %} · {{ i.phone }}{% endif %}
+          {%- if i.phone %} · {{ i.phone|mask_phone }}{% endif %}
         </div>
       </div>
       <span class="pill" style="{% if i.is_fast_track %}background:#000;color:#FFD700{% endif %}">{{ i.stage_label }}</span>
@@ -81,9 +82,9 @@
 <div class="card pad-lg mt">
   <h3 style="margin-top:0;font-size:1rem">Where are other patients?</h3>
   <p class="muted" style="font-size:.85rem">These patients are at other desks. Click to go to that desk.</p>
-  {% if billing_q %}<div class="mb"><b>🧾 Billing ({{ billing_q|length }}) — <a href="/billing">Billing desk</a></b><br><span class="muted" style="font-size:.84rem">{% for i in billing_q[:5] %}{% if i.is_fast_track %}👑{% endif %}{{ i.full_name }} ({{ i.ref }}){% if not loop.last %}, {% endif %}{% endfor %}{% if billing_q|length > 5 %} +{{ billing_q|length - 5 }} more{% endif %}</span></div>{% endif %}
-  {% if payment_q %}<div class="mb"><b>💳 Pay point ({{ payment_q|length }}) — <a href="/paypoint">Pay point</a></b><br><span class="muted" style="font-size:.84rem">{% for i in payment_q[:5] %}{% if i.is_fast_track %}👑{% endif %}{{ i.full_name }} ({{ i.ref }}){% if not loop.last %}, {% endif %}{% endfor %}{% if payment_q|length > 5 %} +{{ payment_q|length - 5 }} more{% endif %}</span></div>{% endif %}
-  {% if paid_q %}<div class="mb"><b>📁 Paid — waiting for folder ({{ paid_q|length }}) — <a href="/hims/">HIMS desk</a></b><br><span class="muted" style="font-size:.84rem">{% for i in paid_q[:5] %}{% if i.is_fast_track %}👑{% endif %}{{ i.full_name }} ({{ i.ref }}){% if not loop.last %}, {% endif %}{% endfor %}{% if paid_q|length > 5 %} +{{ paid_q|length - 5 }} more{% endif %}</span></div>{% endif %}
+  {% if billing_q %}<div class="mb"><b>🧾 Billing ({{ billing_q|length }}) — <a href="/billing">Billing desk</a></b><br><span class="muted" style="font-size:.84rem">{% for i in billing_q[:5] %}{% if i.is_fast_track %}👑{% endif %}{{ i.full_name|first_name }} ({{ i.ref }}){% if not loop.last %}, {% endif %}{% endfor %}{% if billing_q|length > 5 %} +{{ billing_q|length - 5 }} more{% endif %}</span></div>{% endif %}
+  {% if payment_q %}<div class="mb"><b>💳 Pay point ({{ payment_q|length }}) — <a href="/paypoint">Pay point</a></b><br><span class="muted" style="font-size:.84rem">{% for i in payment_q[:5] %}{% if i.is_fast_track %}👑{% endif %}{{ i.full_name|first_name }} ({{ i.ref }}){% if not loop.last %}, {% endif %}{% endfor %}{% if payment_q|length > 5 %} +{{ payment_q|length - 5 }} more{% endif %}</span></div>{% endif %}
+  {% if paid_q %}<div class="mb"><b>📁 Paid — waiting for folder ({{ paid_q|length }}) — <a href="/hims/">HIMS desk</a></b><br><span class="muted" style="font-size:.84rem">{% for i in paid_q[:5] %}{% if i.is_fast_track %}👑{% endif %}{{ i.full_name|first_name }} ({{ i.ref }}){% if not loop.last %}, {% endif %}{% endfor %}{% if paid_q|length > 5 %} +{{ paid_q|length - 5 }} more{% endif %}</span></div>{% endif %}
 </div>
 {% endif %}
 

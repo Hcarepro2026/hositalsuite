@@ -40,6 +40,6 @@
     </nav>
   </div>
 </div>
-<script src="{{ url_for('static', filename='js/auth.js') }}?v={{ app_version }}"></script>
+<script src="{{ url_for('static', filename='js/auth.js') }}?v={{ app_version }}" nonce="{{ csp_nonce }}"></script>
 </body>
 </html>

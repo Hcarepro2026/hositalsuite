@@ -333,7 +333,18 @@ def resolve_upload_path(rel_path: str) -> str | None:
 
 
 # ------------------------------------------------------------------ hooks
+def _generate_csp_nonce() -> str:
+    # 16 bytes urlsafe is 22 chars, enough entropy for CSP nonce per request
+    return secrets.token_urlsafe(16)
+
+def _csp_before():
+    # Generate per-request nonce for inline scripts. Stored in g and
+    # made available to templates via context processor in __init__.py.
+    from flask import g
+    g.csp_nonce = _generate_csp_nonce()
+
 def register_security_hooks(app):
+    app.before_request(_csp_before)
     app.before_request(csrf_protect)
 
     from .views.auth import enforce_pending_password_change
@@ -351,16 +362,29 @@ def register_security_hooks(app):
         if request.is_secure:
             resp.headers.setdefault("Strict-Transport-Security",
                                     "max-age=31536000; includeSubDomains")
-        # CSP: the app ships inline <style>/<script> blocks and data: QR images,
-        # so 'unsafe-inline' is required until those are extracted. Everything
-        # else is locked to same-origin, and framing is forbidden outright.
-        resp.headers.setdefault(
-            "Content-Security-Policy",
+        # CSP: script-src now uses per-request nonce instead of 'unsafe-inline'.
+        # style-src still allows 'unsafe-inline' because the app has many
+        # style=\"\" attributes which would otherwise require 'unsafe-hashes' or a
+        # full CSS refactor. Inline <style> tags use the nonce where present.
+        # This removes the main XSS vector (inline scripts) while keeping the
+        # mobile-first UI working. Next step: extract style attributes to classes
+        # and switch style-src to nonce-only.
+        from flask import g as _g
+        nonce = getattr(_g, "csp_nonce", "") or ""
+        # Build CSP: if nonce present, include it for script and style
+        script_part = f"'self' 'nonce-{nonce}'" if nonce else "'self'"
+        style_part = f"'self' 'unsafe-inline' 'nonce-{nonce}'" if nonce else "'self' 'unsafe-inline'"
+        csp_value = (
             "default-src 'self'; "
             "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
-            "style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' 'unsafe-inline'; worker-src 'self'; connect-src 'self'; font-src 'self' data:; "
-            "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+            f"style-src {style_part}; "
+            f"script-src {script_part}; worker-src 'self'; connect-src 'self'; font-src 'self' data:; "
+            "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        )
+        resp.headers.setdefault("Content-Security-Policy", csp_value)
+        # Expose nonce in header for debugging / future strict-dynamic?
+        if nonce:
+            resp.headers.setdefault("X-CSP-Nonce", nonce)
         resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         resp.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         resp.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")

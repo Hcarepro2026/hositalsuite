@@ -51,10 +51,10 @@ def test_patient_gets_inapp_ack_and_sms_whatsapp(client, seeded):
     assert c.ref.encode() in status.data
     assert b"Messages from the hospital" in status.data
     assert b"received your complaint" in status.data
-    # SMS + WhatsApp queued to the patient's phone
-    sms = db.session.query(SmsMessage).filter_by(to_number="08012345678").first()
+    # SMS + WhatsApp queued to the patient's phone — normalized to +234
+    sms = db.session.query(SmsMessage).filter(SmsMessage.to_number.contains("8012345678")).first()
     assert sms is not None and c.ref in sms.body
-    wa = db.session.query(WhatsAppMessage).filter_by(to_number="08012345678").first()
+    wa = db.session.query(WhatsAppMessage).filter(WhatsAppMessage.to_number.contains("8012345678")).first()
     assert wa is not None and c.ref in wa.body
 
 
@@ -72,7 +72,7 @@ def test_patient_gets_outcome_when_resolved(client, seeded):
                       "resolution_notes": "Refund processed and confirmed with patient."},
                 follow_redirects=True)
     sms = (db.session.query(SmsMessage)
-           .filter(SmsMessage.to_number == "08098765432",
+           .filter(SmsMessage.to_number.contains("8098765432"),
                    SmsMessage.body.ilike("%resolved%")).first())
     assert sms is not None
     status = client.get(f"/complaint/status?ref={c.ref}&phone=08098765432")

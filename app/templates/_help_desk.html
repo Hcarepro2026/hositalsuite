@@ -8,7 +8,7 @@
    Falls back gracefully when the hospital has not filled in its contact
    details yet — it tells the patient to ask at reception instead of showing
    an empty box. #}
-<div class="help-desk">
+<div class="help-desk" id="help-desk">
   <b>{{ _('help_need') }}</b>
   {% if hospital and (hospital.phone or hospital.phone_alt) %}
     <div class="help-nums">

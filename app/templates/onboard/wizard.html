@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0e5a8a">
 <title>Set up your hospital</title>
-<style>
+<style nonce="{{ csp_nonce }}">
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   background:#f2f5f8;color:#152433;line-height:1.45}
@@ -171,7 +171,7 @@ a{color:#0e5a8a}
   </form>
   <p class="foot">Already have a sign-in? <a href="/login">Go to sign-in</a></p>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
 (function(){
   var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
   var dots = document.querySelectorAll('#dots i');

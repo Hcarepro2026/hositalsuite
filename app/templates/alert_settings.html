@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Alert settings — Premium{% endblock %}
 {% block extra_head %}
-<style>
+<style nonce="{{ csp_nonce }}">
 .premium-card { background:#fff; border-radius:16px; padding:18px; margin-bottom:16px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
 .premium-card h2 { margin-top:0; }
 .toggle-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f0f0f0; }
@@ -118,10 +118,10 @@
   </ul>
 </div>
 
-<script>window.hmsUserName = {{ current_user.name | tojson }};</script>
+<script nonce="{{ csp_nonce }}">window.hmsUserName = {{ current_user.name | tojson }};</script>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener("DOMContentLoaded", function(){
   // Update push status UI
   try {

@@ -165,7 +165,7 @@
   {% if phrases|length > 100 %}<p class="muted" style="padding:8px">Showing 100 of {{ phrases|length }}</p>{% endif %}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // Audition
 async function auditionVoices(){
   const key = document.getElementById('audition-key').value;

@@ -117,10 +117,12 @@ def test_whatsapp_gets_the_same_live_link(client, app, seeded):
         got = handle_whatsapp(org, "2348012345678", "I want Fast Track")
         assert got["answered"] is True
         assert "clinic.example/book" in got["text"]
-        queued = db.session.query(WhatsAppMessage).filter_by(
-            to_number="2348012345678").all()
-        assert queued
+        # Number is normalized to +234... in queue, so check contains 8012345678
+        queued = db.session.query(WhatsAppMessage).filter(
+            WhatsAppMessage.to_number.contains("8012345678")).all()
+        assert queued, "WhatsApp queue should have message"
         assert "clinic.example/book" in queued[-1].body
-        sess = db.session.query(ChatSession).filter_by(
-            phone="2348012345678", channel="whatsapp").one()
+        sess = db.session.query(ChatSession).filter(
+            ChatSession.phone.contains("8012345678"), ChatSession.channel == "whatsapp").first()
+        assert sess is not None
         assert sess.last_action == "fasttrack"

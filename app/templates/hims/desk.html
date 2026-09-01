@@ -1,12 +1,20 @@
 {% extends "base.html" %}
 {% block title %}HIMS Register{% endblock %}
 {% block content %}
+{% set show_always = True %}
+{% include "_emergency_banner.html" %}
+
 
 <div class="spread mb">
   <h1 style="margin:0">📁 HIMS Register</h1>
-  {% if current_user.role in ('SUPER_ADMIN','HEAD_ADMIN_HR','MD_CEO') %}
-  <a class="btn small ghost" href="/hims/export">⬇ Download register</a>
-  {% endif %}
+  <div style="display:flex;gap:8px">
+    {% if current_user.role in ('SUPER_ADMIN','HEAD_ADMIN_HR','MD_CEO','HOD') %}
+    <a class="btn small" href="{{ url_for('hims.import_form') }}">📚 Import paper register</a>
+    {% endif %}
+    {% if current_user.role in ('SUPER_ADMIN','HEAD_ADMIN_HR','MD_CEO') %}
+    <a class="btn small ghost" href="/hims/export">⬇ Download register</a>
+    {% endif %}
+  </div>
 </div>
 
 <div class="grid cols4 mb">
@@ -45,7 +53,7 @@
         {% if p.care_flags %}<br>{% for a in p.care_flags %}<span class="pill amber">{{ a }}</span> {% endfor %}{% endif %}
       </td>
       <td>{{ p.age_display }} · {{ 'Female' if p.sex == 'F' else 'Male' }}</td>
-      <td>{{ p.phone or '—' }}</td>
+      <td>{{ p.phone|mask_phone if p.phone else '—' }}</td>
       <td><span class="pill blue">{{ payer_labels.get(p.payer_type, p.payer_type).split('—')[0] }}</span></td>
       <td>{% if p.last_visit_at %}{{ p.last_visit_at.strftime('%d %b %Y') }}
           {% else %}<span class="muted">never — first visit</span>{% endif %}</td>
@@ -76,7 +84,7 @@
       <div class="spread">
         <div>
           <div style="font-weight:800">{{ i.full_name }}</div>
-          <div class="muted" style="font-size:.85rem">{{ i.ref }} · {{ payer_labels.get(i.payer_type, i.payer_type) }}{% if i.payer_number %} · {{ i.payer_number }}{% endif %} · {{ i.phone or '' }}</div>
+          <div class="muted" style="font-size:.85rem">{{ i.ref }} · {{ payer_labels.get(i.payer_type, i.payer_type) }}{% if i.payer_number %} · {{ i.payer_number }}{% endif %} · {{ i.phone|mask_phone if i.phone else '' }}</div>
           <div class="muted" style="font-size:.85rem">Paid {{ i.paid_at.strftime('%H:%M') if i.paid_at else '' }} · Receipt {{ i.payment_ref or '—' }} · Bill {{ i.bill_ref or '—' }}</div>
         </div>
         <span class="pill green">PAID</span>

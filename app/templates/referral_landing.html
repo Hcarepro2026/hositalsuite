@@ -35,6 +35,6 @@
   {% include "_help_desk.html" %}
 </main>
 <div class="footer">{{ org.name }} · share good care · no login needed</div>
-<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}" nonce="{{ csp_nonce }}"></script>
 </body>
 </html>

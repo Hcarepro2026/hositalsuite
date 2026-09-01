@@ -452,6 +452,204 @@ def _place_label(place: dict) -> str:
     return " › ".join(bits) or "—"
 
 
+
+# ------------------------------------------------------------------ leave requests (approval workflow)
+@bp.get("/roster/leave")
+@require_role(*VIEWERS)
+def leave_list():
+    """My leave requests + pending approvals for HOD/HR."""
+    from ..models import LeaveRequest, LeaveBalance, now_naive
+    org_id = current_user.org_id
+    # My requests — resilient if table not yet migrated (avoid 500)
+    try:
+        my_reqs = (db.session.query(LeaveRequest)
+                   .filter_by(org_id=org_id, user_id=current_user.id)
+                   .order_by(LeaveRequest.requested_at.desc()).limit(100).all())
+    except Exception:
+        my_reqs = []
+        db.session.rollback()
+    pending = []
+    try:
+        if current_user.role in ("HOD", "HEAD_ADMIN_HR", "SUPER_ADMIN", "ADMIN_MANAGER") or getattr(current_user, "is_super", False):
+            q = db.session.query(LeaveRequest).filter_by(org_id=org_id, status="PENDING")
+            pending = q.order_by(LeaveRequest.requested_at.asc()).limit(100).all()
+    except Exception:
+        pending = []
+        db.session.rollback()
+    try:
+        year = now_naive().date().year
+        balances = (db.session.query(LeaveBalance)
+                    .filter_by(org_id=org_id, user_id=current_user.id, year=year).all())
+    except Exception:
+        year = now_naive().date().year
+        balances = []
+        db.session.rollback()
+    return render_template("roster/leave.html", my_reqs=my_reqs, pending=pending,
+                           balances=balances, year=year, leave_types=LEAVE_TYPES)
+
+
+@bp.get("/roster/leave/request")
+@require_role(*VIEWERS)
+def leave_request_form():
+    return render_template("roster/leave_request.html", leave_types=LEAVE_TYPES)
+
+
+@bp.post("/roster/leave/request")
+@require_role(*VIEWERS)
+def leave_request_submit():
+    from ..models import LeaveRequest, LEAVE_BALANCE_DEFAULTS
+    import datetime as dt
+    leave_type = rd.normalise_leave(request.form.get("leave_type") or "")
+    start_raw = (request.form.get("start_date") or "").strip()
+    end_raw = (request.form.get("end_date") or "").strip()
+    reason = (request.form.get("reason") or "").strip()[:300]
+
+    errors = []
+    if not leave_type:
+        errors.append("Choose the type of leave.")
+    start = rd.parse_date(start_raw)
+    end = rd.parse_date(end_raw) or start
+    if not start:
+        errors.append("Enter a valid start date.")
+    if not end:
+        errors.append("Enter a valid end date.")
+    if start and end and end < start:
+        errors.append("End date cannot be before start date.")
+    if start and (end - start).days + 1 > 90:
+        errors.append("Leave request cannot exceed 90 days at once. Split it.")
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        return redirect(url_for("roster.leave_request_form"))
+
+    days = (end - start).days + 1
+    req = LeaveRequest(
+        org_id=current_user.org_id,
+        user_id=current_user.id,
+        leave_type=leave_type,
+        start_date=start,
+        end_date=end,
+        days_requested=days,
+        reason=reason,
+        status="PENDING",
+    )
+    db.session.add(req)
+    audit("LEAVE_REQUESTED", "leave_request", None,
+          {"type": leave_type, "start": str(start), "end": str(end), "days": days})
+    db.session.commit()
+    flash(f"Leave request sent: {days} day(s) {req.label} from {start} to {end}. Your HOD/HR will review.", "success")
+    return redirect(url_for("roster.leave_list"))
+
+
+@bp.post("/roster/leave/<int:rid>/approve")
+@require_role("HOD", "HEAD_ADMIN_HR", "SUPER_ADMIN", "ADMIN_MANAGER")
+def leave_approve(rid: int):
+    from ..models import LeaveRequest, LeaveBalance, RosterEntry, now_naive
+    org_id = current_user.org_id
+    req = db.session.get(LeaveRequest, rid)
+    if not req or req.org_id != org_id:
+        abort(404)
+    if req.status != "PENDING":
+        flash("This request is already reviewed.", "info")
+        return redirect(url_for("roster.leave_list"))
+    # Check balance
+    year = req.start_date.year
+    bal = (db.session.query(LeaveBalance)
+           .filter_by(org_id=org_id, user_id=req.user_id, year=year, leave_type=req.leave_type).first())
+    if not bal:
+        from ..models import LEAVE_BALANCE_DEFAULTS
+        entitled = LEAVE_BALANCE_DEFAULTS.get(req.leave_type, 30)
+        bal = LeaveBalance(org_id=org_id, user_id=req.user_id, year=year,
+                           leave_type=req.leave_type, entitled=entitled,
+                           used=0, remaining=entitled)
+        db.session.add(bal)
+        db.session.flush()
+    if bal.remaining < req.days_requested and req.leave_type not in ("SICK", "COMPASSIONATE", "OFF"):
+        flash(f"{req.user.name} has only {bal.remaining} days of {req.label} left, but requested {req.days_requested}. Approve anyway? Use note.", "warning")
+
+    # Create roster entries for each day
+    try:
+        for d in rd.days_between(req.start_date, req.end_date):
+            # Skip if already on leave
+            if rd.leave_on(org_id, req.user_id, d):
+                continue
+            # Find user's department for scope
+            user = db.session.get(User, req.user_id)
+            dept_id = getattr(user, "department_id", None)
+            db.session.add(RosterEntry(
+                org_id=org_id, duty_date=d, user_id=req.user_id,
+                kind="LEAVE", shift="LEAVE", leave_type=req.leave_type,
+                scope="DEPARTMENT" if dept_id else "ORG",
+                department_id=dept_id, note=f"Approved leave #{req.id}",
+                source="leave_request", created_by=current_user.id))
+        req.status = "APPROVED"
+        req.reviewed_by = current_user.id
+        req.reviewed_at = now_naive()
+        req.roster_created = True
+        bal.used += req.days_requested
+        bal.remaining = max(0, bal.entitled - bal.used)
+        audit("LEAVE_APPROVED", "leave_request", req.id,
+              {"type": req.leave_type, "days": req.days_requested, "user": req.user.name})
+        db.session.commit()
+        flash(f"Approved: {req.user.name} — {req.days_requested} days {req.label}.", "success")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Could not approve: {exc}", "error")
+    return redirect(url_for("roster.leave_list"))
+
+
+@bp.post("/roster/leave/<int:rid>/reject")
+@require_role("HOD", "HEAD_ADMIN_HR", "SUPER_ADMIN", "ADMIN_MANAGER")
+def leave_reject(rid: int):
+    from ..models import LeaveRequest, now_naive
+    org_id = current_user.org_id
+    req = db.session.get(LeaveRequest, rid)
+    if not req or req.org_id != org_id:
+        abort(404)
+    if req.status != "PENDING":
+        flash("Already reviewed.", "info")
+        return redirect(url_for("roster.leave_list"))
+    note = (request.form.get("review_note") or "").strip()[:300]
+    req.status = "REJECTED"
+    req.reviewed_by = current_user.id
+    req.reviewed_at = now_naive()
+    req.review_note = note
+    audit("LEAVE_REJECTED", "leave_request", req.id, {"note": note})
+    db.session.commit()
+    flash(f"Rejected leave request for {req.user.name}.", "info")
+    return redirect(url_for("roster.leave_list"))
+
+
+@bp.post("/roster/autofill")
+@require_role(*EDITORS)
+def roster_autofill():
+    """Auto-fill next week from previous week."""
+    from datetime import timedelta
+    place, errs = _place_from_request(request.form)
+    if errs:
+        flash("Choose where this roster belongs first.", "error")
+        return redirect(url_for("roster.roster_view"))
+    _require_edit(place)
+    src_raw = (request.form.get("source_start") or "").strip()
+    tgt_raw = (request.form.get("target_start") or "").strip()
+    src = rd.parse_date(src_raw)
+    tgt = rd.parse_date(tgt_raw)
+    if not src or not tgt:
+        flash("Pick source week start and target week start dates.", "error")
+        return redirect(_back(place))
+    result = rd.autofill_next_week(current_user.org_id, place,
+                                   source_start=src, target_start=tgt,
+                                   created_by_id=current_user.id)
+    audit("ROSTER_AUTOFILL", "roster", None,
+          {"source": str(src), "target": str(tgt), "added": result["added"], "place": place})
+    db.session.commit()
+    flash(f"Auto-filled {result['added']} duty slots from week of {src} to week of {tgt}. {result['skipped']} skipped (leave or already rostered).", "success")
+    return redirect(_back(place))
+
+# ------------------------------------------------------------------ export
+
+
+
 # ------------------------------------------------------------------ export
 @bp.get("/roster/export")
 @require_role(*VIEWERS)

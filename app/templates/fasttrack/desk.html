@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Fast Track Desk{% endblock %}
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
   .gold-card{background: linear-gradient(135deg,#FFD700 0%,#FFC400 50%,#FFA500 100%);color:#000;border-radius:18px;padding:18px 20px;box-shadow:0 8px 24px rgba(255,165,0,0.3);margin-bottom:16px;border:1px solid rgba(0,0,0,0.06)}
   .gold-card h1{margin:0;font-size:1.45rem;font-weight:900;letter-spacing:-0.01em}
   .gold-card p{margin:8px 0 0;font-size:.9rem;line-height:1.5;font-weight:500}
@@ -46,8 +46,8 @@
 <div class="fast-row">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
     <div style="flex:1">
-      <div class="name">👑 {{ t.patient_name }} <span class="badge-gold">{{ t.code }}</span> <span class="badge-fast">{{ all_labels.get(t.fast_track_reason, t.fast_track_reason or 'Premium') }}</span></div>
-      <div class="muted" style="font-size:.82rem;margin-top:4px">{{ t.department.name if t.department else '' }} · {{ t.queue_date }} · {{ t.phone or '' }}</div>
+      <div class="name">👑 {{ t.patient_name|first_name }} <span class="badge-gold">{{ t.code }}</span> <span class="badge-fast">{{ all_labels.get(t.fast_track_reason, t.fast_track_reason or 'Premium') }}</span></div>
+      <div class="muted" style="font-size:.82rem;margin-top:4px">{{ t.department.name if t.department else '' }} · {{ t.queue_date }} · {{ t.phone|mask_phone if t.phone else '' }}</div>
     </div>
     <span class="pill" style="background:#000;color:#FFD700">{{ t.status }}</span>
   </div>
@@ -67,7 +67,7 @@
 <div class="fast-row">
   <div style="display:flex;justify-content:space-between;gap:10px">
     <div style="flex:1">
-      <div class="name">👑 {{ r.intake.full_name }} <span class="badge-gold">{{ r.intake.ref }}</span> <span class="badge-fast">{{ r.label }}</span></div>
+      <div class="name">👑 {{ r.intake.full_name|first_name }} <span class="badge-gold">{{ r.intake.ref }}</span> <span class="badge-fast">{{ r.label }}</span></div>
       <div class="muted" style="font-size:.82rem;margin-top:3px">{{ r.intake.stage_label }}</div>
       {% if r.journey and r.journey.total %}<div style="margin-top:6px;background:#FFFEF0;border-radius:8px;padding:6px 10px;font-size:.78rem;border:1px solid #f0e6c0">⏱ About {{ (r.journey.total)|hm }} total left</div>{% endif %}
     </div>
@@ -96,7 +96,7 @@
 <div class="fast-row">
   <div style="display:flex;justify-content:space-between;gap:10px">
     <div style="flex:1">
-      <div class="name">👑 {{ r.patient.full_name if r.patient else 'Patient #' ~ r.visit.patient_id }} <span class="badge-gold">{{ r.patient.hospital_number if r.patient else '' }}</span></div>
+      <div class="name">👑 {{ r.patient.full_name|first_name if r.patient else 'Patient #' ~ r.visit.patient_id }} <span class="badge-gold">{{ r.patient.hospital_number if r.patient else '' }}</span></div>
       <div class="muted" style="font-size:.82rem;margin-top:3px">{{ r.visit.clinic }} {% if r.visit.consulting_room %}· {{ r.visit.consulting_room }}{% endif %} · {{ r.visit.status }}</div>
     </div>
     <div style="text-align:right"><span class="pill" style="background:#000;color:#FFD700">{{ (r.waited)|hm }}</span></div>
@@ -113,7 +113,7 @@
 <div class="fast-row">
   <div style="display:flex;justify-content:space-between;gap:10px">
     <div style="flex:1">
-      <div class="name">👑 {{ r.patient.full_name if r.patient else '—' }} <span class="badge-gold">{{ r.step.destination }}</span></div>
+      <div class="name">👑 {{ r.patient.full_name|first_name if r.patient else '—' }} <span class="badge-gold">{{ r.step.destination }}</span></div>
       <div class="muted" style="font-size:.82rem;margin-top:3px">{{ r.patient.hospital_number if r.patient else '' }} · Sent {{ (r.waited)|hm }} ago</div>
     </div>
     <span class="pill" style="background:#000;color:#FFD700">{{ (r.waited)|hm }}</span>

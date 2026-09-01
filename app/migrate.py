@@ -38,6 +38,7 @@ COLUMNS = [
     ("department", "roster_mode", "VARCHAR(10) DEFAULT 'two_12h'"),
     ("department", "roster_staff_per_shift", "INTEGER DEFAULT 1"),
     ("appointment", "referral_id", "INTEGER"),
+    ("appointment", "patient_id", "INTEGER"),
     ("appointment", "is_repeat", _bool_sql),
     ("patient_feedback", "referral_id", "INTEGER"),
     ("organization", "email", "VARCHAR(160)"),
@@ -74,6 +75,10 @@ COLUMNS = [
     # --- HIMS patient folder: patient-CARE fields (this app is not an EMR).
     # Belt and braces behind migration b3f81a9d5c22: if Alembic is ever skipped
     # or fails, /hims/ must still not 500 on a missing column.
+    ("patient", "photo_path", "VARCHAR(300)"),
+    ("work_claim", "suspended", "BOOLEAN DEFAULT FALSE"),
+    ("work_claim", "suspended_at", "TIMESTAMP"),
+    ("work_claim", "suspended_by", "INTEGER"),
     ("patient", "preferred_lang", "VARCHAR(4)"),
     ("patient", "assistance", "VARCHAR(200)"),
     ("patient", "care_note", "VARCHAR(200)"),
@@ -216,3 +221,86 @@ def ensure_schema() -> None:
         with db.engine.begin() as conn:
             conn.execute(text(
                 f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {table} ({cols}) WHERE {where}'))
+
+    # --- New tables that may not exist on old deployments (e.g. leave workflow, patient photo)
+    # create_all() should handle, but belt-and-braces raw CREATE TABLE IF NOT EXISTS
+    # so a missing import does not leave production with 500s.
+    try:
+        with db.engine.begin() as conn:
+            # leave_request
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS leave_request (
+                    id SERIAL PRIMARY KEY,
+                    org_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    leave_type VARCHAR(16) NOT NULL,
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    days_requested INTEGER NOT NULL,
+                    reason VARCHAR(300),
+                    status VARCHAR(12) DEFAULT 'PENDING' NOT NULL,
+                    requested_at TIMESTAMP,
+                    reviewed_by INTEGER,
+                    reviewed_at TIMESTAMP,
+                    review_note VARCHAR(300),
+                    roster_created BOOLEAN DEFAULT FALSE NOT NULL,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP
+                )
+            """))
+            # leave_balance
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS leave_balance (
+                    id SERIAL PRIMARY KEY,
+                    org_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    year INTEGER NOT NULL,
+                    leave_type VARCHAR(16) NOT NULL,
+                    entitled INTEGER DEFAULT 0 NOT NULL,
+                    used INTEGER DEFAULT 0 NOT NULL,
+                    remaining INTEGER DEFAULT 0 NOT NULL,
+                    updated_at TIMESTAMP,
+                    UNIQUE (org_id, user_id, year, leave_type)
+                )
+            """))
+            # For SQLite, SERIAL is not valid — try SQLite version if Postgres failed
+    except Exception:
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS leave_request (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        org_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        leave_type VARCHAR(16) NOT NULL,
+                        start_date DATE NOT NULL,
+                        end_date DATE NOT NULL,
+                        days_requested INTEGER NOT NULL,
+                        reason VARCHAR(300),
+                        status VARCHAR(12) DEFAULT 'PENDING' NOT NULL,
+                        requested_at TIMESTAMP,
+                        reviewed_by INTEGER,
+                        reviewed_at TIMESTAMP,
+                        review_note VARCHAR(300),
+                        roster_created BOOLEAN DEFAULT 0 NOT NULL,
+                        created_at TIMESTAMP,
+                        updated_at TIMESTAMP
+                    )
+                """))
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS leave_balance (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        org_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        year INTEGER NOT NULL,
+                        leave_type VARCHAR(16) NOT NULL,
+                        entitled INTEGER DEFAULT 0 NOT NULL,
+                        used INTEGER DEFAULT 0 NOT NULL,
+                        remaining INTEGER DEFAULT 0 NOT NULL,
+                        updated_at TIMESTAMP,
+                        UNIQUE (org_id, user_id, year, leave_type)
+                    )
+                """))
+        except Exception:
+            pass
+
