@@ -11,10 +11,10 @@ ALL_MODULES = None
 
 def _all_kb():
     from . import (kb_core, kb_departments_full, kb_depts, kb_extra, kb_extended,
-                   kb_part5, kb_part6, kb_part7)
+                   kb_part5, kb_part6, kb_part7, kb_app_master)
     return (list(kb_core.KB) + list(kb_depts.KB) + list(kb_extra.KB) + list(kb_extended.KB)
             + list(kb_part5.KB) + list(kb_part6.KB) + list(kb_part7.KB)
-            + list(kb_departments_full.KB))
+            + list(kb_departments_full.KB) + list(kb_app_master.KB))
 
 
 def seed_global_kb(app, quiet: bool = False) -> int:

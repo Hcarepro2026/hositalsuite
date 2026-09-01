@@ -507,6 +507,18 @@ def build_preview(org_id: int, raw_rows: list[dict], *, place: dict,
                           db.session.query(DutyRoster).filter_by(org_id=org_id).all()} \
         if place.get("scope") == "ORG" else set()
     leave_days = _existing_leave(org_id)
+    # Cross-dept clash: where is this person already rostered today (any dept)?
+    anywhere = _existing_anywhere(org_id)
+    # Current place label for comparison
+    try:
+        current_label = ""
+        if place.get("scope") == "ORG":
+            current_label = "Hospital-wide (Admin Manager)"
+        else:
+            dept = db.session.get(Department, place.get("department_id")) if place.get("department_id") else None
+            current_label = dept.name if dept else f"dept {place.get('department_id')}"
+    except Exception:
+        current_label = ""
     seen: set[tuple] = set()
     out: list[dict] = []
 
@@ -585,6 +597,15 @@ def build_preview(org_id: int, raw_rows: list[dict], *, place: dict,
                         errors.append(f"{person.name} is on {LEAVE_LABELS.get(leave_days[(person.id, d)], 'leave')} "
                                       f"on {d} — they cannot be on duty that day.")
                         break
+                    # Cross-department clash warning
+                    if (person.id, d) in anywhere:
+                        other_places = [p for p in anywhere[(person.id, d)] if p != current_label]
+                        if other_places:
+                            warnings.append(
+                                f"⚠️ {person.name} is already rostered on {d} at "
+                                f"{', '.join(other_places[:2])}. "
+                                "Check with that HOD — same person cannot be in two places same night."
+                            )
                 else:
                     key = (d, person.id, "LEAVE")
                     if key in seen or (person.id, d) in leave_days:
@@ -619,6 +640,23 @@ def _existing_slots(org_id: int, place: dict) -> set[tuple]:
 def _existing_leave(org_id: int) -> dict[tuple, str]:
     rows = db.session.query(RosterEntry).filter_by(org_id=org_id, kind="LEAVE").all()
     return {(r.user_id, r.duty_date): (r.leave_type or "OFF") for r in rows}
+
+
+def _existing_anywhere(org_id: int) -> dict[tuple, list[str]]:
+    """Map (user_id, date) -> list of place labels where already rostered (any dept).
+    
+    Used for cross-department clash warning: same nurse rostered by two HODs
+    on same night — each only sees own list, so we warn.
+    """
+    rows = db.session.query(RosterEntry).filter_by(org_id=org_id, kind="DUTY").all()
+    out: dict[tuple, list[str]] = {}
+    for r in rows:
+        key = (r.user_id, r.duty_date)
+        label = r.place_label
+        out.setdefault(key, [])
+        if label not in out[key]:
+            out[key].append(label)
+    return out
 
 
 # ------------------------------------------------------------------ preview store
@@ -714,6 +752,74 @@ def commit_rows(org_id: int, rows: list[dict], *, place: dict, created_by_id: in
             existing.add(key)
             added += 1
     return {"added": added, "skipped": skipped}
+
+
+def autofill_next_week(org_id: int, place: dict, *, source_start: date, target_start: date, created_by_id: int) -> dict:
+    """Copy one week of roster to the next week — saves typing.
+
+    Why: HODs often repeat same pattern weekly. Auto-fill copies DUTY rows
+    from source week (7 days) to target week (7 days), skipping leave days
+    and existing slots. Returns {added, skipped}.
+    """
+    from datetime import timedelta
+    source_end = source_start + timedelta(days=6)
+    target_end = target_start + timedelta(days=6)
+
+    # Load source week
+    src_rows = (db.session.query(RosterEntry)
+                .filter(RosterEntry.org_id == org_id,
+                        RosterEntry.duty_date >= source_start,
+                        RosterEntry.duty_date <= source_end,
+                        RosterEntry.kind == "DUTY")
+                .all())
+    # Filter by place
+    if place.get("scope") and place["scope"] != "ORG":
+        src_rows = [r for r in src_rows if r.scope == place["scope"]]
+        for col in ("department_id", "section_id", "unit_id"):
+            if place.get(col):
+                src_rows = [r for r in src_rows if getattr(r, col) == place[col]]
+    elif place.get("scope") == "ORG":
+        src_rows = [r for r in src_rows if r.scope == "ORG"]
+
+    leave_days = _existing_leave(org_id)
+    existing = _existing_slots(org_id, place)
+    org_dates = {r.duty_date for r in db.session.query(DutyRoster).filter_by(org_id=org_id).all()}
+
+    added = skipped = 0
+    for src in src_rows:
+        offset = (src.duty_date - source_start).days
+        target_date = target_start + timedelta(days=offset)
+        # Skip if target is leave day
+        if (src.user_id, target_date) in leave_days:
+            skipped += 1
+            continue
+        if place["scope"] == "ORG":
+            if target_date in org_dates:
+                skipped += 1
+                continue
+            db.session.add(DutyRoster(org_id=org_id, duty_date=target_date,
+                                      user_id=src.user_id, source="autofill",
+                                      note=f"Auto-filled from {src.duty_date}",
+                                      created_by=created_by_id))
+            org_dates.add(target_date)
+            added += 1
+            continue
+        key = (target_date, src.user_id, src.shift)
+        if key in existing:
+            skipped += 1
+            continue
+        db.session.add(RosterEntry(
+            org_id=org_id, duty_date=target_date, user_id=src.user_id,
+            kind="DUTY", shift=src.shift, scope=src.scope,
+            department_id=src.department_id, section_id=src.section_id,
+            unit_id=src.unit_id, note=f"Auto-filled from {src.duty_date}",
+            source="autofill", created_by=created_by_id))
+        existing.add(key)
+        added += 1
+    return {"added": added, "skipped": skipped}
+
+
+# ------------------------------------------------------------------ reading
 
 
 # ------------------------------------------------------------------ reading

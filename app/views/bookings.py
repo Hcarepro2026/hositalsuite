@@ -146,6 +146,19 @@ def portal_submit():
     pay_status = "PENDING" if (is_ft and ft_requires_pay) else ("WAIVED" if is_ft else "PENDING")
 
     def _build_apt():
+        # Link to existing patient folder if phone matches — closes gap #4
+        patient_id = None
+        try:
+            from ..models import Patient
+            pat = db.session.query(Patient).filter_by(org_id=org.id, phone=phone).first()
+            if not pat:
+                # try normalized phone without spaces
+                clean = phone.replace(" ", "").replace("-", "")
+                pat = db.session.query(Patient).filter_by(org_id=org.id, phone=clean).first()
+            if pat:
+                patient_id = pat.id
+        except Exception:
+            patient_id = None
         return Appointment(
             org_id=org.id,
             ref=services.next_appointment_ref(org, now),
@@ -155,6 +168,7 @@ def portal_submit():
             appointment_time=slot,
             patient_name=name[:120],
             phone=phone,
+            patient_id=patient_id,
             consent_at=now,
             status="BOOKED",
             source="qr" if qr_loc else "link",

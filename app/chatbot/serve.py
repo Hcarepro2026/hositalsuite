@@ -99,6 +99,14 @@ def respond(text: str, *, org, lang: str = "en", session) -> dict:
     """
     org_id = getattr(org, "id", None)
 
+    # Phase 1 & 14: privacy & prompt injection — backend enforced, never frontend only
+    if engine.is_privacy_attack(text) or engine.is_prompt_injection(text):
+        body, links = decorate(engine.PRIVACY_REFUSAL if lang != "pcm" else engine.PRIVACY_REFUSAL_PCM, None, org)
+        return {"text": body, "action": None, "links": links,
+                "answered": True, "intent": "privacy_refusal",
+                "article": None, "confidence": 99.0, "unanswered": False,
+                "handoff": False}
+
     if engine.is_teaching(text):
         body, links = decorate(engine.TEACHING_REPLY, None, org)
         return {"text": body, "action": "handoff", "links": links,
