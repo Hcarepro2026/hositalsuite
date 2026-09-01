@@ -8,7 +8,7 @@
 {% include "_pwa_head.html" %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 {% block extra_head %}{% endblock %}
-<style>
+<style nonce="{{ csp_nonce }}">
   :root{
     --primary: {{ settings.brand_primary or '#0e5a8a' }};
     --accent: {{ settings.brand_accent or '#12b5a5' }};
@@ -86,7 +86,7 @@
 </nav>
 </div>
 {% if request.path not in ('/', '/dashboard') %}<div class="backbar"><a class="backlink" href="javascript:void(0)" onclick="hmsBack()">← Back</a></div>{% endif %}
-<script>function hmsBack(){if(document.referrer && history.length>1){history.back();}else{window.location.href='/';}}</script>
+<script nonce="{{ csp_nonce }}">function hmsBack(){if(document.referrer && history.length>1){history.back();}else{window.location.href='/';}}</script>
 {% endif %}
 <main class="wrap">
   {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}{% endwith %}
@@ -105,8 +105,8 @@
 <!-- Loading time premium: defer, code split, minimal, compressed logo, lazy native_voice -->
 <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}" defer></script>
 <script src="{{ url_for('static', filename='js/push.js') }}?v={{ app_version }}" defer></script>
-<script>
-// Browser detection for footer — Chrome, Firefox, Safari, Edge, Samsung, UC, Opera
+<script nonce="{{ csp_nonce }}">
+ // Browser detection for footer — Chrome, Firefox, Safari, Edge, Samsung, UC, Opera
 (function(){
   try{
     var ua = navigator.userAgent.toLowerCase();
@@ -138,7 +138,7 @@ window._loadNativeVoice = function(){
 </script>
 
 {% if current_user.is_authenticated %}
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function(){
   // Lazy load native voice only for staff who need it — premium loading time
   if(document.body.getAttribute('data-native-voice') === '1' || window.location.pathname.indexOf('/alert-settings') === 0 || window.location.pathname.indexOf('/notifications') === 0){

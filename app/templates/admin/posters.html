@@ -35,7 +35,7 @@ is location-tagged so you know exactly where a submission came from.</p>
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 /* build services=a,b,c query from checkboxes */
 document.getElementById('poster-form').addEventListener('submit', function (e) {
   e.preventDefault();

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Hospital Structure — Departments + Clinics + Rooms + Destinations + TV{% endblock %}
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
 .tab-bar { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 18px 0; }
 .tab-bar a { padding:8px 14px; border-radius:999px; border:1px solid #e5e7eb; text-decoration:none; font-weight:600; font-size:.9rem; background:#f8fafc; color:#334155; }
 .tab-bar a.active { background:#0ea5e9; color:white; border-color:#0ea5e9; }

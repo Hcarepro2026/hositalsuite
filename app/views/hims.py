@@ -358,6 +358,32 @@ def folder(pid: int):
                        if v.status not in ("CLOSED", "CANCELLED")
                        and v.started_at
                        and v.started_at.date() == now_naive().date()), None)
+    # --- Item 4: Link existing bookings & queue tickets to patient folders ---
+    # Show bookings and queue tickets that belong to this patient (by patient_id or phone)
+    from ..models import Appointment, QueueTicket
+    linked_bookings = []
+    linked_tickets = []
+    try:
+        # Bookings by patient_id or phone
+        qb = db.session.query(Appointment).filter(Appointment.org_id == p.org_id)
+        qb = qb.filter((Appointment.patient_id == p.id) | (Appointment.phone == p.phone) if p.phone else (Appointment.patient_id == p.id))
+        linked_bookings = qb.order_by(Appointment.appointment_date.desc()).limit(20).all()
+        # Tickets by patient_id or phone
+        qt = db.session.query(QueueTicket).filter(QueueTicket.org_id == p.org_id)
+        qt = qt.filter((QueueTicket.patient_id == p.id) | (QueueTicket.phone == p.phone) if p.phone else (QueueTicket.patient_id == p.id))
+        linked_tickets = qt.order_by(QueueTicket.created_at.desc()).limit(20).all()
+        # Auto-link any unlinked that match phone
+        for b in linked_bookings:
+            if not b.patient_id and p.phone and b.phone == p.phone:
+                b.patient_id = p.id
+        for t in linked_tickets:
+            if not t.patient_id and p.phone and t.phone == p.phone:
+                t.patient_id = p.id
+        if linked_bookings or linked_tickets:
+            db.session.flush()
+    except Exception:
+        pass
+
     return render_template("hims/folder.html", p=p, visits=p.visits[:25],
                            payer_labels=PAYER_LABELS, category_labels=CATEGORY_LABELS,
                            assistance_labels=ASSISTANCE_LABELS,
@@ -366,7 +392,9 @@ def folder(pid: int):
                            .order_by(Department.name).all(),
                            visit_types=VISIT_TYPES,
                            open_visit=open_visit,
-                           can_edit=current_user.role in DESK)
+                           can_edit=current_user.role in DESK,
+                           linked_bookings=linked_bookings,
+                           linked_tickets=linked_tickets)
 
 
 @bp.get("/folder/<int:pid>/edit")

@@ -135,6 +135,7 @@ def test_create_user_actually_creates_a_user(client, seeded):
     client.post("/admin/users/create", data={
         "_csrf": csrf(client, "/admin/users"), "username": "formtest",
         "name": "Form Test", "role": "HOD", "phone": "08012223333",
+        "email": "formtest@gmail.com",
         "password": "Passw0rd!x"}, follow_redirects=True)
     assert db.session.query(User).filter_by(username="formtest").first() is not None
 
