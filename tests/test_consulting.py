@@ -28,7 +28,7 @@ def _doctor(org_id, username="doc1", name="Dr Ade Ogun"):
     u.set_password("Passw0rd!x")
     db.session.add(u)
     db.session.flush()
-    db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+    db.session.add(RosterEntry(org_id=org_id, duty_date=now_naive().date(),
                                user_id=u.id, kind="DUTY", shift="DAY",
                                scope="DEPARTMENT"))
     db.session.flush()
@@ -348,7 +348,7 @@ def test_every_consulting_and_onward_route_answers(app, client, seeded):
         org_id = seeded["org"]
         am = db.session.query(User).filter_by(org_id=org_id,
                                               role="ADMIN_MANAGER").first()
-        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+        db.session.add(RosterEntry(org_id=org_id, duty_date=now_naive().date(),
                                    user_id=am.id, kind="DUTY", shift="DAY",
                                    scope="DEPARTMENT"))
         p = _patient(org_id)
@@ -593,7 +593,7 @@ def test_the_room_page_marks_which_patients_are_unclaimed(app, client, seeded):
         am = db.session.query(User).filter_by(org_id=org_id,
                                               role="ADMIN_MANAGER").first()
         am.must_change_password = False
-        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+        db.session.add(RosterEntry(org_id=org_id, duty_date=now_naive().date(),
                                    user_id=am.id, kind="DUTY", shift="DAY",
                                    scope="DEPARTMENT"))
         db.session.flush()
@@ -689,7 +689,7 @@ def test_triage_preselects_a_free_doctor_instead_of_nobody(app, client, seeded):
         am = db.session.query(User).filter_by(org_id=org_id,
                                               role="ADMIN_MANAGER").first()
         am.must_change_password = False
-        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+        db.session.add(RosterEntry(org_id=org_id, duty_date=now_naive().date(),
                                    user_id=am.id, kind="DUTY", shift="DAY",
                                    scope="DEPARTMENT"))
         db.session.flush()

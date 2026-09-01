@@ -42,7 +42,7 @@ def _doctor(org_id, username="doc1", name="Dr Ade Ogun", rostered=True):
     db.session.add(u)
     db.session.flush()
     if rostered:
-        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+        db.session.add(RosterEntry(org_id=org_id, duty_date=now_naive().date(),
                                    user_id=u.id, kind="DUTY", shift="DAY",
                                    scope="DEPARTMENT"))
         db.session.flush()
@@ -311,7 +311,7 @@ def test_a_doctor_can_declare_ready_and_see_their_own_queue(app, client, seeded)
         org_id = seeded["org"]
         doc = db.session.query(User).filter_by(org_id=org_id, role="HOD").first()
         doc.must_change_password = False
-        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+        db.session.add(RosterEntry(org_id=org_id, duty_date=now_naive().date(),
                                    user_id=doc.id, kind="DUTY", shift="DAY",
                                    scope="DEPARTMENT"))
         db.session.commit()
