@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}My Visit — {{ feed.org.name }}{% endblock %}
 {% block extra_head %}
-<style>
+<style nonce="{{ csp_nonce }}">
 /* Premium++++ Personal TV — Domino's style tracker, gold for fast track, slow internet optimized */
 .personal-tv {
   max-width: 520px; margin: 0 auto; padding: 12px;
@@ -125,7 +125,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // Personal TV — slow internet optimized, <5KB JS, works on all browsers + feature phone fallback
 (function(){
   var accessKey = "{{ access_key }}";

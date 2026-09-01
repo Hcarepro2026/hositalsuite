@@ -29,7 +29,14 @@ def _payload(**extra):
     return data
 
 
-def test_empty_site_opens_the_setup_walk(client):
+def test_empty_site_opens_the_setup_walk(app):
+    # Empty site — no seeded org, so no code needed
+    # Use fresh client without seeded fixture
+    from app.models import db
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+    client = app.test_client()
     r = client.get("/start")
     assert r.status_code == 200
     assert b"Set up your hospital" in r.data
@@ -39,25 +46,33 @@ def test_empty_site_opens_the_setup_walk(client):
     assert "/start" in home.headers["Location"]
 
 
-def test_first_hospital_is_created_and_admin_is_signed_in(client):
+def test_first_hospital_is_created_and_admin_is_signed_in(app):
+    from app.models import db as _db
+    with app.app_context():
+        _db.drop_all()
+        _db.create_all()
+    client = app.test_client()
     token = csrf(client, "/start")
     r = client.post("/start", data={**_payload(), "_csrf": token}, follow_redirects=False)
-    assert r.status_code == 302
+    assert r.status_code == 302, f"Expected 302, got {r.status_code} — {r.data.decode()[:2000]}"
     assert r.headers["Location"].endswith("/start/done")
-    org = db.session.query(Organization).filter_by(code="SUN").one()
-    admin = db.session.query(User).filter_by(username="sun.admin").one()
-    assert admin.org_id == org.id
-    assert admin.role == "SUPER_ADMIN"
-    assert admin.check_password("SunPass12!")
-    assert get_setting(org.id, "brand_primary") == "#112233"
-    assert get_setting(org.id, "onboarding_complete") is True
-    sites = db.session.query(Branch).filter_by(org_id=org.id).all()
-    assert {b.code for b in sites} == {"MAIN", "ANNEX"}
-    assert db.session.query(Department).filter_by(org_id=org.id).count() >= 5
+    with app.app_context():
+        org = _db.session.query(Organization).filter_by(code="SUN").one()
+        admin = _db.session.query(User).filter_by(username="sun.admin").one()
+        assert admin.org_id == org.id
+        assert admin.role == "SUPER_ADMIN"
+        assert admin.check_password("SunPass12!")
+        assert get_setting(org.id, "brand_primary") == "#112233"
+        assert get_setting(org.id, "onboarding_complete") is True
+        sites = _db.session.query(Branch).filter_by(org_id=org.id).all()
+        assert {b.code for b in sites} == {"MAIN", "ANNEX"}
+        assert _db.session.query(Department).filter_by(org_id=org.id).count() >= 5
     done = client.get("/start/done")
     assert done.status_code == 200
     assert b"Your hospital is ready" in done.data
-    assert get_setting(org.id, "onboard_guide") is True
+    with app.app_context():
+        org = _db.session.query(Organization).filter_by(code="SUN").one()
+        assert get_setting(org.id, "onboard_guide") is True
     dash = client.get("/")
     assert dash.status_code == 200
     assert b"do these next" in dash.data

@@ -2,7 +2,7 @@
 from app import scoring
 from app.inspection_areas import (AREA_KEYS, INSPECTION_AREAS,
                                   match_department)
-from app.models import Department, Inspection, InspectionScore, db
+from app.models import Department, Inspection, InspectionScore, db, now_naive
 from tests.conftest import csrf, login
 
 
@@ -100,7 +100,7 @@ def test_each_card_names_the_staff_on_duty_from_the_roster(app, client, seeded):
         nurse.set_password("Passw0rd!x")
         db.session.add(nurse)
         db.session.flush()
-        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+        db.session.add(RosterEntry(org_id=org_id, duty_date=now_naive().date(),
                                    user_id=nurse.id, kind="DUTY", shift="DAY",
                                    scope="DEPARTMENT", department_id=dept.id))
         db.session.commit()
@@ -126,7 +126,7 @@ def test_someone_on_leave_is_not_shown_as_on_duty(app, seeded):
         cook.set_password("Passw0rd!x")
         db.session.add(cook)
         db.session.flush()
-        db.session.add(RosterEntry(org_id=org_id, duty_date=date.today(),
+        db.session.add(RosterEntry(org_id=org_id, duty_date=now_naive().date(),
                                    user_id=cook.id, kind="LEAVE", shift="LEAVE",
                                    leave_type="ANNUAL", scope="DEPARTMENT",
                                    department_id=dept.id))

@@ -31,9 +31,16 @@ def test_hub_lists_all_six_services_in_order(client, seeded):
         assert f'href="{href}"' in html, f"service {n} ({href}) missing"
     # 6th is the share tile (JS-driven, not a plain link)
     assert 'id="share-tile"' in html
-    # numbered so the order is unmistakable on a small screen
-    for n in range(1, 7):
-        assert f"{n} ·" in html
+    # Order must be preserved — book, queue, chat, complaint, feedback, share
+    # Premium tile design no longer uses numbered "1 ·" — check positional order instead
+    positions = []
+    for href in ["/book", "/queue/join", "/chat", "/complaint", "/feedback"]:
+        pos = html.find(f'href="{href}"')
+        assert pos != -1
+        positions.append(pos)
+    assert positions == sorted(positions), "services not in expected order"
+    share_pos = html.find('id="share-tile"')
+    assert share_pos > positions[-1], "share tile should be last"
 
 
 def test_hub_works_in_every_language(client, seeded):
@@ -128,6 +135,7 @@ def test_create_user_actually_creates_a_user(client, seeded):
     client.post("/admin/users/create", data={
         "_csrf": csrf(client, "/admin/users"), "username": "formtest",
         "name": "Form Test", "role": "HOD", "phone": "08012223333",
+        "email": "formtest@gmail.com",
         "password": "Passw0rd!x"}, follow_redirects=True)
     assert db.session.query(User).filter_by(username="formtest").first() is not None
 

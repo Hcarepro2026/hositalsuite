@@ -65,7 +65,7 @@
     <p class="center mt"><a href="/login">Back to sign in</a></p>
   </div>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   var TREE = {{ tree | tojson }};
   var preS = "{{ section_id or '' }}";

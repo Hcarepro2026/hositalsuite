@@ -81,11 +81,20 @@ def join_page():
     if not org:
         abort(503)
     from ..patient_places import public_departments
-    depts = public_departments(org.id)
+    # Founder: Link queue only to Reception + Fast Track, show as Patient on Queue with priority for today's date only
+    is_emergency = request.args.get("emergency") == "1"
+    if is_emergency:
+        # Emergency goes straight to Accident & Emergency
+        depts = public_departments(org.id, only_reception=False)
+        # Pre-select Accident & Emergency if exists
+        emergency_dept = next((d for d in depts if "emergency" in d.name.lower() or "accident" in d.name.lower()), None)
+        pre = emergency_dept.id if emergency_dept else None
+    else:
+        depts = public_departments(org.id, only_reception=True)
+        pre = request.args.get("dept", type=int)
     db.session.commit()
-    pre = request.args.get("dept", type=int)
     loc = (request.args.get("loc") or "").strip().upper()
-    return render_template("queue_join.html", org=org, depts=depts, pre=pre, loc=loc)
+    return render_template("queue_join.html", org=org, depts=depts, pre=pre, loc=loc, is_emergency=is_emergency)
 
 
 @bp.post("/queue/join")
@@ -114,6 +123,16 @@ def join_submit():
             flash("To join Fast Track, you must tick the box that says you understand it is a premium service and you agree to pay a little more for quick service.", "error")
             return redirect(url_for("queue.join_page"))
     n = next_ticket(org.id, dept, now.date())
+    # Link to existing patient folder if phone matches — closes gap #4
+    patient_id = None
+    if phone:
+        try:
+            from ..models import Patient
+            pat = db.session.query(Patient).filter_by(org_id=org.id, phone=phone).first()
+            if pat:
+                patient_id = pat.id
+        except Exception:
+            patient_id = None
     t = QueueTicket(
         org_id=org.id,
         code=f"{_dept_letter(dept)}-{n:03d}",
@@ -122,6 +141,7 @@ def join_submit():
         queue_date=now.date(),
         patient_name=name[:120],
         phone=phone or None,
+        patient_id=patient_id,
         status="WAITING",
         source="qr" if request.form.get("loc") else "link",
         is_fast_track=is_fast,
@@ -162,6 +182,7 @@ def join_submit():
 
 
 @bp.get("/queue/ticket")
+@rate_limit(limit=60, window=60.0, key_extra="ticket")
 def ticket_page():
     key = request.args.get("key", "")
     t = db.session.query(QueueTicket).filter_by(access_key=key).first()

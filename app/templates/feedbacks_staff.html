@@ -164,7 +164,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   var line = {{ board.spoken|tojson }};
   if (window.hmsVoice && window.hmsVoice.speak && line) window.hmsVoice.speak(line);

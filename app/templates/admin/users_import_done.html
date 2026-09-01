@@ -47,7 +47,7 @@
   <a class="btn ghost" href="/admin/users/import">Import another file</a>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById('copy-all')?.addEventListener('click', function () {
   var rows = document.querySelectorAll('#creds tr');
   var lines = [];

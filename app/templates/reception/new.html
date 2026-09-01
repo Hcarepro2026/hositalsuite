@@ -12,6 +12,16 @@
 </div>
 {% endif %}
 
+<div class="card mb" style="border:2px solid #0e5a8a">
+  <h2>🔍 Returning patient? Auto-fill to save time</h2>
+  <p class="hint">Type hospital number or phone — we fill the form for you. No need to ask again.</p>
+  <div class="row">
+    <input type="search" id="returning-search" placeholder="e.g. GHI/2026/00011 or 08012345678" style="flex:1">
+    <button type="button" class="btn" onclick="lookupPatient()">Search & Fill</button>
+  </div>
+  <div id="returning-results" style="margin-top:8px"></div>
+</div>
+
 <form method="post" action="/reception/new">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
 
@@ -136,16 +146,12 @@
         👑 Fast Track — Quick, calm, private — seen first
       </label>
       <p class="hint" style="margin:6px 0 8px">Tick if patient chose Fast Track premium — quick, calm, private. Seen first at every desk. Voice will announce them.</p>
-      <label>Priority reason</label>
+      <label>Fast Track reason</label>
       <select name="fast_track_reason">
-        <option value="">— Auto-detect —</option>
-        <option value="PREMIUM" selected>Premium — Quick and comfortable</option>
-        <option value="ELDERLY_DISABLED" style="display:none" {{ 'selected' if form.get('fast_track_reason')=='ELDERLY' }}>Elderly (60+)</option>
-        <option value="PREGNANT" {{ 'selected' if form.get('fast_track_reason')=='PREGNANT' }}>Pregnant / Antenatal</option>
-        <option value="CHILD" {{ 'selected' if form.get('fast_track_reason')=='CHILD' }}>Child under 5</option>
-        <option value="WHEELCHAIR" {{ 'selected' if form.get('fast_track_reason')=='WHEELCHAIR' }}>Wheelchair / Mobility</option>
-        <option value="PRIORITY" {{ 'selected' if form.get('fast_track_reason')=='PRIORITY' }}>Other priority</option>
+        <option value="PREMIUM" selected>Premium — Fast service, comfortable lounge</option>
+        <option value="BUSINESS">Busy — I have little time today</option>
       </select>
+      <p class="hint" style="margin-top:8px">Elderly 60+, pregnant, child under 5, wheelchair — seen first automatically via Priority Lane, no need for Fast Track. Tick assistance above and we prioritize with care.</p>
     </div>
   </div>
 
@@ -174,4 +180,41 @@
   <button class="btn big">Take them in &amp; send to Billing</button>
   <a class="btn secondary" href="/reception/">Cancel</a>
 </form>
+
+<script nonce="{{ csp_nonce }}">
+async function lookupPatient(){
+  const q = document.getElementById('returning-search').value.trim();
+  if(!q){ alert('Type hospital number or phone first'); return; }
+  const res = document.getElementById('returning-results');
+  res.innerHTML = 'Searching…';
+  try{
+    const r = await fetch('/hims/api/lookup?q=' + encodeURIComponent(q), {credentials:'same-origin'});
+    const data = await r.json();
+    if(!data || data.length===0){ res.innerHTML = '<span class="muted">No folder found for "'+q+'". This is a new patient — fill form.</span>'; return; }
+    if(data.error){ res.innerHTML = '<span style="color:red">'+data.error+'</span>'; return; }
+    let html = '<b>'+data.length+' found — tap to fill:</b><br>';
+    data.forEach(p=>{
+      html += '<button type="button" class="btn small ghost" style="margin:4px" onclick=\'fillPatient('+JSON.stringify(p).replace(/\'/g,"&#39;")+')\'>'+p.hospital_number+' — '+p.full_name+' ('+(p.phone||'')+')</button> ';
+    });
+    res.innerHTML = html;
+  }catch(e){ res.innerHTML = '<span style="color:red">Search failed: '+e+'</span>'; }
+}
+function fillPatient(p){
+  const set = (name,val)=>{ const el=document.querySelector('[name='+name+']'); if(el && val) el.value=val; };
+  set('surname', p.surname);
+  set('first_name', p.first_name);
+  set('other_names', p.other_names);
+  set('sex', p.sex);
+  set('phone', p.phone);
+  set('address', p.address);
+  set('nok_name', p.nok_name);
+  set('nok_phone', p.nok_phone);
+  set('nok_relationship', p.nok_relationship);
+  if(p.age_years) set('age_years', p.age_years);
+  if(p.date_of_birth) set('date_of_birth', p.date_of_birth);
+  document.getElementById('returning-results').innerHTML = '<span style="color:green">✓ Filled from '+p.hospital_number+' — check and save.</span>';
+  // voice
+  try{ if(window.hmsVoice) hmsVoice.speak(p.first_name+' found — form filled'); }catch(e){}
+}
+</script>
 {% endblock %}

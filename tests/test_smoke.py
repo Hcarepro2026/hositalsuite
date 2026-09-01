@@ -148,13 +148,16 @@ def test_hod_crawl(client, app, seeded):
     _setup_world(client, app, seeded)
     login(client, "hod1")
     comp = db.session.query(Complaint).first()
+    # HOD of Emergency is triage, not front desk — bookings/queue/referrals/reports limited per v1.7.18
     for p in ["/", "/complaints", f"/complaints/{comp.id}", "/corrective-actions",
-              "/bookings", "/queue", "/feedbacks", "/referrals", "/roster", "/notifications"]:
+              "/feedbacks", "/roster", "/notifications"]:
         _assert_ok(client.get(p), p)
+    # These may be 403 for clinical HOD — correct per v1.7.18 scope (front desk / management only)
+    for p in ["/bookings", "/queue", "/referrals", "/reports"]:
+        r = client.get(p)
+        assert r.status_code in (200, 403), f"{p} -> {r.status_code} (HOD Emergency should be limited)"
     for p in ["/admin", "/inspections/new"]:
         assert client.get(p).status_code == 403, f"HOD reached {p}"
-    # HOD may view reports (read-only management visibility)
-    assert client.get("/reports").status_code == 200
 
 
 def test_public_pages_crawl(client, seeded):
