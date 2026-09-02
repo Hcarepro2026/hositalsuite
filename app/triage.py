@@ -359,7 +359,24 @@ def announce_long_waits(org_id: int) -> int:
 
 
 def announce_emergency(visit: PatientVisit, patient: Patient) -> None:
+    # Voice alarm to ALL — founder: emergency must alarm everywhere
+    spoken = announce.speech_name(patient.spoken_name) if patient else "Emergency patient"
+    detail = f"{spoken} needs immediate attention in Accident and Emergency."
     announce.to_station(visit.org_id, "emergency_arrival",
                         place="Accident and Emergency",
-                        detail=f"{announce.speech_name(patient.spoken_name)} "
-                               f"needs immediate attention.")
+                        detail=detail)
+    # Alarm every management + clinical role
+    for role in ("SUPER_ADMIN","MD_CEO","DMD","DCST","HEAD_ADMIN_HR","ADMIN_MANAGER","HOD","APEX_NURSE","DOCTOR","NURSE","RECEPTIONIST","TRIAGE_NURSE","HIMS_CLERK"):
+        try:
+            announce.to_role(visit.org_id, role, "emergency_arrival",
+                             place="Accident and Emergency",
+                             detail=detail, count=1, patient=spoken)
+        except Exception:
+            pass
+    try:
+        from . import personal_tv
+        sess = personal_tv.ensure_personal_session(visit.org_id, visit=visit)
+        personal_tv.update_session_from_visit(sess)
+        personal_tv.notify_patient_personal(sess, title="Emergency - A&E", body=f"{spoken} - go to Accident and Emergency now, you will be seen immediately", data={"priority": "EMERGENCY", "stage": "EMERGENCY"})
+    except Exception:
+        pass

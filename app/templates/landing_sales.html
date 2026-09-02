@@ -11,7 +11,7 @@
 <meta property="og:title" content="CareQueue — Patient Experience Platform">
 <meta property="og:description" content="Booking, queue, Fast Track lounge, live TV, voice & WhatsApp. For hospitals that put patients first.">
 <meta property="og:type" content="website">
-<style>
+<style nonce="{{ csp_nonce }}">
 /* ===== DESIGN TOKENS — Apple + Figma + Adobe award level ===== */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -510,7 +510,7 @@ img{max-width:100%;display:block}
   </div>
 </footer>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // ===== Scroll reveal + stagger + ambient microinteractions — no external libs =====
 (function(){
   const els = document.querySelectorAll('.reveal');

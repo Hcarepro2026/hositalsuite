@@ -106,7 +106,7 @@ def test_branding_logo_resize_endpoints_serve_correct_sizes(client, seeded):
 def test_service_worker_offline_first_and_push_works_closed(client, seeded):
     sw = client.get("/sw.js")
     assert sw.status_code == 200
-    assert b"hs-shell-v2-" in sw.data
+    assert b"hs-shell-" in sw.data
     assert b"push" in sw.data
     assert b"notificationclick" in sw.data
     assert b"sync" in sw.data

@@ -3,6 +3,10 @@
 .secret_key
 *.pem
 *.key
+instance/
+vapid_keys.json
+private_key.pem
+public_key.pem
 
 # --- live data: database, uploads, reports, backups (never commit) ---
 data/

@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Triage{% endblock %}
 {% block content %}
+{% include "_emergency_banner.html" %}
 <h1>🩺 Triage</h1>
+<p class="muted" style="font-size:.85rem;background:#fff3cd;padding:8px 12px;border-radius:8px;border-left:4px solid #ffc107">🚨 Emergency shows here 8am-4pm only (working hours). On HIMS and Accident & Emergency page, emergency shows always (24/7) with voice alarm to all desks.</p>
 <p class="muted">Place each patient into a clinic and a doctor's room. Priority lane first: elderly 60+, pregnant, child under 5, wheelchair. Patient is called out loud by name, doctor told someone is coming. Journey time shown.</p>
 
 <div class="grid cols4 mb">

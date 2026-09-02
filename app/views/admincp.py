@@ -213,12 +213,12 @@ def user_create():
     if dept_id:
         d = db.session.get(Department, dept_id)
         if not d or d.org_id != current_user.org_id:
-            flash("Unknown department.", "error")
+            flash("We couldn't find that department — it may have been removed or belongs to another hospital. Please choose from the list.", "error")
             return redirect(url_for("admin.users"))
     if branch_id:
         from .. import branches as br
         if not br.get_in_org(branch_id, current_user.org_id):
-            flash("Unknown site.", "error")
+            flash("We couldn't find that site — it may have been removed. Please choose from the list.", "error")
             return redirect(url_for("admin.users"))
     if not username or not name or role not in ROLES:
         flash("Username, full name and a valid role are required.", "error")
@@ -288,12 +288,12 @@ def user_edit(uid: int):
     if dept_id:
         d = db.session.get(Department, dept_id)
         if not d or d.org_id != current_user.org_id:
-            flash("Unknown department.", "error")
+            flash("We couldn't find that department — it may have been removed or belongs to another hospital. Please choose from the list.", "error")
             return redirect(url_for("admin.users"))
     if branch_id:
         from .. import branches as br
         if not br.get_in_org(branch_id, current_user.org_id):
-            flash("Unknown site.", "error")
+            flash("We couldn't find that site — it may have been removed. Please choose from the list.", "error")
             return redirect(url_for("admin.users"))
     # Never let an admin strip the last SUPER_ADMIN of its role — that would
     # lock every administrator out of the system with no way back in.
@@ -1588,7 +1588,7 @@ def data_request_fulfil(rid: int):
         req.status = "REJECTED"
         req.outcome = (request.form.get("reason") or "Rejected — identity could not be verified.")[:1000]
     else:
-        flash("Unknown action.", "error")
+        flash("We couldn't understand that action — it may be outdated. Please try again or ask for help.", "error")
         return redirect(url_for("admin.data_request_detail", rid=rid))
 
     if req.status != "REJECTED":

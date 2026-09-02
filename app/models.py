@@ -2034,11 +2034,62 @@ WORK_KINDS = (
     ("TRIAGE",      "Placing patients with doctors"),
     ("CONSULT",     "Seeing patients in a consulting room"),
     ("LABORATORY",  "Laboratory work"),
+    ("LAB_SAMPLE",  "Collecting lab samples"),
+    ("LAB_RESULT",  "Entering lab results"),
     ("PHARMACY",    "Dispensing"),
+    ("PHARM_STOCK", "Pharmacy stock check"),
+    ("THEATER",     "Theater / Surgery"),
+    ("THEATER_PREP","Theater preparation"),
+    ("WARD_ROUND",  "Ward round"),
+    ("WARD_CARE",   "Ward patient care"),
+    ("ANC",         "Antenatal care"),
+    ("IMMUNIZATION","Immunization"),
+    ("FAST_TRACK",  "Fast Track — premium quick care"),
+    ("EMERGENCY",   "Accident & Emergency"),
+    ("RADIOLOGY",   "X-ray / Radiology"),
+    ("PHYSIO",      "Physiotherapy"),
+    ("DENTAL",      "Dental care"),
+    ("MORTUARY",    "Mortuary"),
+    ("RECORDS",     "Records & filing"),
     ("COMPLAINT",   "Answering a complaint"),
     ("CLEANING",    "Cleaning and environment"),
+    ("SECURITY",    "Security / Gate"),
+    ("MAINTENANCE", "Maintenance"),
     ("OTHER",       "Other department work"),
 )
+
+# Department-specific defaults — what work does this department usually do?
+DEPT_DEFAULT_WORK = {
+    "RECEPTION": ["RECEPTION", "FAST_TRACK"],
+    "BILLING": ["BILLING", "FAST_TRACK"],
+    "PAYMENT": ["PAYMENT", "FAST_TRACK"],
+    "MEGALEX": ["PAYMENT", "FAST_TRACK"],
+    "HIMS": ["HIMS", "RECORDS", "FAST_TRACK"],
+    "TRIAGE": ["TRIAGE", "WARD_CARE", "FAST_TRACK"],
+    "CONSULT": ["CONSULT", "WARD_ROUND", "FAST_TRACK"],
+    "LABORATORY": ["LABORATORY", "LAB_SAMPLE", "LAB_RESULT"],
+    "PHARMACY": ["PHARMACY", "PHARM_STOCK", "FAST_TRACK"],
+    "THEATER": ["THEATER", "THEATER_PREP", "WARD_CARE", "CLEANING"],
+    "WARD": ["WARD_CARE", "WARD_ROUND", "CLEANING"],
+    "ANC": ["ANC", "WARD_CARE"],
+    "ACCIDENT": ["EMERGENCY", "TRIAGE", "WARD_CARE"],
+    "EMERGENCY": ["EMERGENCY", "TRIAGE", "WARD_CARE"],
+    "RADIOLOGY": ["RADIOLOGY", "RECORDS"],
+    "PHYSIO": ["PHYSIO", "WARD_CARE"],
+    "DENTAL": ["DENTAL", "RECORDS"],
+    "MORTUARY": ["MORTUARY", "RECORDS"],
+    "ADMIN": ["OTHER", "RECORDS", "CLEANING"],
+    "CLEANING": ["CLEANING", "OTHER"],
+    "SECURITY": ["SECURITY", "OTHER"],
+}
+
+def default_work_for_dept(dept_name: str) -> list[str]:
+    name = (dept_name or "").upper()
+    for key, kinds in DEPT_DEFAULT_WORK.items():
+        if key in name:
+            return kinds
+    return ["OTHER", "CLEANING"]
+
 WORK_KIND_LABELS = dict(WORK_KINDS)
 WORK_KIND_CODES = tuple(c for c, _ in WORK_KINDS)
 
@@ -2078,6 +2129,9 @@ class WorkClaim(db.Model):
     started_at = db.Column(db.DateTime, default=now_naive, nullable=False, index=True)
     ended_at = db.Column(db.DateTime, index=True)
     seconds = db.Column(db.Integer)
+    suspended = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    suspended_at = db.Column(db.DateTime)
+    suspended_by = db.Column(db.Integer, db.ForeignKey("user.id"))
 
     user = db.relationship("User", foreign_keys=[user_id])
     department = db.relationship("Department")

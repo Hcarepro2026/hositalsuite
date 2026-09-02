@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Consulting room{% endblock %}
 {% block content %}
+{# Emergency always on A&E page — founder rule: HIMS and Accident & Emergency always 24/7 with voice alarm to all #}
+{% if session and session.clinic == 'EMERGENCY' %}
+  {% set show_always = True %}
+  {% include "_emergency_banner.html" %}
+{% elif doctor_clinic == 'EMERGENCY' %}
+  {% set show_always = True %}
+  {% include "_emergency_banner.html" %}
+{% else %}
+  {% include "_emergency_banner.html" %}
+{% endif %}
 <h1>🩻 My consulting room</h1>
 
 {% if session and session.is_open %}

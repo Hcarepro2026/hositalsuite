@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}TV QR Posters{% endblock %}
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
 @media print {
   .no-print { display:none !important; }
   .poster { break-after: page; page-break-after: always; }

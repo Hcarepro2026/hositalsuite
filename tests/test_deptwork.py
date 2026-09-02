@@ -34,7 +34,18 @@ def _staff(org_id, username, dept, role="STAFF"):
 
 
 def _seg(org_id, dept, *, minutes=None, staff=None, hours_ago=1):
-    start = now_naive() - timedelta(hours=hours_ago)
+    # Use midday today to avoid midnight edge where Lagos date rolls over
+    # but hours_ago pushes into yesterday (Africa/Lagos timezone).
+    base = now_naive().replace(hour=12, minute=0, second=0, microsecond=0)
+    if hours_ago == 1:
+        start = base
+    else:
+        start = now_naive() - timedelta(hours=hours_ago)
+        # If that falls outside today bounds, clamp to today midday
+        from app.deptwork import _today_bounds as _tb
+        s, e = _tb()
+        if not (s <= start <= e):
+            start = base
     row = JourneySegment(org_id=org_id, department_id=dept.id, stage="PHARMACY",
                          entered_at=start,
                          staff_id=staff.id if staff else None)

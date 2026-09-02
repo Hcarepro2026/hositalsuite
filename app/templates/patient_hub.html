@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0e5a8a">
 <title>{{ _('tagline') }} — {{ org.name if org else 'Hospital' }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
-<style>
+<style nonce="{{ csp_nonce }}">
   .hub-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:10px}
   @media (min-width:620px){.hub-grid{grid-template-columns:1fr 1fr}}
   .hub-tile{display:flex;align-items:center;gap:14px;text-decoration:none;
@@ -159,7 +159,31 @@
   </div>
   {% endif %}
 
-  <a class="emerg" href="/chat{{ q }}">🚑 {{ _('hub_emergency') }}</a>
+  {# --- Emergency card — audited, properly linked to A&E and others per founder --- #}
+  <div class="emerg-card" style="margin:16px 0 12px;padding:14px;border-radius:14px;background:linear-gradient(135deg,#fdecec 0%,#fff3cd 100%);border:2px solid #c62828;border-left:7px solid #c62828;box-shadow:0 4px 14px rgba(198,40,40,.15)">
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:1.6rem;flex-shrink:0">🚨</span>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:.98rem;color:#8c1d1d">Emergency — Accident & Emergency Unit — open 24/7</b>
+        <div style="font-size:.84rem;color:#6b1a1a;margin-top:4px;line-height:1.45;font-weight:500">
+          Go straight to <b>Accident & Emergency</b> now — do not wait online. Tell reception it's an emergency. You will be seen immediately. If outside hospital, call help desk below or go to nearest hospital.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <a href="/queue/join{{ q }}{% if q %}&{% else %}?{% endif %}emergency=1" class="btn small" style="background:#c62828;color:#fff;font-weight:900;border-radius:999px;padding:8px 14px;text-decoration:none;font-size:.85rem">🚑 Get Emergency Number → A&E</a>
+          {% if hospital and hospital.phone %}
+          <a href="tel:{{ hospital.phone | replace(' ', '') }}" class="btn small secondary" style="border-radius:999px;padding:8px 14px;font-size:.85rem;text-decoration:none">📞 Call Help Desk — {{ hospital.phone }}</a>
+          {% else %}
+          <a href="#help-desk" onclick="document.querySelector('.help-desk')?.scrollIntoView({behavior:'smooth'});return false;" class="btn small secondary" style="border-radius:999px;padding:8px 14px;font-size:.85rem;text-decoration:none">📞 Help Desk below</a>
+          {% endif %}
+          <a href="/chat{{ q }}{% if q %}&{% else %}?{% endif %}q=emergency" class="btn small" style="background:#fff;border:1px solid #c62828;color:#8c1d1d;border-radius:999px;padding:8px 12px;font-size:.8rem;text-decoration:none">💬 Directions to A&E</a>
+          <button type="button" class="btn small" style="background:#fff3cd;border:1px solid #ffe69c;color:#664d03;border-radius:999px;padding:8px 12px;font-size:.8rem" onclick="try{if(window.hmsVoice&&hmsVoice.speak){hmsVoice.speak('Emergency — Go straight to Accident and Emergency now. It is open twenty four seven. Tell reception it is an emergency, you will be seen immediately. Do not wait for online queue. If outside hospital, call help desk or go to nearest hospital.');}}catch(e){}">🔊 Voice</button>
+        </div>
+        <div style="margin-top:8px;font-size:.72rem;color:#8c1d1d;line-height:1.3">
+          🔗 Linked: <a href="/queue/join{{ q }}{% if q %}&{% else %}?{% endif %}emergency=1" style="color:#8c1d1d;font-weight:700">A&E queue</a> · <a href="/chat{{ q }}" style="color:#8c1d1d">Chatbot emergency help</a> · <a href="#help-desk" style="color:#8c1d1d">Help desk phones</a> · Always open 24/7
+        </div>
+      </div>
+    </div>
+  </div>
 
   {% include "_help_desk.html" %}
 
@@ -170,7 +194,7 @@
   </div>
 </main>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   var tile = document.getElementById('share-tile');
   var box  = document.getElementById('share-box');
