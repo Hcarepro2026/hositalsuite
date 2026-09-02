@@ -117,6 +117,53 @@
 </div>
 {% endif %}
 
+<!-- ---------------------------------------------- linked bookings & queue tickets — Item 4 -->
+{% if linked_bookings or linked_tickets %}
+<div class="card mb" style="border-left:5px solid #0e5a8a">
+  <h2 style="margin-top:0">🔗 Linked bookings & queue tickets — same patient</h2>
+  <p class="hint" style="margin-top:0">Bookings and queue tickets with same phone or folder are linked automatically. This closes gap #4 — one patient, one journey.</p>
+  {% if linked_bookings %}
+  <h3 style="font-size:.95rem;margin:10px 0 6px">📅 Bookings ({{ linked_bookings|length }})</h3>
+  <div class="table-wrap" style="padding:0">
+  <table>
+    <tr><th>Date</th><th>Ref</th><th>Dept</th><th>Time</th><th>Status</th><th>Fast Track</th></tr>
+    {% for b in linked_bookings %}
+    <tr {% if b.is_fast_track %}style="background:#FFFEF0"{% endif %}>
+      <td>{{ b.appointment_date.strftime('%d %b %Y') if b.appointment_date else '—' }}</td>
+      <td><b>{{ b.ref }}</b></td>
+      <td>{{ b.department.name if b.department else '—' }}</td>
+      <td>{{ b.appointment_time or '—' }}</td>
+      <td><span class="pill {{ 'green' if b.status=='ARRIVED' else 'blue' if b.status=='BOOKED' else 'gray' }}">{{ b.status }}</span></td>
+      <td>{% if b.is_fast_track %}👑 {{ b.fast_track_reason or 'FAST' }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% endif %}
+  {% if linked_tickets %}
+  <h3 style="font-size:.95rem;margin:14px 0 6px">🎟️ Queue tickets ({{ linked_tickets|length }})</h3>
+  <div class="table-wrap" style="padding:0">
+  <table>
+    <tr><th>Date</th><th>Code</th><th>Dept</th><th>Name</th><th>Status</th><th>Fast Track</th></tr>
+    {% for t in linked_tickets %}
+    <tr {% if t.is_fast_track %}style="background:#FFFEF0"{% endif %}>
+      <td>{{ t.queue_date.strftime('%d %b') if t.queue_date else '—' }}</td>
+      <td><b>{{ t.code }}</b></td>
+      <td>{{ t.department.name if t.department else '—' }}</td>
+      <td>{{ t.patient_name or '—' }}</td>
+      <td><span class="pill {{ 'green' if t.status=='DONE' else 'amber' if t.status=='WAITING' else 'blue' }}">{{ t.status }}</span></td>
+      <td>{% if t.is_fast_track %}👑 {{ t.fast_track_reason or 'FAST' }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% endif %}
+  <div style="margin-top:10px">
+    <button type="button" class="btn small" style="background:#eef4f9;color:#0e5a8a" onclick="try{hmsVoice&&hmsVoice.speak('This patient has linked bookings and queue tickets. Bookings and tickets with same phone are linked automatically to the folder. One patient, one journey.')}catch(e){}">🔊 Voice — linked journey</button>
+  </div>
+</div>
+{% endif %}
+
 <!-- ---------------------------------------------- visits -->
 <div class="card mb">
   <h2>Attendance history</h2>

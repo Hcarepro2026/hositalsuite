@@ -168,7 +168,7 @@
 
 {% block scripts %}
 {% if show_form and not existing %}
-<script>
+<script nonce="{{ csp_nonce }}">
 var CRITERIA = {{ criteria | tojson }};
 var GPS_MODE = "{{ gps_mode }}";
 var started = document.getElementById('started-ts');

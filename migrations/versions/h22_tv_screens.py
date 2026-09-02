@@ -14,6 +14,10 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if 'tv_screen' in insp.get_table_names():
+        return
     op.create_table(
         'tv_screen',
         sa.Column('id', sa.Integer(), nullable=False),

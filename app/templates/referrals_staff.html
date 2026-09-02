@@ -120,7 +120,7 @@ this page shows who came. <b>No prizes, no coupons, no pressure</b> — just a k
 {% endif %}
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function hmsCopy(id) {
   var el = document.getElementById(id);
   var text = el ? (el.innerText || el.value) : '';

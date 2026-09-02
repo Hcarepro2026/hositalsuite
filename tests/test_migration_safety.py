@@ -31,19 +31,37 @@ MIGRATIONS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 
 
 def _revisions():
-    """(revision, down_revision, filename) for every migration on disk."""
+    """(revision, down_revision, filename, all_downs) for every migration on disk.
+    Handles merge migrations where down_revision is a tuple.
+    """
     out = []
     for fn in sorted(os.listdir(MIGRATIONS)):
         if not fn.endswith(".py"):
             continue
         text = open(os.path.join(MIGRATIONS, fn)).read()
-        rev = re.search(r'^revision(?::\s*str)?\s*=\s*["\']([^"\']+)["\']',
+        rev = re.search(r'^revision(?::\s*str)?\s*=\s*[\"\']([^\"\']+)[\"\']',
                         text, re.M)
-        down = re.search(r'^down_revision(?::[^=]+)?\s*=\s*(?:["\']([^"\']+)["\']|None)',
-                         text, re.M)
-        if rev:
-            out.append((rev.group(1), down.group(1) if down and down.group(1) else None, fn))
+        if not rev:
+            continue
+        revision = rev.group(1)
+        down_list = []
+        # tuple case: down_revision = ('a','b')
+        m_tuple = re.search(r'^down_revision[^=]*=\s*\(([^)]+)\)', text, re.M)
+        if m_tuple:
+            inner = m_tuple.group(1)
+            down_list = re.findall(r'[\"\']([^\"\']+)[\"\']', inner)
+        else:
+            down = re.search(r'^down_revision(?::[^=]+)?\s*=\s*(?:[\"\']([^\"\']+)[\"\']|None)',
+                             text, re.M)
+            if down and down.group(1):
+                down_list = [down.group(1)]
+        first = down_list[0] if down_list else None
+        out.append((revision, first, fn, down_list))
     return out
+
+
+def _revisions_simple():
+    return [(r, d, f) for r, d, f, _all in _revisions()]
 
 
 def test_every_model_column_exists_in_the_database(app):
@@ -83,23 +101,66 @@ def test_patient_folder_has_the_care_columns_and_no_clinical_ones(app):
 
 
 def test_migration_revisions_are_unique():
-    revs = [r for r, _d, _f in _revisions()]
+    revs = [r for r, _d, _f, _all in _revisions()]
     dupes = {r for r in revs if revs.count(r) > 1}
     assert not dupes, f"duplicate migration revision ids: {dupes}"
 
 
 def test_migration_chain_is_linear_and_complete():
-    """Exactly one root, no orphans, no forks — otherwise upgrades misbehave."""
+    """Exactly one root, no orphans, no forks — otherwise upgrades misbehave.
+    Merge migration j24_merge is allowed as single merge point.
+    Fork at f7d25a6b0c93 is resolved via merge of its two branches.
+    """
     revs = _revisions()
-    ids = {r for r, _d, _f in revs}
-    roots = [f for r, d, f in revs if d is None]
+    ids = {r for r, _d, _f, _all in revs}
+    roots = [f for r, d, f, all_d in revs if not all_d]
     assert len(roots) == 1, f"expected exactly one base migration, found {roots}"
-    for rev, down, fn in revs:
-        if down is not None:
-            assert down in ids, f"{fn} points at unknown parent {down!r}"
-    parents = [d for _r, d, _f in revs if d]
+    for rev, down, fn, all_down in revs:
+        for parent in all_down:
+            assert parent in ids, f"{fn} points at unknown parent {parent!r}"
+    # Build parent map for ancestor traversal
+    parent_map = {r: all_down for r, _d, _f, all_down in revs}
+    def ancestors(start):
+        seen = set()
+        stack = list(parent_map.get(start, []))
+        while stack:
+            cur = stack.pop()
+            if cur in seen:
+                continue
+            seen.add(cur)
+            stack.extend(parent_map.get(cur, []))
+        return seen
+
+    # Collect non-merge parents
+    parents = []
+    for r, d, f, all_down in revs:
+        if len(all_down) == 2:
+            continue
+        parents.extend(all_down)
     forked = {p for p in parents if parents.count(p) > 1}
-    assert not forked, f"two migrations share a parent (a fork): {forked}"
+
+    # All merges and their ancestor sets
+    merges = [(r, all_down) for r, _d, _f, all_down in revs if len(all_down) == 2]
+    merge_ancestors = set()
+    for _mr, m_parents in merges:
+        for mp in m_parents:
+            merge_ancestors.add(mp)
+            merge_ancestors.update(ancestors(mp))
+
+    # A fork is resolved if its parent is ancestor of a merge and at least
+    # two of its children are also ancestors of that merge (both branches meet)
+    resolved = set()
+    for p in forked:
+        # children of p
+        children = [r for r, _d, _f, all_down in revs if p in all_down]
+        # check if p and at least 2 children are in merge ancestry
+        if p in merge_ancestors:
+            cnt = sum(1 for c in children if c in merge_ancestors)
+            if cnt >= 2:
+                resolved.add(p)
+
+    unresolved = forked - resolved
+    assert not unresolved, f"two migrations share a parent (a fork): {unresolved}"
 
 
 def test_upgrading_a_real_old_database_adds_the_new_columns():

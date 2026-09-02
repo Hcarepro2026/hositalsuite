@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0e5a8a">
 <title>{{ _('hub_chat') }} — {{ org.name if org else 'Hospital' }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
-<style>
+<style nonce="{{ csp_nonce }}">
 /* ------------------------------------------------------------------
    Chat layout.
 
@@ -126,8 +126,8 @@ body{display:flex;flex-direction:column;background:var(--bg,#eef2f6);
   <button type="submit" class="go" id="send">{{ _('chat_send') }}</button>
 </form>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
-<script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}" nonce="{{ csp_nonce }}"></script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   "use strict";
   var sessionId = null;

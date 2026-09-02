@@ -127,12 +127,18 @@ def manifest_response(org, settings: dict) -> Response:
 
 
 SW_JS = r"""/* Hospital Suite v2 — alarm-like, works closed, multi-browser, slow internet optimized, premium */
-const CACHE = "hs-shell-v2-__VERSION__";
+const CACHE = "hs-shell-__VERSION__";
 const SHELL = [
   "/offline",
   "/my-visit/offline",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",
+  "/static/icons/icon-maskable.png",
+  "/branding/logo",
+  "/branding/logo/192",
+  "/branding/logo/512",
+  "/branding/logo/maskable",
+  "/branding/logo/apple",
   "/static/css/app.css",
   "/static/js/app.js"
 ];
@@ -180,6 +186,7 @@ self.addEventListener("fetch", function (event) {
   }
   if (url.pathname.indexOf("/admin") === 0) return;
 
+  // CSS/JS must be network-first — prevents old UI freeze, versioned cache, offline fallback
   // CSS/JS network-first, cache fallback — prevents old UI freeze
   if (url.pathname.indexOf("/static/") === 0) {
     event.respondWith(
