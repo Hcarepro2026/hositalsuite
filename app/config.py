@@ -91,6 +91,11 @@ class Config:
     REPORT_DIR = os.path.join(DATA_DIR, "reports")
     BACKUP_DIR = os.environ.get("BACKUP_DIR") or os.path.join(DATA_DIR, "backups")
     BACKUP_KEEP = int(os.environ.get("BACKUP_KEEP", "7"))
+    # Hard floor between backups, in hours. A backup reads EVERY table — on a
+    # metered-egress database a runaway backup loop is the most expensive
+    # thing this app can do. The Setting-based per-day guard is primary; this
+    # in-memory floor survives the case where settings are unreadable.
+    MIN_BACKUP_INTERVAL_HOURS = float(os.environ.get("MIN_BACKUP_INTERVAL_HOURS", "20"))
     MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB evidence photos/files
 
     PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8077")

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import time
 
 from flask import Blueprint, current_app, jsonify, request
 
@@ -13,6 +14,21 @@ from ..security import csrf_exempt, rate_limit
 from .. import scoring
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
+
+# ---------------------------------------------------------------------------
+# Probe result caches. /health and /ready are pinged by Render, UptimeRobot
+# and the founder's dashboards every few seconds, around the clock. The
+# schema-drift check in /ready is a FULL introspection of 100+ tables — small
+# per call, but 24/7 polling on a metered-egress database (Supabase counts
+# every byte shipped, and this org once shipped 424 GB in a month) makes
+# per-ping introspection pure waste: schema drift does not appear and vanish
+# between two pings 60 seconds apart. Both caches are per-process and expire
+# quickly; a drift incident is therefore visible within a minute.
+_READY_CACHE_TTL = 60.0
+_ready_cache = {"at": 0.0, "payload": None, "status": 200}
+_backup_cache = {"at": 0.0, "value": None}
+_HEALTH_CACHE_TTL = 30.0
+_health_extra = {"at": 0.0, "last_backup": None}
 
 
 @bp.get("/health")
@@ -43,14 +59,20 @@ def health():
     except Exception:                                 # noqa: BLE001
         scheduler_ok = None
 
-    last_backup = None
-    try:
-        from ..backup import list_backups
-        rows = list_backups(limit=1)
-        if rows:
-            last_backup = rows[0].created_at.isoformat()
-    except Exception:                                 # noqa: BLE001
-        db.session.rollback()
+    last_backup = _health_extra["last_backup"]
+    now = time.monotonic()
+    if (current_app.config.get("TESTING")
+            or now - _health_extra["at"] > _HEALTH_CACHE_TTL):
+        try:
+            from ..backup import list_backups
+            rows = list_backups(limit=1)
+            last_backup = rows[0].created_at.isoformat() if rows else None
+            _health_extra.update(at=now, last_backup=last_backup)
+        except Exception:                             # noqa: BLE001
+            # never cache a failed lookup — the next ping retries at once
+            db.session.rollback()
+            _health_extra.update(at=0.0, last_backup=None)
+            last_backup = None
 
     healthy = db_ok and (scheduler_ok is not False)
     # v2 push + queue estimator + personal TV
@@ -113,6 +135,18 @@ def ready():
     # Connectivity looked perfect throughout. This compares what the app
     # expects against what the database actually has, so the next drift is
     # visible from outside instead of being discovered by a patient.
+    #
+    # CACHED for _READY_CACHE_TTL — but ONLY the healthy answer. Success is
+    # the steady state that monitors hammer every few seconds; failure is
+    # rare and must always be evaluated fresh so recovery is instant.
+    # Under TESTING the cache is bypassed entirely: the test suite recreates
+    # the database between tests, so a cached answer would lie.
+    now = time.monotonic()
+    if (not current_app.config.get("TESTING")
+            and _ready_cache["status"] == 200
+            and now - _ready_cache["at"] <= _READY_CACHE_TTL
+            and _ready_cache["payload"] is not None):
+        return _ready_cache["payload"], 200
     try:
         from sqlalchemy import inspect as _inspect
         insp = _inspect(db.engine)
@@ -126,13 +160,15 @@ def ready():
             missing.extend(f"{tname}.{c.name}" for c in table.columns
                            if c.name not in cols)
         if missing:
+            _ready_cache.update(at=0.0, payload=None, status=503)
             return jsonify(ready=False, reason="schema drift",
                            missing=sorted(missing)[:20]), 503
+        _ready_cache.update(at=now, payload=jsonify(ready=True), status=200)
+        return _ready_cache["payload"], 200
     except Exception as exc:                          # noqa: BLE001
         db.session.rollback()
+        _ready_cache.update(at=0.0, payload=None, status=503)
         return jsonify(ready=False, reason=f"schema check failed: {exc}"[:200]), 503
-
-    return jsonify(ready=True), 200
 
 
 # ================================================================ live alerts (§19/§37)

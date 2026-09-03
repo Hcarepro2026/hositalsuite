@@ -121,51 +121,78 @@ def _lev(a: str, b: str) -> int:
     return prev[-1]
 
 
+# How many LIGHT candidate rows the fuzzy fallback may inspect when an exact
+# search finds nothing. Rows fetched here carry ONLY the match fields
+# (surname / first name / other names / folder number) — deliberately NOT
+# full Patient entities, which pull phone numbers, addresses and next-of-kin
+# into memory for every failed search. Full entities are fetched for the top
+# matches only, after scoring.
+FUZZY_CANDIDATE_CAP = 500
+FUZZY_MAX_EDIT = 2
+
+
 def _fuzzy_surname_matches(org_id: int, term: str, limit: int = 10) -> list:
     """Fallback: when exact LIKE finds nothing, look for close spellings.
 
     Real HIMS desks get "Abatan" typed as "Abathan" or "Ogunleye" as
     "Ogunlewe". A 1-2 letter edit distance catches those without needing
     PostgreSQL pg_trgm (not available on Render free).
+
+    Two phases, on purpose:
+      1. score LIGHT tuples (5 small columns) from up to FUZZY_CANDIDATE_CAP
+         recent, active folders of THIS hospital — minimal PII in memory,
+         far less bandwidth from the database (egress matters: a 62 MB
+         Supabase database once shipped 424 GB in a month);
+      2. load full Patient rows ONLY for the best `limit` ids, so the views
+         keep working with real entities while 490 rejected candidates never
+         materialize past their four name fields.
     """
     term_l = term.lower().strip()
     if len(term_l) < 3:
         return []
-    # Load candidate surnames — limited to 500 most recent to keep it fast
-    # on low-bandwidth mobile.
-    candidates = (db.session.query(Patient)
+    candidates = (db.session.query(
+                      Patient.id,
+                      Patient.surname,
+                      Patient.first_name,
+                      Patient.other_names,
+                      Patient.hospital_number)
                   .filter(Patient.org_id == org_id, Patient.active.is_(True))
                   .order_by(Patient.last_visit_at.desc().nullslast())
-                  .limit(500).all())
-    scored = []
-    for p in candidates:
-        # Check surname, first_name, full_name
-        for field in (p.surname, p.first_name, p.hospital_number):
+                  .limit(FUZZY_CANDIDATE_CAP)
+                  .all())
+    scored = []                                   # (best_distance, id)
+    for pid, surname, first_name, other_names, hosp_no in candidates:
+        best = FUZZY_MAX_EDIT + 1
+        for field in (surname, first_name, other_names, hosp_no):
             if not field:
                 continue
-            fl = field.lower()
-            # Quick length filter
-            if abs(len(fl) - len(term_l)) > 2:
+            fl = str(field).lower()
+            # Quick length filter: more than 2 letters away can never be
+            # within edit distance 2.
+            if abs(len(fl) - len(term_l)) > FUZZY_MAX_EDIT:
                 continue
-            # Exact substring already handled, so check edit distance
-            if _lev(term_l, fl) <= 2 or _lev(term_l, fl[:len(term_l)]) <= 1:
-                scored.append(p)
-                break
-            # Also try parts
-            for part in fl.split():
-                if _lev(term_l, part) <= 2:
-                    scored.append(p)
+            d = _lev(term_l, fl)
+            if d > FUZZY_MAX_EDIT and len(fl) >= len(term_l):
+                # prefix match tolerates "ogunl…" + a trailing second surname
+                d = min(d, _lev(term_l, fl[:len(term_l)]) + 1)
+            if d > FUZZY_MAX_EDIT:
+                for part in fl.split():
+                    d = min(d, _lev(term_l, part))
+                    if d <= FUZZY_MAX_EDIT:
+                        break
+            if d < best:
+                best = d
+                if best == 0:
                     break
-    # Deduplicate
-    seen = set()
-    out = []
-    for p in scored:
-        if p.id not in seen:
-            seen.add(p.id)
-            out.append(p)
-        if len(out) >= limit:
-            break
-    return out
+        if best <= FUZZY_MAX_EDIT:
+            scored.append((best, pid))
+    if not scored:
+        return []
+    scored.sort(key=lambda t: (t[0], t[1]))
+    top_ids = [pid for _d, pid in scored[:limit]]
+    by_id = {p.id: p for p in (db.session.query(Patient)
+                               .filter(Patient.id.in_(top_ids)).all())}
+    return [by_id[pid] for pid in top_ids if pid in by_id]
 
 
 

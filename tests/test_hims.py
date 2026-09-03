@@ -550,3 +550,70 @@ def test_spoken_sentences_are_written_to_be_heard(app, seeded):
             "Mr Tunde, 3 patients are waiting at the drug dispensary. Please attend to them."
         # no name -> addressed to the room, never to "None"
         assert phrase("patient_registered", patient="Mr Sikiru").startswith("Team,")
+
+
+# ------------------------------------------------------------------ fuzzy search
+def test_fuzzy_fallback_finds_misspelled_surnames(app, seeded):
+    """\"Abatan\" typed as \"Abathan\" must still find the folder."""
+    with app.app_context():
+        org = seeded["org"]
+        db.session.add(Patient(org_id=org, hospital_number="TES/2026/00001",
+                               surname="ABATAN", first_name="Lekan", sex="F",
+                               age_years=34, payer_type="SELF", category="GENERAL"))
+        db.session.commit()
+        hits = search(org, "Abathan")
+        assert len(hits) == 1 and hits[0].surname == "ABATAN"
+        # results are real Patient entities the views can render
+        assert hits[0].hospital_number == "TES/2026/00001"
+
+
+def test_fuzzy_fallback_is_scoped_to_this_hospital(app, seeded):
+    """Edit distance must never leak another hospital's folders."""
+    from app.models import Organization
+    with app.app_context():
+        org = seeded["org"]
+        other = Organization(code="OTH2", name="Other Hospital")
+        db.session.add(other)
+        db.session.flush()
+        db.session.add(Patient(org_id=other.id, hospital_number="OTH/2026/00001",
+                               surname="ABATAN", first_name="Lekan", sex="F",
+                               age_years=30, payer_type="SELF", category="GENERAL"))
+        db.session.commit()
+        assert search(org, "Abathan") == []
+
+
+def test_fuzzy_fallback_fetches_light_rows_not_full_dossiers(app, seeded, monkeypatch):
+    """The candidate scan must pull the four name fields — NOT full patients.
+
+    Loading 500 complete Patient rows (phones, addresses, next of kin) into
+    memory per failed search was a privacy and egress smell flagged in review:
+    on Supabase, every byte shipped per query counts against a monthly cap.
+    The two-phase design scores light tuples, then hydrates only the matches.
+    """
+    from app import hims as hims_mod
+    with app.app_context():
+        org = seeded["org"]
+        for i in range(6):
+            db.session.add(Patient(org_id=org,
+                                   hospital_number=f"TES/2026/000{i + 1}",
+                                   surname=f"OGUNLEYE{i}", first_name="Bola",
+                                   sex="F", age_years=40,
+                                   payer_type="SELF", category="GENERAL",
+                                   phone=f"0806000000{i}"))
+        db.session.commit()
+
+        hydrated = []
+        real_get = db.session.query
+
+        def counting_query(*entity):
+            if entity and getattr(entity[0], "__name__", "") == "Patient":
+                hydrated.append(1)
+            return real_get(*entity)
+
+        monkeypatch.setattr(hims_mod.db, "query", counting_query)
+        monkeypatch.setattr(hims_mod, "FUZZY_CANDIDATE_CAP", 4)   # even capped
+        hits = search(org, "Ogunlewe")            # misspelled, exact finds none
+        assert 0 < len(hits) <= 10
+        # exactly ONE full-entity fetch (the hydration of the top matches),
+        # plus the result-limiting query — never 500 dossiers in memory
+        assert len(hydrated) <= 2, "fuzzy search loaded full Patient rows more than once"

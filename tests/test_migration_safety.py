@@ -107,60 +107,67 @@ def test_migration_revisions_are_unique():
 
 
 def test_migration_chain_is_linear_and_complete():
-    """Exactly one root, no orphans, no forks — otherwise upgrades misbehave.
-    Merge migration j24_merge is allowed as single merge point.
-    Fork at f7d25a6b0c93 is resolved via merge of its two branches.
+    """Exactly one root, no orphans, and exactly ONE head.
+
+    An earlier version of this test hard-coded the specifics of one historical
+    fork (its parent id and its merge revision). That was a test shaped around
+    a single known bug rather than the invariant behind it, so the NEXT fork —
+    with different ids — would have sailed through. The invariant is simple
+    and general:
+
+        a fork (two migrations sharing a parent) is fine ONLY if the branches
+        eventually merge, which is exactly the statement "the graph of
+        revisions has exactly one head".
+
+    Zero heads = a cycle or empty chain. Two+ heads = `alembic upgrade head`
+    refuses to run, so deploys fall back to ensure_schema() forever and drift
+    accumulates. Both are failures; the check below catches both for ANY
+    fork, past or future, without knowing any revision ids.
     """
     revs = _revisions()
+    assert revs, "no migrations found — is the migrations/ directory intact?"
     ids = {r for r, _d, _f, _all in revs}
     roots = [f for r, d, f, all_d in revs if not all_d]
     assert len(roots) == 1, f"expected exactly one base migration, found {roots}"
     for rev, down, fn, all_down in revs:
         for parent in all_down:
             assert parent in ids, f"{fn} points at unknown parent {parent!r}"
-    # Build parent map for ancestor traversal
-    parent_map = {r: all_down for r, _d, _f, all_down in revs}
-    def ancestors(start):
-        seen = set()
-        stack = list(parent_map.get(start, []))
-        while stack:
-            cur = stack.pop()
-            if cur in seen:
-                continue
-            seen.add(cur)
-            stack.extend(parent_map.get(cur, []))
-        return seen
 
-    # Collect non-merge parents
-    parents = []
-    for r, d, f, all_down in revs:
-        if len(all_down) == 2:
-            continue
-        parents.extend(all_down)
-    forked = {p for p in parents if parents.count(p) > 1}
+    # Heads = revisions that are no other revision's parent.
+    referenced = {p for _r, _d, _f, all_down in revs for p in all_down}
+    heads = sorted(ids - referenced)
+    assert len(heads) == 1, (
+        f"migration chain has {len(heads)} heads: {heads}. "
+        "Two heads means an unresolved fork — `alembic upgrade head` will "
+        "refuse to run on every deploy. Add ONE merge migration whose "
+        "down_revision is the tuple of ALL current heads, exactly like "
+        "j24_merge did for the 2026-08 fork.")
 
-    # All merges and their ancestor sets
-    merges = [(r, all_down) for r, _d, _f, all_down in revs if len(all_down) == 2]
-    merge_ancestors = set()
-    for _mr, m_parents in merges:
-        for mp in m_parents:
-            merge_ancestors.add(mp)
-            merge_ancestors.update(ancestors(mp))
 
-    # A fork is resolved if its parent is ancestor of a merge and at least
-    # two of its children are also ancestors of that merge (both branches meet)
-    resolved = set()
-    for p in forked:
-        # children of p
-        children = [r for r, _d, _f, all_down in revs if p in all_down]
-        # check if p and at least 2 children are in merge ancestry
-        if p in merge_ancestors:
-            cnt = sum(1 for c in children if c in merge_ancestors)
-            if cnt >= 2:
-                resolved.add(p)
+def test_parsed_chain_agrees_with_alembic_itself():
+    """Cross-check our hand-rolled parser against alembic's own graph walk.
 
-    unresolved = forked - resolved
-    assert not unresolved, f"two migrations share a parent (a fork): {unresolved}"
+    The tests above reason about files we parse with regexes. If a future
+    migration uses syntax the parser does not understand (say, a dynamic
+    down_revision), we could happily validate a chain that doesn't exist.
+    Alembic is the authority at deploy time, so its ScriptDirectory must
+    agree: exactly one head, and it must be the head our parser found.
+    """
+    import os as _os
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    cfg = Config(_os.path.join(root, "alembic.ini"))
+    cfg.set_main_option("script_location", _os.path.join(root, "migrations"))
+    script = ScriptDirectory.from_config(cfg)
+    heads = sorted(script.get_heads())
+    ours = sorted({r for r, _d, _f, all_d in _revisions()
+                   if all_d and r not in {p for _r2, _d2, _f2, a2 in _revisions()
+                                          for p in a2}})
+    assert len(heads) == 1, f"alembic sees {len(heads)} heads: {heads}"
+    assert heads == ours, f"alembic head {heads} != parsed head {ours}"
 
 
 def test_upgrading_a_real_old_database_adds_the_new_columns():

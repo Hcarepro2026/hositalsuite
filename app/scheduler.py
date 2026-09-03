@@ -25,6 +25,7 @@ from .models import (AppNotification, Complaint, CorrectiveAction, DutyRoster,
 _started = False
 _thread_ref = None          # for health reporting
 _lock = threading.Lock()
+_last_backup_monotonic = 0.0   # in-memory min-interval guard for the nightly backup
 
 
 # ------------------------------------------------------------------ helpers
@@ -270,12 +271,28 @@ def job_nightly_backup(app):
 
     The previous implementation silently returned on PostgreSQL, so production
     had no backups at all despite the UI claiming otherwise. See app/backup.py.
+
+    A backup is a FULL read of every table — the single largest routine query
+    this app points at the database. On a metered-egress host (Supabase free:
+    5 GB/month) an accidental second run per day would double the largest line
+    item, so a hard in-memory minimum interval backstops the per-day Setting
+    guard: even if the Setting read fails or races, a backup can never run
+    more than once per MIN_BACKUP_INTERVAL_HOURS per process.
     """
+    import time as _time
     from .backup import create_backup, prune_backups
     from .config import Config
+
+    global _last_backup_monotonic
+    if _last_backup_monotonic and \
+            (_time.monotonic() - _last_backup_monotonic) < Config.MIN_BACKUP_INTERVAL_HOURS * 3600:
+        app.logger.info("nightly backup skipped — another one ran less than "
+                        "%sh ago (in-memory guard)", Config.MIN_BACKUP_INTERVAL_HOURS)
+        return
     try:
         create_backup(app, kind="nightly")
         prune_backups(keep=Config.BACKUP_KEEP)
+        _last_backup_monotonic = _time.monotonic()
     except Exception as exc:                     # noqa: BLE001
         app.logger.exception("nightly backup FAILED: %s", exc)
         db.session.rollback()

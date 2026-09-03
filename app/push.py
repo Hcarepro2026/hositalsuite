@@ -240,8 +240,17 @@ def send_push_to_subscription(subscription, payload: Dict[str, Any]) -> tuple[bo
     except Exception as exc:
         # WebPushException has response
         err = str(exc)[:400]
-        # If 410 Gone, subscription expired — deactivate
-        if "410" in err or "expired" in err.lower() or "invalid" in err.lower():
+        # Permanent rejections mean this subscription will NEVER succeed again:
+        #   410 Gone            — subscription expired at the push service
+        #   403 Unauthorized    — VAPID key rotated (old subscriptions are bound
+        #                         to the old public key) or endpoint revoked
+        #   404 Not Found       — endpoint removed
+        # Deactivate so the queue stops retrying a dead address forever. The
+        # browser re-subscribes with the CURRENT key on the next visit.
+        permanent = ("410" in err or "403" in err or "404" in err
+                     or "expired" in err.lower() or "invalid" in err.lower()
+                     or "unauthorized" in err.lower() or "not found" in err.lower())
+        if permanent:
             try:
                 subscription.is_active = False
                 db.session.commit()
