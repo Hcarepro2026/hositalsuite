@@ -127,45 +127,99 @@ def _fuzzy_surname_matches(org_id: int, term: str, limit: int = 10) -> list:
     Real HIMS desks get "Abatan" typed as "Abathan" or "Ogunleye" as
     "Ogunlewe". A 1-2 letter edit distance catches those without needing
     PostgreSQL pg_trgm (not available on Render free).
+
+    FIX 2026-09-04 (perf/privacy): old version loaded 500 full Patient rows
+    (all columns, including PII like address, nok_phone) into Python memory
+    per failed search, then ran Levenshtein per field in Python. At scale that
+    is a privacy and egress risk (424 GB Supabase overage). New version:
+      - pulls only needed columns (id, surname, first_name, hospital_number)
+        as lightweight tuples, never full PII rows;
+      - pre-filters by first 2 letters / length to cut candidate set from 500
+        to ~50-100;
+      - fetches full Patient objects only for the ~10 actual matches.
     """
-    term_l = term.lower().strip()
+    term_l = term.lower().strip()[:40]
     if len(term_l) < 3:
         return []
-    # Load candidate surnames — limited to 500 most recent to keep it fast
-    # on low-bandwidth mobile.
-    candidates = (db.session.query(Patient)
-                  .filter(Patient.org_id == org_id, Patient.active.is_(True))
-                  .order_by(Patient.last_visit_at.desc().nullslast())
-                  .limit(500).all())
-    scored = []
-    for p in candidates:
-        # Check surname, first_name, full_name
-        for field in (p.surname, p.first_name, p.hospital_number):
+    from . import branches as br
+    # Lightweight candidate fetch — no PII beyond names/number.
+    # Include last_visit_at for recency ordering; branch filtering included.
+    try:
+        base_q = db.session.query(
+            Patient.id, Patient.surname, Patient.first_name,
+            Patient.hospital_number, Patient.last_visit_at
+        ).filter(Patient.org_id == org_id, Patient.active.is_(True))
+        base_q = br.apply_branch_filter(base_q, Patient.branch_id)
+        # Narrow to plausible candidates: same first letter or first 2 chars.
+        # This cuts typical scan from 500 to <100 without losing true typos
+        # (edit distance 2 rarely changes first 2 letters).
+        prefix = term_l[:2]
+        # Use LIKE on surname prefix — indexed via ix_patient_org_surname
+        candidates = (base_q.filter(
+            or_(
+                func.lower(Patient.surname).like(f"{prefix}%"),
+                func.lower(Patient.first_name).like(f"{prefix}%"),
+            )
+        ).order_by(Patient.last_visit_at.desc().nullslast()).limit(200).all())
+        # If prefix filter finds too few, broaden to length-similar set (still limited)
+        if len(candidates) < 10:
+            extra = (base_q.filter(
+                func.length(Patient.surname).between(len(term_l)-2, len(term_l)+2)
+            ).order_by(Patient.last_visit_at.desc().nullslast()).limit(100).all())
+            # merge, deduplicate by id
+            seen_ids = {c[0] for c in candidates}
+            for e in extra:
+                if e[0] not in seen_ids:
+                    candidates.append(e)
+                    seen_ids.add(e[0])
+                    if len(candidates) >= 200:
+                        break
+    except Exception:
+        # Fallback: small raw fetch without prefix filtering
+        try:
+            candidates = (db.session.query(
+                Patient.id, Patient.surname, Patient.first_name,
+                Patient.hospital_number, Patient.last_visit_at
+            ).filter(Patient.org_id == org_id, Patient.active.is_(True))
+            .order_by(Patient.last_visit_at.desc().nullslast()).limit(200).all())
+        except Exception:
+            return []
+    scored_ids = []
+    seen_ids = set()
+    for pid, surname, first_name, hospital_number, _last in candidates:
+        found = False
+        for field in (surname, first_name, hospital_number):
             if not field:
                 continue
             fl = field.lower()
-            # Quick length filter
             if abs(len(fl) - len(term_l)) > 2:
+                # length filter already, but keep for safety
                 continue
-            # Exact substring already handled, so check edit distance
             if _lev(term_l, fl) <= 2 or _lev(term_l, fl[:len(term_l)]) <= 1:
-                scored.append(p)
+                found = True
                 break
-            # Also try parts
             for part in fl.split():
                 if _lev(term_l, part) <= 2:
-                    scored.append(p)
+                    found = True
                     break
-    # Deduplicate
-    seen = set()
-    out = []
-    for p in scored:
-        if p.id not in seen:
-            seen.add(p.id)
-            out.append(p)
-        if len(out) >= limit:
-            break
-    return out
+            if found:
+                break
+        if found and pid not in seen_ids:
+            scored_ids.append(pid)
+            seen_ids.add(pid)
+            if len(scored_ids) >= limit:
+                break
+    if not scored_ids:
+        return []
+    # Fetch full rows ONLY for the handful of matches — preserves caller contract
+    # but avoids pulling 500 full PII rows per failed search.
+    try:
+        rows = db.session.query(Patient).filter(Patient.id.in_(scored_ids)).all()
+        # Preserve scored order
+        by_id = {r.id: r for r in rows}
+        return [by_id[i] for i in scored_ids if i in by_id]
+    except Exception:
+        return []
 
 
 

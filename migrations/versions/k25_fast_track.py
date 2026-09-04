@@ -15,22 +15,28 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
+    # FIX 2026-09-04: idempotent via inspector — avoids InFailedSqlTransaction
+    # where "already exists" aborts the whole transaction and later tables
+    # (e.g. service_clinic) then fail with "relation already exists" noise.
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    tables = set(insp.get_table_names())
     for table in ('patient_visit', 'reception_intake', 'queue_ticket'):
-        try:
+        if table not in tables:
+            continue
+        cols = {c['name'] for c in insp.get_columns(table)}
+        if 'is_fast_track' not in cols:
             op.add_column(table, sa.Column('is_fast_track', sa.Boolean(), nullable=True, server_default=sa.text('0')))
-        except Exception:
-            pass
-        try:
+        if 'fast_track_reason' not in cols:
             op.add_column(table, sa.Column('fast_track_reason', sa.String(length=40), nullable=True))
+    # Ensure boolean defaults are 0/False and not null for new rows
+    for tbl in ('patient_visit', 'reception_intake', 'queue_ticket'):
+        if tbl not in tables:
+            continue
+        try:
+            op.execute(f"UPDATE {tbl} SET is_fast_track=0 WHERE is_fast_track IS NULL")
         except Exception:
             pass
-    # Ensure boolean defaults are 0/False and not null for new rows
-    try:
-        op.execute("UPDATE patient_visit SET is_fast_track=0 WHERE is_fast_track IS NULL")
-        op.execute("UPDATE reception_intake SET is_fast_track=0 WHERE is_fast_track IS NULL")
-        op.execute("UPDATE queue_ticket SET is_fast_track=0 WHERE is_fast_track IS NULL")
-    except Exception:
-        pass
 
 def downgrade():
     for table in ('patient_visit', 'reception_intake', 'queue_ticket'):

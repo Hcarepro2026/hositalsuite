@@ -338,8 +338,11 @@ def get_live_counts(org_id: int) -> Dict[str, int]:
     - Reception, Billing, MEGALEX/PayPoint, LAHSMA, HIMS, Triage,
     - patients waiting to see each doctor, and other Onward locations (Lab, Pharmacy, etc)
     
-    Africa optimized: cached 30s per-org to avoid DB hammer on slow internet, low battery.
-    Premium: still real-time enough (30s) but saves 80% DB hits.
+    Africa optimized: cached 60s per-org to avoid DB hammer on slow internet, low battery.
+    FIX 2026-09-04: egress guard — was 30s cache, each call did 20+ COUNT(*) queries.
+    With personal TV polling every 10s and TV dashboard polling, 100 concurrent
+    patients => 2000+ COUNTs/min => 424 GB Supabase egress. Now 60s cache cuts
+    egress ~50% and still real-time enough; counts are estimates, not seconds.
     Multi-hospital: per org_id, per-org timestamp (fixed cross-org stale bug).
     """
     global _cache, _cache_at
@@ -348,7 +351,7 @@ def get_live_counts(org_id: int) -> Dict[str, int]:
     # Check cache 30s per-org — fixed bug where global _cache_at caused cross-org stale
     try:
         last_at = _cache_at.get(cache_key)
-        if last_at and (now - last_at).total_seconds() < 30:
+        if last_at and (now - last_at).total_seconds() < 60:
             if cache_key in _cache:
                 return _cache[cache_key]
     except Exception:
@@ -431,7 +434,7 @@ def get_live_counts(org_id: int) -> Dict[str, int]:
     except Exception:
         pass
 
-    # Cache 30s per-org
+    # Cache 60s per-org
     try:
         _cache[cache_key] = counts
         _cache_at[cache_key] = now

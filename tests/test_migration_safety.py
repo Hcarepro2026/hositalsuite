@@ -108,8 +108,10 @@ def test_migration_revisions_are_unique():
 
 def test_migration_chain_is_linear_and_complete():
     """Exactly one root, no orphans, no forks — otherwise upgrades misbehave.
-    Merge migration j24_merge is allowed as single merge point.
-    Fork at f7d25a6b0c93 is resolved via merge of its two branches.
+    Merge migrations are allowed as merge points (e.g. j24_merge).
+    Any fork must be resolved by a merge whose ancestors include both branches.
+    This is generic — not tied to a specific revision id — so future forks
+    are also caught. Also asserts there is exactly one head after merges.
     """
     revs = _revisions()
     ids = {r for r, _d, _f, _all in revs}
@@ -161,6 +163,16 @@ def test_migration_chain_is_linear_and_complete():
 
     unresolved = forked - resolved
     assert not unresolved, f"two migrations share a parent (a fork): {unresolved}"
+
+    # Exactly one head (revision that is not a parent of another) after merges.
+    # Multiple heads means `alembic upgrade head` is ambiguous and Render may
+    # stamp the wrong branch, leaving schema drift hidden until a 500.
+    children = set()
+    for _r, _d, _f, all_down in revs:
+        children.update(all_down)
+    heads = [r for r, _d, _f, _all in revs if r not in children]
+    # Allow exactly one head; j24_merge and future merges should resolve forks.
+    assert len(heads) == 1, f"expected exactly one head revision, found {heads} — fork not merged?"
 
 
 def test_upgrading_a_real_old_database_adds_the_new_columns():

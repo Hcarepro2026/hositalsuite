@@ -222,14 +222,27 @@ def ensure_schema() -> None:
             conn.execute(text(
                 f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {table} ({cols}) WHERE {where}'))
 
-    # --- New tables that may not exist on old deployments (e.g. leave workflow, patient photo)
-    # create_all() should handle, but belt-and-braces raw CREATE TABLE IF NOT EXISTS
-    # so a missing import does not leave production with 500s.
+    # --- New tables that may not exist on old deployments (e.g. leave workflow)
+    # FIX 2026-09-04: senior review — bare `except Exception: pass` hid
+    # migration drift (app would 500 later with no log). Now: inspector check,
+    # dialect-aware DDL, and warning logs instead of silent swallow.
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
     try:
-        with db.engine.begin() as conn:
-            # leave_request
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS leave_request (
+        from flask import current_app as _cur_app
+        if _cur_app and hasattr(_cur_app, "logger"):
+            _log = _cur_app.logger  # prefer app logger when in context
+    except Exception:
+        pass
+    _is_pg = str(db.engine.url).startswith("postgres")
+    # Refresh table list — earlier loop may have added columns but not tables.
+    try:
+        _existing_after = set(inspect(db.engine).get_table_names())
+    except Exception:
+        _existing_after = existing_tables
+    _leave_tables = {
+        "leave_request": (
+            """CREATE TABLE IF NOT EXISTS leave_request (
                     id SERIAL PRIMARY KEY,
                     org_id INTEGER NOT NULL,
                     user_id INTEGER NOT NULL,
@@ -246,29 +259,8 @@ def ensure_schema() -> None:
                     roster_created BOOLEAN DEFAULT FALSE NOT NULL,
                     created_at TIMESTAMP,
                     updated_at TIMESTAMP
-                )
-            """))
-            # leave_balance
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS leave_balance (
-                    id SERIAL PRIMARY KEY,
-                    org_id INTEGER NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    year INTEGER NOT NULL,
-                    leave_type VARCHAR(16) NOT NULL,
-                    entitled INTEGER DEFAULT 0 NOT NULL,
-                    used INTEGER DEFAULT 0 NOT NULL,
-                    remaining INTEGER DEFAULT 0 NOT NULL,
-                    updated_at TIMESTAMP,
-                    UNIQUE (org_id, user_id, year, leave_type)
-                )
-            """))
-            # For SQLite, SERIAL is not valid — try SQLite version if Postgres failed
-    except Exception:
-        try:
-            with db.engine.begin() as conn:
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS leave_request (
+                )""" ,
+            """CREATE TABLE IF NOT EXISTS leave_request (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         org_id INTEGER NOT NULL,
                         user_id INTEGER NOT NULL,
@@ -285,10 +277,22 @@ def ensure_schema() -> None:
                         roster_created BOOLEAN DEFAULT 0 NOT NULL,
                         created_at TIMESTAMP,
                         updated_at TIMESTAMP
-                    )
-                """))
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS leave_balance (
+                    )"""
+        ),
+        "leave_balance": (
+            """CREATE TABLE IF NOT EXISTS leave_balance (
+                    id SERIAL PRIMARY KEY,
+                    org_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    year INTEGER NOT NULL,
+                    leave_type VARCHAR(16) NOT NULL,
+                    entitled INTEGER DEFAULT 0 NOT NULL,
+                    used INTEGER DEFAULT 0 NOT NULL,
+                    remaining INTEGER DEFAULT 0 NOT NULL,
+                    updated_at TIMESTAMP,
+                    UNIQUE (org_id, user_id, year, leave_type)
+                )""" ,
+            """CREATE TABLE IF NOT EXISTS leave_balance (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         org_id INTEGER NOT NULL,
                         user_id INTEGER NOT NULL,
@@ -299,8 +303,24 @@ def ensure_schema() -> None:
                         remaining INTEGER DEFAULT 0 NOT NULL,
                         updated_at TIMESTAMP,
                         UNIQUE (org_id, user_id, year, leave_type)
-                    )
-                """))
-        except Exception:
-            pass
+                    )"""
+        ),
+    }
+    for _tbl, (_ddl_pg, _ddl_sqlite) in _leave_tables.items():
+        if _tbl in _existing_after:
+            continue
+        _ddl_primary = _ddl_pg if _is_pg else _ddl_sqlite
+        _ddl_fallback = _ddl_sqlite if _is_pg else _ddl_pg
+        try:
+            with db.engine.begin() as _conn:
+                _conn.execute(text(_ddl_primary))
+            _log.info("ensure_schema: created missing table %s", _tbl)
+        except Exception as _exc:  # noqa: BLE001
+            _log.warning("ensure_schema: primary DDL for %s failed (%s) — trying fallback", _tbl, _exc)
+            try:
+                with db.engine.begin() as _conn2:
+                    _conn2.execute(text(_ddl_fallback))
+                _log.info("ensure_schema: created %s via fallback DDL", _tbl)
+            except Exception as _exc2:  # noqa: BLE001
+                _log.error("ensure_schema: could not create %s — app may 500 on that table (%s / %s)", _tbl, _exc, _exc2)
 
