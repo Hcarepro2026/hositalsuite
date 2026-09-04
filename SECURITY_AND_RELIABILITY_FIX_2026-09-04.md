@@ -11,7 +11,7 @@ This addresses the senior review (leaked secret, security theater, silent migrat
 **File:** `HOSPITAL_ASSISTANT_WORLD_CLASS_REPORT.md:96`
 ```diff
 - PRIVATE: `REDACTED-REDACTED-REDACTED-REDACTED`
-+ PRIVATE: `REDACTED — was REDACTED — rotated immediately…`
++ PRIVATE: `REDACTED — was [REDACTED]... — rotated immediately…`
 ```
 
 - **This was a real production VAPID private key in plaintext, committed to git.** The `.gitignore` fix (`instance/`, `vapid_keys.json`, `*.pem`) in the same patch was meant to keep it out, but the key sat in a tracked markdown anyway.

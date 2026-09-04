@@ -93,7 +93,7 @@ Your chatbot is now world-class, privacy-first, Nigeria-focused, patient-centred
 
 - Generated permanent production keys (REDACTED 2026-09-04 — leaked key rotated):
   - PUBLIC: `BFTnObyKabMVbeqvg8wWXvrO1or_8zOL_0wA4PVhQIXwUDjp7VV6pGvBQo8QNN9OmVcoQIDN0Zd3Lt9gqoDJkwM` (example — generate your own via `python -m py_vapid --gen`)
-  - PRIVATE: `REDACTED — was REDACTED — rotated immediately, new key in Render env VAPID_PRIVATE_KEY only, never in repo. See VAPID_SETUP_GUIDE.md. If you deployed with the old key, generate a new pair and update Render env now; old subscriptions will need to re-enable.`
+  - PRIVATE: `REDACTED — was [OLD KEY REMOVED] — rotated immediately, new key in Render env VAPID_PRIVATE_KEY only, never in repo. See VAPID_SETUP_GUIDE.md. If you deployed with the old key, generate a new pair and update Render env now; old subscriptions will need to re-enable.`
 - Added `instance/`, `vapid_keys.json`, `*.pem`, `*.key` to `.gitignore` — private never committed
 - Added auto-generation fallback in `app/push.py` `_ensure_global_vapid()` — works out-of-box if env missing, saves to instance file, logs warning
 - Created `VAPID_SETUP_GUIDE.md` with instructions where to paste in Render (without private key in repo)
