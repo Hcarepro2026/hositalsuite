@@ -649,6 +649,12 @@ def answer(text: str, lang: str = "en", org_id=None):
             best, best_score = a, s
     if best is None or best_score < 1:
         return None
+    # The clinical_safe flag's documented contract: False means the hospital
+    # marked this dialogue "never answer directly — give the safe redirect".
+    # The flag used to be stored everywhere but read nowhere.
+    if best.clinical_safe is False:
+        return {"text": SAFE_CLINICAL_PCM if lang == "pcm" else SAFE_CLINICAL,
+                "article": None, "confidence": 1.0, "action": "clinical"}
 
     field = LANG_FIELD.get(lang, "en")
     body = getattr(best, field, None) or getattr(best, "yo", None) or best.en

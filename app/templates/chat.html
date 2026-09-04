@@ -87,6 +87,8 @@ body{display:flex;flex-direction:column;background:var(--bg,#eef2f6);
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<main id="main-content" style="display:contents">
 
 <div class="chat-head">
   <a class="back" href="/welcome" title="Back to services" aria-label="Back to services">‹</a>
@@ -126,6 +128,7 @@ body{display:flex;flex-direction:column;background:var(--bg,#eef2f6);
   <button type="submit" class="go" id="send">{{ _('chat_send') }}</button>
 </form>
 
+</main>
 <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
 (function () {

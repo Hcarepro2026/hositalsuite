@@ -1445,6 +1445,12 @@ def kb_edit(kid: int):
     a = db.session.get(KnowledgeArticle, kid)
     if not a or (a.org_id and a.org_id != current_user.org_id and not current_user.is_super):
         abort(404)
+    # The shared global library is every hospital's assistant — only a Super
+    # Administrator may rewrite or remove it. A tenant's head office edits
+    # their own hospital's voice, never the shared one (the same invariant
+    # the keyword-learning path already enforces).
+    if a.org_id is None and not current_user.is_super:
+        abort(404)
     f = request.form
     a.intent = (f.get("intent") or a.intent).strip()
     a.category = (f.get("category") or a.category).strip()
@@ -1500,6 +1506,12 @@ def kb_delete(kid: int):
     from ..models import KnowledgeArticle
     a = db.session.get(KnowledgeArticle, kid)
     if not a or (a.org_id and a.org_id != current_user.org_id and not current_user.is_super):
+        abort(404)
+    # The shared global library is every hospital's assistant — only a Super
+    # Administrator may rewrite or remove it. A tenant's head office edits
+    # their own hospital's voice, never the shared one (the same invariant
+    # the keyword-learning path already enforces).
+    if a.org_id is None and not current_user.is_super:
         abort(404)
     audit("KB_DELETED", "kb", kid, {"intent": a.intent})
     db.session.delete(a)
