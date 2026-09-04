@@ -38,7 +38,10 @@ def csrf_protect():
     if request.endpoint in CSRF_EXEMPT:
         return None
     token = request.form.get("_csrf") or request.headers.get("X-CSRF-Token")
-    if not token or token != session.get("_csrf"):
+    # F-010: constant-time compare — a plain equality check would leak the
+    # token byte-by-byte through timing; negligible risk, free to remove.
+    if not token or not secrets.compare_digest(
+            token.encode(), (session.get("_csrf") or "").encode()):
         abort(403, description="Invalid or missing CSRF token. Refresh the page and try again.")
     return None
 
