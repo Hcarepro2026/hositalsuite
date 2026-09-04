@@ -138,7 +138,7 @@ The same routing/SLA/escalation pipeline applies.
 ## 5. Business rules — verified
 
 All rules from the specification are implemented **and covered by automated tests**
-(`python -m pytest tests/ -q` → **99 passed**):
+(`python -m pytest tests/ -q` → **914 passed**; coverage 69% — see the box above):
 
 - Exactly five criteria; scores 1–5; total/percent/rating bands ✔
 - Score 1 or 2 → submission blocked until explanation exists (form + API) ✔

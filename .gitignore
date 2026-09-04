@@ -56,3 +56,10 @@ ss.txt
 *.txt.cookies
 md2.txt
 lang.txt
+
+# --- CI workflow (F-001) ---
+# The active workflow copy is prepared here locally, but this GitHub App token
+# cannot push workflow files (workflows:write permission). Activation is a
+# manual step documented in ci/README.md — DO NOT git-add this directory until
+# pushing with a token that has the workflow scope.
+.github/

@@ -41,7 +41,7 @@
 <div class="offline-banner" id="offline-banner">📴 OFFLINE — DATA SAVED LOCALLY. You can keep working; entries sync when you're back online.</div>
 <div class="online-banner" id="online-banner">✅ Back online</div>
 <div class="topbar">
-  <a class="brand" href="/">
+  <a class="brand" href="{{ url_for('main.home') }}">
     {% if hospital and hospital.logo_path %}
       <img class="brand-logo" src="/branding/logo" alt="" style="max-height:32px;max-width:120px;object-fit:contain">
     {% else %}🏥{% endif %}
@@ -58,30 +58,30 @@
 <div class="navwrap" id="navwrap">
 <nav class="nav" id="mainnav">
   {% set can = nav_permissions() %}
-  <a href="/" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
-  {% if can.dept_desk %}<a href="/my-department" class="{{ 'active' if request.path.startswith('/my-department') }}">My Department</a>{% endif %}
-  {% if can.inspections %}<a href="/inspections" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>{% endif %}
-  {% if can.reception %}<a href="/reception/" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>{% endif %}
-  {% if can.reception or can.bookings %}<a href="/fasttrack" class="{{ 'active' if request.path.startswith('/fasttrack') }}" style="{% if request.path.startswith('/fasttrack') %}background:#000;color:#FFD700{% else %}background:linear-gradient(135deg,#FFD700,#FFA500);color:#000;font-weight:900{% endif %}">⭐ Fast Track</a>{% endif %}
-  {% if can.cashdesk %}<a href="/billing" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a><a href="/paypoint" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>{% endif %}
-  {% if can.hims %}<a href="/hims/" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>{% endif %}
-  {% if can.lahsma %}<a href="/lahsma" class="{{ 'active' if request.path.startswith('/lahsma') }}">LAHSMA</a>{% endif %}
-  {% if can.triage %}<a href="/triage/" class="{{ 'active' if request.path.startswith('/triage') }}">Triage</a>{% endif %}
-  {% if can.consulting %}<a href="/consulting-room" class="{{ 'active' if request.path.startswith('/consulting-room') }}">My Room</a>{% endif %}
-  {% if can.onward %}<a href="/onward" class="{{ 'active' if request.path.startswith('/onward') }}">Onward</a>{% endif %}
-  {% if can.tracking %}<a href="/tracking" class="{{ 'active' if request.path.startswith('/tracking') }}">Patient Flow</a>{% endif %}
-  {% if can.bookings %}<a href="/bookings" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a><a href="/queue" class="{{ 'active' if request.path == '/queue' }}">Queue</a>{% endif %}
-  {% if can.complaints %}<a href="/complaints" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a><a href="/feedbacks" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Satisfaction</a>{% endif %}
-  {% if can.referrals %}<a href="/referrals" class="{{ 'active' if request.path.startswith('/referrals') }}">Referrals</a>{% endif %}
-  {% if can.corrective %}<a href="/corrective-actions" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>{% endif %}
-  {% if can.roster %}<a href="/roster" class="{{ 'active' if request.path.startswith('/roster') or request.path.startswith('/dept-roster') }}">Roster</a>{% endif %}
-  {% if can.attendance %}<a href="/attendance" class="{{ 'active' if request.path.startswith('/attendance') }}">I am here</a>{% endif %}
-  {% if can.reports %}<a href="/reports" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>{% endif %}
-  <a href="/notifications" class="{{ 'active' if request.path.startswith('/notifications') }}">🔔</a>
-  <a href="/alert-settings" class="{{ 'active' if request.path.startswith('/alert-settings') }}" title="Voice & alert settings">🗣</a>
-  <a href="/mfa/setup" class="{{ 'active' if request.path.startswith('/mfa') }}" title="Protect my sign-in">🔐</a>
-  {% if can.roles_admin and not can.admin %}<a href="/admin/roles" class="{{ 'active' if request.path.startswith('/admin/roles') }}">🔐 Roles</a>{% endif %}
-  {% if can.admin %}<a href="/admin" class="{{ 'active' if request.path.startswith('/admin') }}">⚙ Admin</a>{% endif %}
+  <a href="{{ url_for('main.home') }}" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
+  {% if can.dept_desk %}<a href="{{ url_for('deptdesk.desk') }}" class="{{ 'active' if request.path.startswith('/my-department') }}">My Department</a>{% endif %}
+  {% if can.inspections %}<a href="{{ url_for('inspections.inspection_list') }}" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>{% endif %}
+  {% if can.reception %}<a href="{{ url_for('reception.desk') }}" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>{% endif %}
+  {% if can.reception or can.bookings %}<a href="{{ url_for('fasttrack.desk') }}" class="{{ 'active' if request.path.startswith('/fasttrack') }}" style="{% if request.path.startswith('/fasttrack') %}background:#000;color:#FFD700{% else %}background:linear-gradient(135deg,#FFD700,#FFA500);color:#000;font-weight:900{% endif %}">⭐ Fast Track</a>{% endif %}
+  {% if can.cashdesk %}<a href="{{ url_for('cashdesk.billing') }}" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a><a href="{{ url_for('cashdesk.paypoint') }}" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>{% endif %}
+  {% if can.hims %}<a href="{{ url_for('hims.desk') }}" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>{% endif %}
+  {% if can.lahsma %}<a href="{{ url_for('lahsma.desk') }}" class="{{ 'active' if request.path.startswith('/lahsma') }}">LAHSMA</a>{% endif %}
+  {% if can.triage %}<a href="{{ url_for('triage.bench') }}" class="{{ 'active' if request.path.startswith('/triage') }}">Triage</a>{% endif %}
+  {% if can.consulting %}<a href="{{ url_for('consulting.room') }}" class="{{ 'active' if request.path.startswith('/consulting-room') }}">My Room</a>{% endif %}
+  {% if can.onward %}<a href="{{ url_for('consulting.onward_board') }}" class="{{ 'active' if request.path.startswith('/onward') }}">Onward</a>{% endif %}
+  {% if can.tracking %}<a href="{{ url_for('tracking.dashboard') }}" class="{{ 'active' if request.path.startswith('/tracking') }}">Patient Flow</a>{% endif %}
+  {% if can.bookings %}<a href="{{ url_for('bookings.staff_list') }}" class="{{ 'active' if request.path.startswith('/bookings') }}">Bookings</a><a href="{{ url_for('queue.staff_queue') }}" class="{{ 'active' if request.path == '/queue' }}">Queue</a>{% endif %}
+  {% if can.complaints %}<a href="{{ url_for('complaints.staff_queue') }}" class="{{ 'active' if request.path.startswith('/complaints') }}">Complaints</a><a href="{{ url_for('feedback.staff_list') }}" class="{{ 'active' if request.path.startswith('/feedbacks') }}">Satisfaction</a>{% endif %}
+  {% if can.referrals %}<a href="{{ url_for('referrals.staff_list') }}" class="{{ 'active' if request.path.startswith('/referrals') }}">Referrals</a>{% endif %}
+  {% if can.corrective %}<a href="{{ url_for('main.corrective_actions') }}" class="{{ 'active' if request.path.startswith('/corrective') }}">Corrective Actions</a>{% endif %}
+  {% if can.roster %}<a href="{{ url_for('roster.roster_view') }}" class="{{ 'active' if request.path.startswith('/roster') or request.path.startswith('/dept-roster') }}">Roster</a>{% endif %}
+  {% if can.attendance %}<a href="{{ url_for('attendance.desk') }}" class="{{ 'active' if request.path.startswith('/attendance') }}">I am here</a>{% endif %}
+  {% if can.reports %}<a href="{{ url_for('reports.center') }}" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>{% endif %}
+  <a href="{{ url_for('main.notifications_inbox') }}" class="{{ 'active' if request.path.startswith('/notifications') }}">🔔</a>
+  <a href="{{ url_for('main.alert_settings') }}" class="{{ 'active' if request.path.startswith('/alert-settings') }}" title="Voice & alert settings">🗣</a>
+  <a href="{{ url_for('mfa.setup') }}" class="{{ 'active' if request.path.startswith('/mfa') }}" title="Protect my sign-in">🔐</a>
+  {% if can.roles_admin and not can.admin %}<a href="{{ url_for('rolesadmin.index') }}" class="{{ 'active' if request.path.startswith('/admin/roles') }}">🔐 Roles</a>{% endif %}
+  {% if can.admin %}<a href="{{ url_for('admin.overview') }}" class="{{ 'active' if request.path.startswith('/admin') }}">⚙ Admin</a>{% endif %}
   <form method="post" action="/logout" style="margin-left:auto"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn ghost small" type="submit">Sign out</button></form>
 </nav>
 </div>
@@ -95,7 +95,7 @@
 <div class="footer">
   {% if hospital %}<b>{{ hospital.name }}</b>{% if hospital.address %} · {{ hospital.address }}{% endif %}{% if hospital.phone %} · {{ hospital.phone }}{% endif %}{% if hospital.email %} · {{ hospital.email }}{% endif %}<br>{% endif %}
   Hospital Admin Manager Suite v{{ app_version }} · secure · audited · mobile-first · multi-hospital · slow-internet optimized<br>
-  <a href="/privacy">Privacy Notice</a> · <a href="/privacy/request">Your data rights</a> · <span id="browser-support">Browser: <span id="browser-name">detecting...</span></span>
+  <a href="{{ url_for('main.privacy') }}">Privacy Notice</a> · <a href="{{ url_for('main.privacy_request') }}">Your data rights</a> · <span id="browser-support">Browser: <span id="browser-name">detecting...</span></span>
 </div>
 <div id="toast-zone" aria-live="polite"></div>
 <div id="feature-phone-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#000;color:#FFD700;padding:12px;text-align:center;font-weight:700;z-index:9999">

@@ -617,3 +617,63 @@ def test_fuzzy_fallback_fetches_light_rows_not_full_dossiers(app, seeded, monkey
         # exactly ONE full-entity fetch (the hydration of the top matches),
         # plus the result-limiting query — never 500 dossiers in memory
         assert len(hydrated) <= 2, "fuzzy search loaded full Patient rows more than once"
+
+
+# ------------------------------------------------------------------ F-011 / F-020
+def test_api_lookup_is_audited(client, seeded):
+    """Every PII read lands in the hash-chained audit trail, with the search
+    term MASKED (a phone typed at the desk must not be copied into the log)."""
+    from app.models import AuditLog
+    login(client, "am1")
+    _folder(client, surname="LOOKUP", first_name="Audit")
+    r = client.get("/hims/api/lookup?q=LOOKUP")
+    assert r.status_code == 200 and len(r.get_json()) >= 1
+    rows = (AuditLog.query
+            .filter(AuditLog.action == "HIMS_LOOKUP")
+            .order_by(AuditLog.id.desc()).all())
+    assert rows, "patient PII read was not audited (F-011)"
+    import json as _json
+    detail = _json.loads(rows[0].detail)
+    assert detail["results"] >= 1
+    assert "LOOKUP" in detail["q"]
+
+
+def test_api_lookup_audits_masked_phone_search(client, seeded):
+    from app.models import AuditLog
+    import json as _json
+    login(client, "am1")
+    _folder(client)                       # registers 08059826879
+    r = client.get("/hims/api/lookup?q=08059826879")
+    assert r.status_code == 200
+    row = AuditLog.query.filter_by(action="HIMS_LOOKUP").order_by(AuditLog.id.desc()).first()
+    detail = _json.loads(row.detail)
+    assert "08059826879" not in detail["q"], "raw phone stored in audit trail"
+    assert "****" in detail["q"]
+
+
+def test_api_lookup_error_does_not_leak_exception_text(client, seeded, monkeypatch):
+    """F-020: raw Python exception text (drivers, SQL, paths) must never reach
+    the client — log server-side, return a generic error."""
+    from app.views import hims as hims_view
+    login(client, "am1")
+    def boom(*a, **kw):
+        raise RuntimeError("psycopg2 secret internals /home/user/app/models.py")
+    monkeypatch.setattr(hims_view.hims, "search", boom)
+    r = client.get("/hims/api/lookup?q=whatever")
+    assert r.status_code == 500
+    body = r.get_json()
+    assert body["error"] == "lookup failed"
+    assert b"psycopg2" not in r.data and b"RuntimeError" not in r.data
+
+
+def test_api_lookup_is_rate_limited(client, seeded):
+    """F-011: a compromised staff login must not harvest the register at line
+    speed. Blast past the limit and expect 429s."""
+    login(client, "am1")
+    seen_429 = False
+    for i in range(60):
+        r = client.get(f"/hims/api/lookup?q=probe{i:03d}")
+        if r.status_code == 429:
+            seen_429 = True
+            break
+    assert seen_429, "lookup endpoint has no rate limit (F-011)"

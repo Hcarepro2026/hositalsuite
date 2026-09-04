@@ -81,7 +81,7 @@
   {% endwith %}
 
   <!-- Premium luxury Fast Track booking — special button -->
-  <a class="lux-card" href="/book{{ q }}" aria-label="Book Fast Track">
+  <a class="lux-card" href="{{ url_for('bookings.portal') }}{{ q }}" aria-label="Book Fast Track">
     <div class="lux-icon">👑</div>
     <div class="lux-txt">
       <div class="lux-title">Fast Track — Be Seen Fast</div>
@@ -95,7 +95,7 @@
   <p class="muted" style="margin:0 0 6px;font-size:.9rem">{{ _('hub_sub') }}</p>
 
   <div class="hub-grid">
-    <a class="hub-tile t-book" href="/book{{ q }}">
+    <a class="hub-tile t-book" href="{{ url_for('bookings.portal') }}{{ q }}">
       <span class="hub-ico">📅</span>
       <span class="hub-txt">
         <span class="hub-title">Book a visit</span>
@@ -103,7 +103,7 @@
       </span><span class="hub-go">›</span>
     </a>
 
-    <a class="hub-tile t-queue" href="/queue/join{{ q }}">
+    <a class="hub-tile t-queue" href="{{ url_for('queue.join_page') }}{{ q }}">
       <span class="hub-ico">🎟️</span>
       <span class="hub-txt">
         <span class="hub-title">Join the queue</span>
@@ -111,7 +111,7 @@
       </span><span class="hub-go">›</span>
     </a>
 
-    <a class="hub-tile t-chat" href="/chat{{ q }}">
+    <a class="hub-tile t-chat" href="{{ url_for('chat.chat_page') }}{{ q }}">
       <span class="hub-ico">💬</span>
       <span class="hub-txt">
         <span class="hub-title">Ask us anything</span>
@@ -119,7 +119,7 @@
       </span><span class="hub-go">›</span>
     </a>
 
-    <a class="hub-tile t-comp" href="/complaint{{ q }}">
+    <a class="hub-tile t-comp" href="{{ url_for('complaints.portal') }}{{ q }}">
       <span class="hub-ico">📣</span>
       <span class="hub-txt">
         <span class="hub-title">Tell us a problem</span>
@@ -127,7 +127,7 @@
       </span><span class="hub-go">›</span>
     </a>
 
-    <a class="hub-tile t-fb" href="/feedback{{ q }}">
+    <a class="hub-tile t-fb" href="{{ url_for('feedback.portal') }}{{ q }}">
       <span class="hub-ico">⭐</span>
       <span class="hub-txt">
         <span class="hub-title">How was your visit?</span>
@@ -169,17 +169,17 @@
           Go straight to <b>Accident & Emergency</b> now — do not wait online. Tell reception it's an emergency. You will be seen immediately. If outside hospital, call help desk below or go to nearest hospital.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <a href="/queue/join{{ q }}{% if q %}&{% else %}?{% endif %}emergency=1" class="btn small" style="background:#c62828;color:#fff;font-weight:900;border-radius:999px;padding:8px 14px;text-decoration:none;font-size:.85rem">🚑 Get Emergency Number → A&E</a>
+          <a href="{{ url_for('queue.join_page') }}{{ q }}{% if q %}&{% else %}?{% endif %}emergency=1" class="btn small" style="background:#c62828;color:#fff;font-weight:900;border-radius:999px;padding:8px 14px;text-decoration:none;font-size:.85rem">🚑 Get Emergency Number → A&E</a>
           {% if hospital and hospital.phone %}
           <a href="tel:{{ hospital.phone | replace(' ', '') }}" class="btn small secondary" style="border-radius:999px;padding:8px 14px;font-size:.85rem;text-decoration:none">📞 Call Help Desk — {{ hospital.phone }}</a>
           {% else %}
           <a href="#help-desk" onclick="document.querySelector('.help-desk')?.scrollIntoView({behavior:'smooth'});return false;" class="btn small secondary" style="border-radius:999px;padding:8px 14px;font-size:.85rem;text-decoration:none">📞 Help Desk below</a>
           {% endif %}
-          <a href="/chat{{ q }}{% if q %}&{% else %}?{% endif %}q=emergency" class="btn small" style="background:#fff;border:1px solid #c62828;color:#8c1d1d;border-radius:999px;padding:8px 12px;font-size:.8rem;text-decoration:none">💬 Directions to A&E</a>
+          <a href="{{ url_for('chat.chat_page') }}{{ q }}{% if q %}&{% else %}?{% endif %}q=emergency" class="btn small" style="background:#fff;border:1px solid #c62828;color:#8c1d1d;border-radius:999px;padding:8px 12px;font-size:.8rem;text-decoration:none">💬 Directions to A&E</a>
           <button type="button" class="btn small" style="background:#fff3cd;border:1px solid #ffe69c;color:#664d03;border-radius:999px;padding:8px 12px;font-size:.8rem" onclick="try{if(window.hmsVoice&&hmsVoice.speak){hmsVoice.speak('Emergency — Go straight to Accident and Emergency now. It is open twenty four seven. Tell reception it is an emergency, you will be seen immediately. Do not wait for online queue. If outside hospital, call help desk or go to nearest hospital.');}}catch(e){}">🔊 Voice</button>
         </div>
         <div style="margin-top:8px;font-size:.72rem;color:#8c1d1d;line-height:1.3">
-          🔗 Linked: <a href="/queue/join{{ q }}{% if q %}&{% else %}?{% endif %}emergency=1" style="color:#8c1d1d;font-weight:700">A&E queue</a> · <a href="/chat{{ q }}" style="color:#8c1d1d">Chatbot emergency help</a> · <a href="#help-desk" style="color:#8c1d1d">Help desk phones</a> · Always open 24/7
+          🔗 Linked: <a href="{{ url_for('queue.join_page') }}{{ q }}{% if q %}&{% else %}?{% endif %}emergency=1" style="color:#8c1d1d;font-weight:700">A&E queue</a> · <a href="{{ url_for('chat.chat_page') }}{{ q }}" style="color:#8c1d1d">Chatbot emergency help</a> · <a href="#help-desk" style="color:#8c1d1d">Help desk phones</a> · Always open 24/7
         </div>
       </div>
     </div>
@@ -188,9 +188,9 @@
   {% include "_help_desk.html" %}
 
   <div class="hub-foot">
-    <a href="/complaint/status">Check a complaint</a> ·
-    <a href="/book/status">Check a booking</a> ·
-    <a href="/privacy">Privacy</a>
+    <a href="{{ url_for('complaints.portal_status') }}">Check a complaint</a> ·
+    <a href="{{ url_for('bookings.portal_status') }}">Check a booking</a> ·
+    <a href="{{ url_for('main.privacy') }}">Privacy</a>
   </div>
 </main>
 
