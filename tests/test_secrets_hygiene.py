@@ -25,8 +25,20 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # The compromised keypair from the 2026-09-03 incident. Never legitimate
 # anywhere in this repository again — not in docs, not in tests, not quoted.
-LEAKED_PRIVATE = "py1HPfXOfyd-2NP_kQx-HprBGTKl9qtAbOWFjL2RJIw"
-LEAKED_PUBLIC = "BFTnObyKabMVbeqvg8wWXvrO1or_8zOL_0wA4PVhQIXwUDjp7VV6pGvBQo8QNN9OmVcoQIDN0Zd3Lt9gqoDJkwM"
+#
+# Built by concatenation ON PURPOSE: this file is itself tracked, and a single
+# literal here would make the scanner below flag its own source (a real bug
+# that shipped and was caught only when the suite re-ran in a fresh checkout).
+# The runtime value still equals the leak exactly.
+LEAKED_PRIVATE = "py1HPfXOfyd-" "2NP_kQx-HprBGTKl9qtAbOWFjL2RJIw"
+LEAKED_PUBLIC = ("BFTnObyKabMVbeqvg8wWXvrO1or_8zOL_0wA4PVhQIXwUDjp7VV6pGvBQo8QNN"
+                 "9OmVcoQIDN0Zd3Lt9gqoDJkwM")
+
+# Guard the guard: if the concatenation above is ever "simplified" back into a
+# single literal, this test would scan itself and FAIL — which is the correct
+# outcome. These assertions just make the failure message obvious.
+assert "-" in LEAKED_PRIVATE and len(LEAKED_PRIVATE) == 43
+assert len(LEAKED_PUBLIC) == 87
 
 # PEM private keys (RSA/EC/OPENSSH/ENCRYPTED/PGP ...).
 PEM_PRIVATE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
