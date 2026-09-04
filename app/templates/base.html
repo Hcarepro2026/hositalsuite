@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang if lang else 'en' }}"> {# F-022: assistive tech must know the real language #}
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -62,7 +62,7 @@
   {% if can.dept_desk %}<a href="{{ url_for('deptdesk.desk') }}" class="{{ 'active' if request.path.startswith('/my-department') }}">My Department</a>{% endif %}
   {% if can.inspections %}<a href="{{ url_for('inspections.inspection_list') }}" class="{{ 'active' if request.path.startswith('/inspections') or request.path.startswith('/admin-manager') }}">Admin Manager</a>{% endif %}
   {% if can.reception %}<a href="{{ url_for('reception.desk') }}" class="{{ 'active' if request.path.startswith('/reception') }}">Reception</a>{% endif %}
-  {% if can.reception or can.bookings %}<a href="{{ url_for('fasttrack.desk') }}" class="{{ 'active' if request.path.startswith('/fasttrack') }}" style="{% if request.path.startswith('/fasttrack') %}background:#000;color:#FFD700{% else %}background:linear-gradient(135deg,#FFD700,#FFA500);color:#000;font-weight:900{% endif %}">⭐ Fast Track</a>{% endif %}
+  {% if can.reception or can.bookings %}<a href="{{ url_for('fasttrack.desk') }}" class="{{ 'active' if request.path.startswith('/fasttrack') }}" style="{% if request.path.startswith('/fasttrack') %}background:#000;color:#FFD700;font-weight:700{% else %}font-weight:400{% endif %}">⭐ Fast Track</a>{% endif %}
   {% if can.cashdesk %}<a href="{{ url_for('cashdesk.billing') }}" class="{{ 'active' if request.path.startswith('/billing') }}">Billing</a><a href="{{ url_for('cashdesk.paypoint') }}" class="{{ 'active' if request.path.startswith('/paypoint') }}">Pay Point</a>{% endif %}
   {% if can.hims %}<a href="{{ url_for('hims.desk') }}" class="{{ 'active' if request.path.startswith('/hims') }}">HIMS</a>{% endif %}
   {% if can.lahsma %}<a href="{{ url_for('lahsma.desk') }}" class="{{ 'active' if request.path.startswith('/lahsma') }}">LAHSMA</a>{% endif %}
@@ -77,7 +77,7 @@
   {% if can.roster %}<a href="{{ url_for('roster.roster_view') }}" class="{{ 'active' if request.path.startswith('/roster') or request.path.startswith('/dept-roster') }}">Roster</a>{% endif %}
   {% if can.attendance %}<a href="{{ url_for('attendance.desk') }}" class="{{ 'active' if request.path.startswith('/attendance') }}">I am here</a>{% endif %}
   {% if can.reports %}<a href="{{ url_for('reports.center') }}" class="{{ 'active' if request.path.startswith('/reports') }}">Reports</a>{% endif %}
-  <a href="{{ url_for('main.notifications_inbox') }}" class="{{ 'active' if request.path.startswith('/notifications') }}">🔔</a>
+  <a href="{{ url_for('main.notifications_inbox') }}" class="{{ 'active' if request.path.startswith('/notifications') }}" title="Notifications">🔔</a>
   <a href="{{ url_for('main.alert_settings') }}" class="{{ 'active' if request.path.startswith('/alert-settings') }}" title="Voice & alert settings">🗣</a>
   <a href="{{ url_for('mfa.setup') }}" class="{{ 'active' if request.path.startswith('/mfa') }}" title="Protect my sign-in">🔐</a>
   {% if can.roles_admin and not can.admin %}<a href="{{ url_for('rolesadmin.index') }}" class="{{ 'active' if request.path.startswith('/admin/roles') }}">🔐 Roles</a>{% endif %}

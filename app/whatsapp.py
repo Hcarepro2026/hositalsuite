@@ -142,6 +142,33 @@ def _send_text(to_number: str, body: str) -> str:
 
 
 # ------------------------------------------------------------------ queue
+def org_for_number(phone_number_id: str | None = None,
+                   display_number: str | None = None):
+    """F-019: which hospital owns the WhatsApp number an inbound message
+    arrived on?
+
+    Each hospital records its Meta phone-number identity as org settings —
+    ``whatsapp_phone_number_id`` (the Graph API id Meta sends on every
+    webhook) and/or ``whatsapp_display_number``. Inbound routing looks the
+    number up here instead of guessing hospital #1, so several hospitals on
+    one deployment can each run their own WhatsApp line. Returns None when
+    no hospital claims the number; the webhook then refuses to guess.
+    """
+    from .models import Organization, Setting
+
+    pid = (phone_number_id or "").strip()
+    disp = "".join(ch for ch in (display_number or "") if ch.isdigit())
+    if not pid and not disp:
+        return None
+    for org in db.session.query(Organization).order_by(Organization.id).all():
+        org_pid = (Setting.get(org.id, "whatsapp_phone_number_id", "") or "").strip()
+        org_disp = "".join(ch for ch in (Setting.get(org.id, "whatsapp_display_number", "") or "")
+                           if ch.isdigit())
+        if (pid and org_pid and org_pid == pid) or (disp and org_disp and org_disp == disp):
+            return org
+    return None
+
+
 def queue_message(org_id: int, to_number: str, body: str, kind: str = "report",
                   media_path: str | None = None, entity_type: str = None,
                   entity_id: int = None, to_user_id: int = None) -> WhatsAppMessage:

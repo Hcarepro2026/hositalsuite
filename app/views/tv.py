@@ -159,6 +159,7 @@ def api_brightness():
 
 @csrf_exempt("tv.api_feed")
 @bp.get("/api/tv/feed")
+@rate_limit(limit=60, window=60.0)   # F-028: screens poll every 5-30s; this only throttles scrapers
 def api_feed():
     """JSON feed for TV auto-refresh — public, per-tenant. Hardened, never crashes TV."""
     org_id = _resolve_org()

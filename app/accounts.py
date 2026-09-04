@@ -122,6 +122,19 @@ def email_allowed_for_hospital(raw: str, hospital_email: str | None) -> list[str
             "Ask Admin if your work mail is not on that list."]
 
 
+def username_available(org_id: int, username: str, *, ignore_user_id: int | None = None) -> bool:
+    """F-021: a username may be reused by DIFFERENT hospitals, never twice
+    inside the same one."""
+    name = (username or "").strip().lower()
+    if not name:
+        return False
+    q = db.session.query(User).filter(User.org_id == org_id,
+                                      User.username == name)
+    if ignore_user_id:
+        q = q.filter(User.id != ignore_user_id)
+    return q.first() is None
+
+
 def username_errors(raw: str) -> list[str]:
     name = (raw or "").strip().lower()
     if not USER_RE.match(name):
@@ -129,18 +142,53 @@ def username_errors(raw: str) -> list[str]:
     return []
 
 
-def find_login_user(identifier: str) -> User | None:
+def find_login_user(identifier: str, org_id: int | None = None) -> User | None:
+    """Resolve a login identifier to ONE user.
+
+    F-021: usernames are per-hospital. When the hospital is known (host,
+    ?h= code, or a single-tenant server) the match happens INSIDE it. When
+    it is not known and the identifier matches users in SEVERAL hospitals,
+    the answer is None — never a guess — and the login page explains that
+    the user should enter through their own hospital's page.
+    """
     ident = (identifier or "").strip()
     if not ident:
         return None
     q = db.session.query(User)
-    u = q.filter(User.username == ident.lower()).first()
-    if u:
-        return u
+    if org_id is not None:
+        q = q.filter(User.org_id == org_id)
+        u = q.filter(User.username == ident.lower()).first()
+        if u:
+            return u
+    else:
+        matches = q.filter(User.username == ident.lower()).all()
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            return None            # ambiguous across hospitals — refuse, never guess
     email = normalize_email(ident)
     if "@" in email:
-        return q.filter(db.func.lower(User.email) == email).first()
+        hits = q.filter(db.func.lower(User.email) == email).all()
+        if len(hits) == 1:
+            return hits[0]
     return None
+
+
+def find_login_user_ambiguous(identifier: str, org_id: int | None = None) -> bool:
+    """True when the identifier matches users in several hospitals and no
+    hospital context was given (F-021) — the caller should show guidance."""
+    ident = (identifier or "").strip().lower()
+    if not ident or org_id is not None:
+        return False
+    usernames = (db.session.query(User)
+                 .filter(User.username == ident).count())
+    if usernames > 1:
+        return True
+    email = normalize_email(identifier or "")
+    if "@" in email:
+        return db.session.query(User).filter(
+            db.func.lower(User.email) == email).count() > 1
+    return False
 
 
 def email_taken(org_id: int, email: str, *, ignore_user_id: int | None = None) -> bool:

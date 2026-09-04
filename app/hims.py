@@ -36,6 +36,8 @@ from datetime import date, datetime
 
 from sqlalchemy import func, or_
 
+from . import crypto_fields
+
 from .models import (ASSISTANCE_CODES, CATEGORY_CODES, MARITAL_STATUSES,
                      PATIENT_LANG_LABELS,
                      PAYER_CODES, Patient, PatientVisit, db, new_code, now_naive)
@@ -221,7 +223,14 @@ def search(org_id: int, term: str, limit: int = MAX_SEARCH_RESULTS) -> list[Pati
     if len(digits) >= 4:
         conds.append(Patient.phone.like(f"%{digits}%"))
         conds.append(Patient.phone_alt.like(f"%{digits}%"))
-        conds.append(Patient.nok_phone.like(f"%{digits}%"))
+        if crypto_fields.encryption_enabled():
+            # F-015: NOK phone is field-encrypted — LIKE is impossible by
+            # design, so match the blind index (full normalised number).
+            bx = crypto_fields.blind_index("patient.nok_phone", digits)
+            if bx:
+                conds.append(Patient.nok_phone_bx == bx)
+        else:
+            conds.append(Patient.nok_phone.like(f"%{digits}%"))
     # "abatan lekan" — try it as surname + first name too
     parts = [p for p in re.split(r"[\s,]+", term.lower()) if p]
     if len(parts) >= 2:

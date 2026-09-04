@@ -125,11 +125,25 @@ SAFE_FALLBACK = (
 )
 
 # Refuse-and-redirect if the MODEL somehow produces clinical content.
+# English first, then the same dangers in the four other supported languages
+# (F-033). Phrases are NORMALIZED form (diacritics folded) — _looks_clinical
+# runs the reply through the same normalizer as the pre-model gate, so
+# "O ní ìbà" and "o ni iba" are caught alike.
 _CLINICAL_LEAK = (
     "you may have", "you might have", "you probably have", "this is likely",
     "take paracetamol", "take ibuprofen", "mg twice", "mg daily", "prescribe",
     "your diagnosis", "i diagnose", "you are suffering from", "sounds like malaria",
     "sounds like typhoid", "dosage", "stop taking your",
+    # Nigerian Pidgin — a diagnosis handed down as fact
+    "you get malaria", "you get typhoid", "na malaria you get", "na typhoid you get",
+    "you dey suffer from", "i don diagnose", "wetin dey worry you na",
+    # Yoruba — "you have X" (iba=fever/malaria, arun=disease), take-medicine orders
+    "o ni iba", "o ni arun", "o nijetta", "o ni je", "mu oogun", "oogun meji",
+    # Hausa — "you have (fever|illness)", take-pill orders, pill counts
+    "kana da zazzabi", "kina da zazzabi", "kana da ciwon", "kina da ciwon",
+    "sha kwayoyi", "kwayoyi biyu", "sau biyu a rana",
+    # Igbo — "you have (an) illness", take-medicine orders
+    "nwere oria", "were ogwu", "ogwu abuo",
 )
 
 
@@ -309,7 +323,8 @@ def _invents_a_location(text: str) -> bool:
 
 # ------------------------------------------------------------------ safety
 def _looks_clinical(text: str) -> bool:
-    low = (text or "").lower()
+    from .engine import _norm
+    low = _norm(text)
     return any(p in low for p in _CLINICAL_LEAK)
 
 

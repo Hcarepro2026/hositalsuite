@@ -39,11 +39,7 @@ dict(cat="clinics", intent="tb_clinic", kw=[
  en="A cough lasting more than two weeks deserves a proper check — and TB, when found, is fully curable with the right care. Our TB clinic tests and treats confidentially and at no cost for the standard regimen. Shall I book your TB screening?",
  pcm="Cough wey pass two weeks deserve proper check — and TB, if dem find am, dey fully curable with the right care. Our TB clinic dey test and treat confidential and free for the normal regimen. Make I book your TB screening?",
  cta="Open Book a visit — the address is on this reply."),
-dict(cat="clinics", intent="ent", kw=[
-    "ent","ear","nose","throat","hearing","ear pain","sore throat","blocked nose","ear discharge","sinus"],
- en="Our ENT clinic looks after ears, nose and throat — from hearing checks to stubborn sinus and throat issues — with proper equipment and a patient team. Shall I book you an ENT review?",
- pcm="Our ENT clinic dey look after ear, nose and throat — from hearing check to stubborn sinus and throat wahala — with proper equipment and patient team. Make I book you ENT review?",
- cta="Open Book a visit — the address is on this reply."),
+# ENT now lives in the full DEPARTMENT library (kb_departments_full.py — F-042)
 dict(cat="clinics", intent="skin", kw=[
     "skin","dermatology","rash","eczema","skin infection","acne","skin allergy","itching skin","dermatologist"],
  en="Healthy skin is health, not vanity — our dermatology team treats rashes, eczema, acne and infections with care and without judgement. Shall I book you a skin clinic review?",

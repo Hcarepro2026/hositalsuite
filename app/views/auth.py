@@ -33,10 +33,14 @@ def login():
     return render_template("login.html", next=request.args.get("next", ""))
 
 
-def _lock_row(username: str) -> LoginAttempt:
-    row = db.session.query(LoginAttempt).filter_by(username=username).first()
+def _lock_row(username: str, org_id: int | None = None) -> LoginAttempt:
+    """Lockout counter scoped to (hospital, username) — F-021. With no
+    hospital context the row is keyed org_id=NULL, so an attacker hammering
+    the bare server cannot lock anyone's account inside a real hospital."""
+    row = (db.session.query(LoginAttempt)
+           .filter_by(org_id=org_id, username=username).first())
     if row is None:
-        row = LoginAttempt(username=username, failures=0)
+        row = LoginAttempt(org_id=org_id, username=username, failures=0)
         db.session.add(row)
         db.session.flush()
     return row
@@ -47,6 +51,38 @@ def _lockout_remaining(row: LoginAttempt) -> int:
     if row.locked_until and row.locked_until > now_naive():
         return max(1, int((row.locked_until - now_naive()).total_seconds() // 60) + 1)
     return 0
+
+
+def _explicit_login_org() -> Organization | None:
+    """The hospital this login request EXPLICITLY belongs to (F-021).
+
+    ?h= code, a mapped subdomain, or a genuinely single-tenant server.
+    Unlike _home_org()/current_org() it never falls back to "first org":
+    on a multi-hospital server an unidentified request must not be silently
+    routed to hospital #1 — an ambiguous username gets guidance instead.
+    """
+    try:
+        hint = (request.args.get("h") or "").strip()
+        if hint:
+            org = (db.session.query(Organization)
+                   .filter(db.or_(Organization.slug == hint.lower(),
+                                  Organization.code == hint.upper())).first())
+            if org is not None:
+                return org
+        host = (request.host or "").split(":")[0].lower()
+        label = host.split(".")[0] if host.count(".") >= 2 else ""
+        if label and label not in ("www", "localhost", "hospital-suite"):
+            org = db.session.query(Organization).filter_by(slug=label).first()
+            if org is not None:
+                return org
+    except Exception:                                    # noqa: BLE001
+        pass
+    try:
+        if db.session.query(Organization).count() == 1:
+            return db.session.query(Organization).order_by(Organization.id).first()
+    except Exception:                                    # noqa: BLE001
+        pass
+    return None
 
 
 @bp.post("/login")
@@ -61,7 +97,9 @@ def login_post():
 
     # Account-scoped brute-force gate. The per-IP limiter cannot help when every
     # request arrives from the same proxy, so failures are also counted per user.
-    lock = _lock_row(username) if username else None
+    home_org = _explicit_login_org()
+    org_id = home_org.id if home_org else None
+    lock = _lock_row(username, org_id) if username else None
     if lock is not None:
         left = _lockout_remaining(lock)
         if left:
@@ -71,7 +109,13 @@ def login_post():
                   "or use 'Forgot password'.", "error")
             return render_template("login.html", next=nxt, username=username), 429
 
-    user = accounts.find_login_user(username)
+    user = accounts.find_login_user(username, org_id=org_id)
+    if user is None and accounts.find_login_user_ambiguous(username):
+        db.session.commit()
+        flash("This sign-in name is used in more than one hospital on this "
+              "server. Please open your own hospital's page (your hospital's "
+              "link or QR poster) and sign in there.", "error")
+        return render_template("login.html", next=nxt, username=username), 400
     if not user or not user.check_password(password):
         if lock is not None:
             lock.failures = (lock.failures or 0) + 1

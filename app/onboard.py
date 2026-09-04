@@ -176,8 +176,8 @@ def validate(form) -> tuple[dict, list[str]]:
     v["username"] = username
     if len(username) < 3:
         errors.append("Pick a sign-in name of at least 3 letters (e.g. ijd.admin).")
-    elif db.session.query(User).filter_by(username=username).first():
-        errors.append("That sign-in name is already taken. Try hospitalcode.admin")
+    # F-021: no global-username check — usernames are scoped per hospital,
+    # and this onboarding is creating a brand-new hospital's namespace.
 
     password = form.get("password") or ""
     confirm = form.get("confirm") or ""

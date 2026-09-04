@@ -14,10 +14,29 @@ from ..models import KnowledgeArticle, db
 LANG_FIELD = {"en": "en", "pcm": "pidgin", "yo": "yo", "ha": "ha", "ig": "ig"}
 
 # Patterns that seek diagnosis/prescription -> refuse & redirect to care.
+# English first; then the same dangers in Pidgin, Yoruba, Hausa and Igbo
+# (F-033: the gate used to be English-only, so a clinical question in any of
+# the four other supported languages sailed straight through to the model).
+# Patterns are written in NORMALIZED form (diacritics stripped — see _norm),
+# so they match "oògùn fún" and "oogun fun" alike.
 CLINICAL_SEEK = [
     r"diagnos", r"what (disease|illness|sickness) do i have", r"which (drug|medicine|tablet)",
     r"prescribe", r"medicine for", r"drug for", r"what is wrong with me", r"do i have (cancer|malaria|diabetes|hiv)",
     r"dosage", r"how many (tablets|mg)",
+    # --- Nigerian Pidgin ---
+    r"wetin dey wrong with me", r"wetin dey (do|worry) me", r"wetin i get",
+    r"which (medicine|drug|tablet)", r"(medicine|drug) wey i (go|fit) (take|drink)",
+    r"wetin i (go|fit) take", r"i (dey )?get (malaria|typhoid|cancer|hiv|diabetes)",
+    # --- Yoruba ---
+    r"oogun fun", r"(kini|kile|kilo) oogun", r"(kini|kile|kilo) (ni )?(se|de) mi", r"ki lo n (se|de) mi",
+    r"se mo ni", r"sayewo mi", r"gbodo mu", r"ogun ti mo",
+    # --- Hausa ---
+    r"wane (magani|kwaya)", r"magani (ga|na|don)", r"me (ke )?(damana|damata|ciwo)",
+    r"(sina |ko )?ina da (zazzabin|malaria|cancer|hiv|ciwon)", r"rubuta magani",
+    r"(yawan|adadin) kwaya", r"bincika ni",
+    # --- Igbo ---
+    r"(kedu|oro|gini) ogwu", r"ogwu maka", r"nwere m (oria|malaria|kansa|hiv)",
+    r"kedu nsogbu", r"gini mere m", r"lelee m", r"dee ogwu", r"ogwu ole",
 ]
 
 SAFE_CLINICAL = (
@@ -33,8 +52,25 @@ SAFE_CLINICAL_PCM = (
 )
 
 
+_NIGERIAN_CHAR_MAP = str.maketrans({
+    # Hausa implosives/ejective and schwa, eng — no decomposed ASCII form
+    "ɓ": "b", "Ɓ": "B", "ɗ": "d", "Ɗ": "D", "ƙ": "k", "Ƙ": "K",
+    "ƴ": "y", "Ƴ": "Y", "ə": "e", "Ə": "E", "ŋ": "n", "Ŋ": "N",
+})
+
+
 def _norm(text: str) -> str:
-    return re.sub(r"[^a-z0-9\s]", " ", (text or "").lower()).strip()
+    """Lowercase + strip Nigerian-orthography diacritics.
+
+    Yoruba vowels carry tone/marks, Hausa uses hooked letters (ɓ ɗ ƙ) —
+    patients type the same words with or without them, and the guardrail
+    patterns must catch both. NFKD splits marked vowels into base +
+    combining mark; the mark is dropped; hooked letters map to plain ASCII.
+    """
+    t = unicodedata.normalize("NFKD", text or "")
+    t = "".join(ch for ch in t if not unicodedata.combining(ch))
+    t = t.translate(_NIGERIAN_CHAR_MAP).lower()
+    return re.sub(r"[^a-z0-9\s]", " ", t).strip()
 
 
 def is_clinical_seek(text: str) -> bool:
@@ -337,9 +373,6 @@ _SQUASH_ALLOWLIST = (
 _PRIVACY_INTENT_RE = (_INTENT_RE[0], _INTENT_RE[4], _INTENT_RE[5], _INTENT_RE[6])
 _INJECTION_INTENT_RE = (_INTENT_RE[1], _INTENT_RE[2], _INTENT_RE[3])
 
-
-def _norm(text: str) -> str:
-    return re.sub(r"[^a-z0-9\s]", " ", (text or "").lower()).strip()
 
 
 def _squash(text: str) -> str:

@@ -352,7 +352,27 @@ def whatsapp_webhook():
                 try:
                     from ..chatbot.serve import handle_whatsapp
                     from ..services import current_org
-                    handle_whatsapp(current_org(), frm, body)
+                    # F-019: route by the business number that received the
+                    # message — each hospital records its own Meta number
+                    # identity (whatsapp_phone_number_id / _display_number
+                    # settings). Only a genuinely single-hospital deployment
+                    # may fall back to "the" org; on a multi-hospital server
+                    # an unmapped number is logged and ignored, never guessed.
+                    meta = value.get("metadata") or {}
+                    org = whatsapp.org_for_number(meta.get("phone_number_id"),
+                                                  meta.get("display_phone_number"))
+                    if org is None:
+                        fallback = current_org()
+                        multi = db.session.query(Organization).count() > 1
+                        if multi:
+                            current_app.logger.error(
+                                "Inbound WhatsApp for number id=%s display=%s matches "
+                                "no hospital's number mapping — NOT routing (multi-tenant). "
+                                "Set the hospital's whatsapp_phone_number_id setting.",
+                                meta.get("phone_number_id"), meta.get("display_phone_number"))
+                            continue
+                        org = fallback
+                    handle_whatsapp(org.id, frm, body)
                 except Exception:                        # noqa: BLE001
                     current_app.logger.exception("whatsapp inbound chat failed")
                     db.session.rollback()

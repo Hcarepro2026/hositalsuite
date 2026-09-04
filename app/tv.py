@@ -167,6 +167,25 @@ def _today_start() -> datetime:
     return datetime.combine(now_naive().date(), datetime.min.time())
 
 
+def _tv_public_code(patient, ticket_code: str | None) -> str:
+    """Identifier a PUBLIC screen may show for a patient (F-028).
+
+    The queue ticket code (e.g. "E-014") is the identifier patients actually
+    hold, so it is safe and preferred. Without one we mask the hospital
+    number to its last 3 characters — enough for a patient to recognise
+    their own call, useless to a stranger harvesting full numbers.
+    """
+    if ticket_code:
+        return ticket_code
+    hn = (getattr(patient, "hospital_number", "") or "").replace(" ", "")
+    return f"••{hn[-3:]}" if hn else "—"
+
+
+def _first_name_only(full: str | None) -> str:
+    """Public displays announce first names only (NDPA — see tv_feed)."""
+    return (full or "").strip().split()[0] if (full or "").strip() else "Patient"
+
+
 # ------------------------------------------------------------------ feed
 def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     """Build live data for a TV screen. Returns dict for JSON + template."""
@@ -273,7 +292,7 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         waited = max(0, int((now - step.sent_at).total_seconds() // 60))
         display_name = "Patient"
         if patient:
-            display_name = getattr(patient, 'spoken_name', None) or (patient.full_name.split()[0] if patient.full_name else "Patient")
+            display_name = _first_name_only(getattr(patient, 'spoken_name', None) or patient.full_name)  # F-028: spoken_name is calling order; full_name is SURNAME-first
         onward_enriched.append({
             "step": step,
             "visit": visit,
@@ -295,6 +314,10 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
 
     # --- Build NOW SERVING: patients IN_CONSULTATION + recently CALLED queue + recently triaged placed
     # Privacy: public TV shows first name only + ticket code, NOT full name + hospital number (NDPA)
+    # F-028: the JSON feed honours the same rule the screen follows — no full
+    # names, no full hospital numbers on the public wire. Voice announces the
+    # first-name display field (the TV page reads item.name, never a private key).
+    ticket_code_by_patient = {t.patient_id: t.code for t in queue_all if t.patient_id}
     now_serving = []
     # 1. Patients currently in consultation (most important)
     for v in sorted(in_consult, key=lambda x: x.seen_at or x.triaged_at or x.started_at, reverse=True)[:3]:
@@ -305,15 +328,14 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
             journey_est = tracking_engine.estimate_remaining_journey(org_id, v)
         except Exception:
             journey_est = {"total": 0, "stages": [], "fast_track": bool(v.is_fast_track)}
-        # Privacy: use spoken_name (title + first name) for display, code is ticket/hospital number but we show code only
-        display_name = getattr(p, 'spoken_name', None) or (p.full_name.split()[0] if p.full_name else "Patient")
+        # Privacy: use spoken_name (title + first name) for display, code is ticket or masked hospital number
+        display_name = _first_name_only(getattr(p, 'spoken_name', None) or p.full_name)  # F-028: spoken_name is calling order; full_name is SURNAME-first
         now_serving.append(
             {
                 "type": "consultation",
-                "code": p.hospital_number,
+                "code": _tv_public_code(p, ticket_code_by_patient.get(p.id)),
                 "name": display_name,  # first name only for privacy
-                "full_name_private": p.full_name,  # kept for voice, not displayed as full on TV
-                "spoken": p.spoken_name,
+                "spoken": display_name,  # F-028: first name only (spoken_name carries the surname)
                 "clinic": v.clinic,
                 "room": v.consulting_room,
                 "doctor": v.doctor.name if v.doctor else "",
@@ -331,8 +353,8 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
             {
                 "type": "queue_called",
                 "code": t.code,
-                "name": t.patient_name or "Patient",
-                "spoken": t.patient_name or "Patient",
+                "name": _first_name_only(t.patient_name),  # F-028: first name only on the wire
+                "spoken": _first_name_only(t.patient_name),
                 "clinic": t.department.name if t.department else "",
                 "room": t.department.name if t.department else "",
                 "doctor": "",
@@ -357,13 +379,13 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
         except Exception:
             journey_est = {"total": 0, "stages": [], "fast_track": bool(v.is_fast_track)}
             wait_est = 0
-        display_name = getattr(p, 'spoken_name', None) or (p.full_name.split()[0] if p.full_name else "Patient")
+        display_name = _first_name_only(getattr(p, 'spoken_name', None) or p.full_name)  # F-028: spoken_name is calling order; full_name is SURNAME-first
         next_up.append(
             {
                 "type": "triaged",
-                "code": p.hospital_number,
+                "code": _tv_public_code(p, ticket_code_by_patient.get(p.id)),
                 "name": display_name,
-                "spoken": p.spoken_name,
+                "spoken": display_name,  # F-028: first name only (spoken_name carries the surname)
                 "clinic": v.clinic,
                 "room": v.consulting_room or v.clinic,
                 "doctor": v.doctor.name if v.doctor else "",
@@ -388,8 +410,8 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
             {
                 "type": "queue_waiting",
                 "code": t.code,
-                "name": t.patient_name or "Patient",
-                "spoken": t.patient_name or "Patient",
+                "name": _first_name_only(t.patient_name),  # F-028: first name only on the wire
+                "spoken": _first_name_only(t.patient_name),
                 "clinic": t.department.name if t.department else "",
                 "room": "",
                 "doctor": "",

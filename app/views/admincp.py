@@ -223,8 +223,9 @@ def user_create():
     if not username or not name or role not in ROLES:
         flash("Username, full name and a valid role are required.", "error")
         return redirect(url_for("admin.users"))
-    if db.session.query(User).filter_by(username=username).first():
-        flash("That username already exists.", "error")
+    from ..accounts import username_available
+    if not username_available(current_user.org_id, username):
+        flash("That username is already used in this hospital.", "error")
         return redirect(url_for("admin.users"))
     from .. import accounts
     org = db.session.get(Organization, current_user.org_id)
