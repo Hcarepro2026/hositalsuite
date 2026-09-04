@@ -34,6 +34,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from . import announce, rosterdata
+from .clinical_tier import clinical_order, emergency_tier_expr
 from .models import (
     CLINIC_CODES,
     CLINIC_LABELS,
@@ -90,14 +91,20 @@ CATEGORY_CLINIC = {
 
 # ------------------------------------------------------------------ the queue
 def waiting(org_id: int) -> list[PatientVisit]:
-    """Patients registered today and not yet placed — fast-track first, then longest wait."""
+    """Patients registered today and not yet placed — triage bench order.
+
+    F-012 clinical tier rule: an EMERGENCY-clinic walk-in is triaged before
+    any Fast Track patient, however gold their badge; Fast Track then ranks
+    within the tier, then longest wait. See app/clinical_tier.py."""
     start = datetime.combine(now_naive().date(), datetime.min.time())
     return (db.session.query(PatientVisit)
             .filter(PatientVisit.org_id == org_id,
                     PatientVisit.status == "REGISTERED",
                     PatientVisit.started_at >= start)
-            .order_by(PatientVisit.is_fast_track.desc(),
-                      PatientVisit.started_at.asc())
+            .order_by(*clinical_order(
+                emergency_tier_expr(PatientVisit.clinic),
+                PatientVisit.is_fast_track,
+                PatientVisit.started_at.asc()))
             .limit(200).all())
 
 

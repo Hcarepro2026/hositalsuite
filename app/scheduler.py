@@ -441,10 +441,39 @@ def _loop(app, interval: int):
     FIX 2026-08-21: last_backup_day lived in memory. Render restarts constantly,
     so memory resets and backup ran 4x/day (twice 9 seconds apart), blowing the
     Supabase quota. Now stored in Setting table so it survives restarts.
+
+    F-002 (multi-process): WEB_CONCURRENCY>1 or >1 dyno means several identical
+    schedulers run in parallel. Jobs are idempotent but the nightly backup was
+    NOT (quota) and SLA escalations would fire 2-3x. A PostgreSQL SESSION-scoped
+    advisory lock held on a dedicated connection elects ONE leader per fleet:
+    lock loss (worker killed / connection dropped) auto-releases, so leadership
+    fails over within one interval. On SQLite (single-process pilot) every loop
+    is the leader.
     """
+    from sqlalchemy import text
+
+    SCHEDULER_LEADER_LOCK_KEY = 736559103   # sibling of audit chain lock
+    leader_conn = None
     consecutive_failures = 0
     while True:
         try:
+            if db.engine.url.get_backend_name() == "postgresql":
+                if leader_conn is None:
+                    try:
+                        leader_conn = db.engine.connect()
+                        # defensive: make sure we start from a clean slate
+                        leader_conn.rollback()
+                    except Exception:  # noqa: BLE001 — DB down; retry next tick
+                        app.logger.exception("Scheduler could not open leader-election connection")
+                        leader_conn = None
+                        time.sleep(interval)
+                        continue
+                is_leader = leader_conn.execute(text(
+                    f"SELECT pg_try_advisory_lock({SCHEDULER_LEADER_LOCK_KEY})"
+                )).scalar()
+                if not is_leader:
+                    time.sleep(interval)   # another instance is the leader
+                    continue
             tick(app)
             today = now_naive().date()
             # Check if backup already done today (from DB, not memory)

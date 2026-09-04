@@ -38,6 +38,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+from .clinical_tier import clinical_order, emergency_tier_expr
 from .models import (
     ConsultingRoom,
     DoctorSession,
@@ -242,7 +243,12 @@ def tv_feed(org_id: int, screen: TvScreen | None = None) -> dict[str, Any]:
     )
     if fast_only:
         o_q = o_q.filter(PatientVisit.is_fast_track.is_(True))
-    pending_onward_raw = o_q.order_by(PatientVisit.is_fast_track.desc(), VisitOnward.sent_at.asc()).limit(100).all()
+        # F-012: the TV board displays the same clinical order staff act on —
+    # EMERGENCY routing first, then Fast Track, then time (app/clinical_tier.py).
+    pending_onward_raw = o_q.order_by(*clinical_order(
+        emergency_tier_expr(VisitOnward.destination),
+        PatientVisit.is_fast_track,
+        VisitOnward.sent_at.asc())).limit(100).all()
     # Deduplicate by (visit_id, destination) — unique constraint should prevent dupes,
     # but guard against race / old data
     seen_onward = set()

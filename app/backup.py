@@ -62,8 +62,18 @@ def _tables() -> list[str]:
 
 
 def create_backup(app, *, kind: str = "auto") -> tuple[str, int]:
-    """Create a backup archive in durable storage. Returns (key, bytes)."""
+    """Create a backup archive in durable storage. Returns (key, bytes).
+
+    Reads run on a DEDICATED fresh connection, not the ambient session. The
+    ambient session can hold an open transaction whose snapshot predates
+    just-committed writes — found by the automated restore drill: a patient
+    committed seconds earlier was silently MISSING from the archive. Recent
+    data must never be absent from a backup, so: commit any pending ambient
+    writes first, then open one clean connection, put it in cross-org (RLS
+    all_orgs) scope if PostgreSQL, and read every table on that connection.
+    """
     from . import storage
+    from sqlalchemy import text as _text
 
     stamp = now_naive().strftime("%Y%m%d-%H%M%S")
     key = f"backups/hospitalsuite-{stamp}.zip"
@@ -75,30 +85,47 @@ def create_backup(app, *, kind: str = "auto") -> tuple[str, int]:
         "tables": {},
     }
 
-    # A backup is deliberately hospital-wide; say so, because RLS would
-    # otherwise hand back an empty archive that LOOKS like a success.
-    from .rls import all_orgs
-    all_orgs()
+    # Flush the caller's pending writes so they are IN the backup (and end
+    # the ambient snapshot so it cannot poison the read connection pool).
+    db.session.commit()
+
+    is_pg = db.engine.url.get_backend_name() == "postgresql"
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for table in _tables():
-            # Large binaries are excluded: they already live in stored_file and
-            # would balloon the archive past what a free host can hold in memory.
-            if table == "stored_file":
-                rows = db.session.execute(db.text(
-                    f"SELECT id, key, org_id, folder, filename, content_type, size, sha256 "  # noqa: S608
-                    f"FROM {table}")).mappings().all()
-            else:
-                rows = db.session.execute(db.text(f"SELECT * FROM {table}")).mappings().all()  # noqa: S608
-            out = io.StringIO()
-            if rows:
-                w = csv.DictWriter(out, fieldnames=list(rows[0].keys()))
-                w.writeheader()
-                for r in rows:
-                    w.writerow({k: ("" if v is None else v) for k, v in r.items()})
-            zf.writestr(f"{table}.csv", out.getvalue())
-            manifest["tables"][table] = len(rows)
+        with db.engine.connect() as conn:
+            # A backup is deliberately hospital-wide; say so, because RLS
+            # would otherwise hand back an empty archive that LOOKS like a
+            # success. The GUC is set on THE READING connection (transaction-
+            # local), which is the one the SELECTs below actually use.
+            if is_pg:
+                from .rls import ORG_VAR, ALL_ORGS
+                # is_local=false: the GUC must survive conn.commit() below —
+                # a transaction-local set_config would be dropped by that
+                # commit and RLS would hand back an EMPTY archive on
+                # PostgreSQL. The connection is dedicated and closed after.
+                conn.execute(_text(
+                    f"SELECT set_config('{ORG_VAR}', '{ALL_ORGS}', false)"))
+            conn.commit()          # end the set_config txn; start clean reads
+
+            tables = sorted(inspect(db.engine).get_table_names())
+            for table in tables:
+                # Large binaries are excluded: they already live in stored_file and
+                # would balloon the archive past what a free host can hold in memory.
+                if table == "stored_file":
+                    rows = conn.execute(_text(
+                        f"SELECT id, key, org_id, folder, filename, content_type, size, sha256 "  # noqa: S608
+                        f"FROM {table}")).mappings().all()
+                else:
+                    rows = conn.execute(_text(f"SELECT * FROM {table}")).mappings().all()  # noqa: S608
+                out = io.StringIO()
+                if rows:
+                    w = csv.DictWriter(out, fieldnames=list(rows[0].keys()))
+                    w.writeheader()
+                    for r in rows:
+                        w.writerow({k: ("" if v is None else v) for k, v in r.items()})
+                zf.writestr(f"{table}.csv", out.getvalue())
+                manifest["tables"][table] = len(rows)
         zf.writestr("manifest.json", json.dumps(manifest, indent=2, default=str))
         zf.writestr("RESTORE.txt", RESTORE_README)
 

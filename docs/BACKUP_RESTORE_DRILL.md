@@ -84,3 +84,18 @@ DATABASE_URL="...restore-test..." python run.py
 ---
 **Owner:** Founder / DPO  
 **Next drill:** Before launch, then 27 Nov 2026
+
+---
+
+## AUTOMATED DRILL (F-016, added 2026-09-04)
+
+`tests/test_backup_restore_drill.py` now runs the full drill in CI on every
+push: creates a real backup archive with app code, restores it into a fresh
+empty database via the exact RESTORE.txt procedure (schema first, then CSVs
+parents-before-children), and verifies every row count, the manifest, and
+spot data. If it goes red, backups can no longer be trusted — treat it like
+the backup job itself is down.
+
+The QUARTERLY MANUAL DRILL ABOVE IS STILL REQUIRED: it exercises the human
+path (real Supabase project, psql, production-scale data) that automation
+cannot reach.

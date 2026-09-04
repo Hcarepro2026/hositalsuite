@@ -6,11 +6,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8077
 
-COPY requirements.txt .
+COPY requirements.txt alembic.ini ./
+COPY migrations ./migrations
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY run.py start.sh ./
+RUN chmod +x start.sh
+
+# F-003: migrations/ + alembic.ini must ship in the image. The app runs
+# `alembic upgrade head` at boot (run_alembic_upgrade); without these files
+# the documented Docker fallback path silently skipped every migration and
+# fell back to ensure_schema() — the exact drift the migration chain exists
+# to prevent.
 RUN chmod +x start.sh
 
 # data directories (mount a volume in production to persist DB/uploads/backups
