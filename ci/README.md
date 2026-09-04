@@ -1,35 +1,51 @@
-# Continuous Integration — one-time setup (5 minutes)
+# Continuous Integration — one activation step remains (owner-only)
 
-`github-actions-tests.yml` runs all 142 tests on every push, against **both** SQLite and
-PostgreSQL, and checks that the database migrations apply cleanly. It is free for this repo.
+**Status 2026-09-04:** The workflow is written, YAML-validated, and kept in
+this folder (`ci/github-actions-tests.yml`) because BOTH the Arena app token
+and Personal Access Tokens without the `workflow` scope are refused when
+pushing files under `.github/workflows/`. GitHub only ever RUNS workflows
+from `.github/workflows/`, so one human step activates it:
 
-It lives here instead of `.github/workflows/` because a Personal Access Token cannot create
-workflow files without the `workflow` scope. Activating it is a copy-paste job:
+## Activate (pick either, ~2 minutes)
 
-## Option A — GitHub website (easiest, no tokens)
+**Option A — GitHub website (no tools needed)**
+1. Open the repo → **Add file → Create new file**
+2. Filename: `.github/workflows/tests.yml`
+3. Paste the entire contents of `ci/github-actions-tests.yml`
+4. Commit (to `main`, or to a branch and PR it)
 
-1. Open your repo on github.com.
-2. Click **Add file → Create new file**.
-3. Type this exact filename: `.github/workflows/tests.yml`
-4. Paste the entire contents of `ci/github-actions-tests.yml` into the box.
-5. Click **Commit new file**.
-
-Done. Open the **Actions** tab after your next push — a green tick means every test passed
-and the change is safe to deploy. A red X means do NOT deploy until it is fixed.
-
-## Option B — from your computer
-
+**Option B — from any clone with a token that has the `workflow` scope**
 ```bash
-mkdir -p .github/workflows
-cp ci/github-actions-tests.yml .github/workflows/tests.yml
-git add .github/workflows/tests.yml
-git commit -m "Enable CI"
-git push
+mkdir -p .github/workflows && cp ci/github-actions-tests.yml .github/workflows/tests.yml
+git add .github/workflows/tests.yml && git commit -m "Activate CI (F-001)" && git push
 ```
-(Requires a token with the `workflow` scope.)
 
-## Why this matters
+> Alternative: in Arena, reconnect GitHub with the `workflow` scope and ask
+> the agent to push it — the file is ready and validated.
 
-You have 142 tests that currently only run when someone remembers to run them. CI runs them
-automatically, every time, before the code reaches patients. It is the cheapest quality
-protection available and it costs nothing.
+## What runs once activated
+
+| Job | What it proves |
+|---|---|
+| `tests (SQLite)` | Full suite on the developer-laptop engine |
+| `tests (PostgreSQL)` | Full suite on the production engine + `alembic upgrade head` applies cleanly to an EMPTY database |
+| `dependency audit` | `pip-audit` reports known CVEs in pinned dependencies (advisory — informs, never blocks a hotfix) |
+
+Triggers: every push to `main`, every pull request, and manual runs
+(Actions tab → tests → Run workflow).
+
+Green tick = every test passed and migrations apply; safe to deploy.
+Red X = do NOT deploy until fixed.
+
+## Branch protection (the other half of F-001)
+
+Settings → Branches → Add rule for `main`:
+- **Require a pull request before merging**
+- **Require status checks**: `tests (SQLite)`, `tests (PostgreSQL)`, `dependency audit`
+- **Require branches to be up to date before merging**
+
+Enabling these needs repo **admin** — the automated attempt returned 403
+(integration tokens cannot change repo settings), so it is a 2-minute job in
+the GitHub web UI by the repo owner. Until CI is actually running (step
+above), do NOT turn on the required-status-checks half — a required check
+that never reports blocks all merges.

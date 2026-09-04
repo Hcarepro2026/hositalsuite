@@ -316,13 +316,26 @@ def whatsapp_verify():
 @csrf_exempt("api.whatsapp_webhook_post")
 @bp.post("/whatsapp/webhook")
 def whatsapp_webhook():
-    """Receive delivery statuses + inbound messages from the Cloud API."""
-    secret = current_app.config.get("WHATSAPP_APP_SECRET", "")
-    if secret:
-        signature = request.headers.get("X-Hub-Signature-256", "")
-        expected = "sha256=" + hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            return "invalid signature", 403
+    """Receive delivery statuses + inbound messages from the Cloud API.
+
+    F-005: this used to SKIP signature verification when WHATSAPP_APP_SECRET
+    was unset — anyone on the internet could POST fake inbound messages or
+    delivery statuses. It now fails CLOSED: no secret configured means the
+    webhook is not deployed, and requests are refused with 503 until an
+    operator sets the secret. With the secret set, the Meta signature is
+    mandatory (constant-time compare) and mismatched signatures get 403.
+    """
+    secret = (current_app.config.get("WHATSAPP_APP_SECRET") or "").strip()
+    if not secret:
+        current_app.logger.error(
+            "WhatsApp webhook POST received while WHATSAPP_APP_SECRET is not "
+            "configured — REJECTING (fail-closed). Set the secret in the "
+            "Meta app dashboard and the environment before enabling.")
+        return "webhook not configured", 503
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    expected = "sha256=" + hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        return "invalid signature", 403
     data = request.get_json(silent=True) or {}
     for entry in data.get("entry", []):
         for change in entry.get("changes", []):

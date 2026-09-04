@@ -359,24 +359,51 @@ def announce_long_waits(org_id: int) -> int:
 
 
 def announce_emergency(visit: PatientVisit, patient: Patient) -> None:
+    """Emergency arrival: alarm everywhere, and LOG every failure.
+
+    F-006: the per-role alert loop and the personal-TV push were wrapped in
+    silent `except: pass`. Everywhere else in the codebase swallowing a
+    secondary effect is deliberate resilience; HERE the swallowed effect IS
+    the safety-critical action — a silent failure means the emergency team
+    was never alarmed and nobody would ever know. Every failure is now
+    logged at ERROR with the role/station it failed for; triage flow itself
+    still never crashes (the alerts stay best-effort).
+    """
     # Voice alarm to ALL — founder: emergency must alarm everywhere
     spoken = announce.speech_name(patient.spoken_name) if patient else "Emergency patient"
     detail = f"{spoken} needs immediate attention in Accident and Emergency."
-    announce.to_station(visit.org_id, "emergency_arrival",
-                        place="Accident and Emergency",
-                        detail=detail)
+    try:
+        announce.to_station(visit.org_id, "emergency_arrival",
+                            place="Accident and Emergency",
+                            detail=detail)
+    except Exception:                                    # noqa: BLE001
+        _log_emergency_failure("station broadcast (ALL stations)", visit.org_id)
+
     # Alarm every management + clinical role
     for role in ("SUPER_ADMIN","MD_CEO","DMD","DCST","HEAD_ADMIN_HR","ADMIN_MANAGER","HOD","APEX_NURSE","DOCTOR","NURSE","RECEPTIONIST","TRIAGE_NURSE","HIMS_CLERK"):
         try:
             announce.to_role(visit.org_id, role, "emergency_arrival",
                              place="Accident and Emergency",
                              detail=detail, count=1, patient=spoken)
-        except Exception:
-            pass
+        except Exception:                                # noqa: BLE001
+            _log_emergency_failure(f"role alert {role}", visit.org_id)
     try:
         from . import personal_tv
         sess = personal_tv.ensure_personal_session(visit.org_id, visit=visit)
         personal_tv.update_session_from_visit(sess)
         personal_tv.notify_patient_personal(sess, title="Emergency - A&E", body=f"{spoken} - go to Accident and Emergency now, you will be seen immediately", data={"priority": "EMERGENCY", "stage": "EMERGENCY"})
-    except Exception:
+    except Exception:                                    # noqa: BLE001
+        _log_emergency_failure("patient personal-TV emergency push", visit.org_id)
+
+
+def _log_emergency_failure(what: str, org_id) -> None:
+    """One loud, greppable line per failed emergency-alert channel."""
+    from flask import current_app
+    try:
+        current_app.logger.error(
+            "EMERGENCY ALERT FAILURE: could not %s for org %s — the "
+            "emergency team may not have been alarmed. Check the announce/"
+            "notification backends NOW.", what, org_id)
+        current_app.logger.exception("emergency alert channel failure detail")
+    except Exception:                                    # noqa: BLE001 — logging must never be the thing that crashes triage
         pass
