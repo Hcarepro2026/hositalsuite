@@ -847,7 +847,21 @@ def ussd_callback():
             code_input = remaining[1].strip().upper()
             try:
                 from ..models import QueueTicket
-                t = db.session.query(QueueTicket).filter_by(org_id=org.id, code=code_input).first()
+                # USSD audit: ticket codes recycle EVERY day (G-001 is today's
+                # first ticket and last month's). Match today's ticket first;
+                # for an older code, only the caller's own number may resolve
+                # it — a bare sequential code must not reveal a stranger's
+                # queue status.
+                t = (db.session.query(QueueTicket)
+                     .filter_by(org_id=org.id, code=code_input,
+                                queue_date=now_naive().date()).first())
+                if t is None and (phone_norm or phone_raw):
+                    t = (db.session.query(QueueTicket)
+                         .filter(QueueTicket.org_id == org.id,
+                                 QueueTicket.code == code_input,
+                                 QueueTicket.phone.in_(
+                                     [p for p in (phone_norm, phone_raw) if p]))
+                         .order_by(QueueTicket.id.desc()).first())
                 if not t:
                     return Response("END Ticket not found. Check code.", mimetype="text/plain")
                 # Estimate position
