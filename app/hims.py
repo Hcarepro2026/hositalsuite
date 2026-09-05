@@ -148,17 +148,24 @@ def _fuzzy_surname_matches(org_id: int, term: str, limit: int = 10) -> list:
       2. load full Patient rows ONLY for the best `limit` ids, so the views
          keep working with real entities while 490 rejected candidates never
          materialize past their four name fields.
+
+    Privacy (FIX 2026-09-04): the candidate set is branch-scoped exactly like
+    the exact-match path in search(), so a clerk at one site can never fuzzy-
+    match a folder that belongs to another branch of the hospital.
     """
     term_l = term.lower().strip()
     if len(term_l) < 3:
         return []
-    candidates = (db.session.query(
-                      Patient.id,
-                      Patient.surname,
-                      Patient.first_name,
-                      Patient.other_names,
-                      Patient.hospital_number)
-                  .filter(Patient.org_id == org_id, Patient.active.is_(True))
+    from . import branches as br
+    base_q = (db.session.query(
+                  Patient.id,
+                  Patient.surname,
+                  Patient.first_name,
+                  Patient.other_names,
+                  Patient.hospital_number)
+              .filter(Patient.org_id == org_id, Patient.active.is_(True)))
+    base_q = br.apply_branch_filter(base_q, Patient.branch_id)
+    candidates = (base_q
                   .order_by(Patient.last_visit_at.desc().nullslast())
                   .limit(FUZZY_CANDIDATE_CAP)
                   .all())
