@@ -25,6 +25,16 @@ def _org():
     return current_user.org_id
 
 
+def _acting_super() -> bool:
+    """True when the current user holds EVERY permission (Super Admin).
+
+    The escalation guard below only binds delegated role managers: a Super
+    Administrator is the ceiling already and may do anything.
+    """
+    return (getattr(current_user, "role", "") == "SUPER_ADMIN"
+            or getattr(current_user, "is_super", False))
+
+
 def _role_or_404(rid: int) -> Role:
     r = db.session.get(Role, rid)
     if r is None or r.org_id != _org():
@@ -104,6 +114,27 @@ def edit(rid: int):
 def save(rid: int):
     role = _role_or_404(rid)
     keys = [k for k in request.form.getlist("perm") if k in PERMISSION_KEYS]
+
+    # Privilege-escalation guard: a DELEGATED role manager (granted
+    # roles_admin but not Super Admin) must never be able to hand out powers
+    # they do not hold themselves — otherwise "manage the role screen"
+    # quietly becomes "make myself Super Admin". Custom roles only, and only
+    # within the editor's own permission set; Super Admin is the ceiling and
+    # is exempt.
+    if not _acting_super():
+        if role.builtin:
+            flash("Only a Super Administrator may change the permissions of a "
+                  "built-in role. Ask them, or manage your own custom roles.",
+                  "error")
+            return redirect(url_for("rolesadmin.edit", rid=role.id))
+        mine = R.permissions_of(current_user)
+        overflow = [k for k in keys if k not in mine]
+        if overflow:
+            keys = [k for k in keys if k in mine]
+            flash("You cannot grant powers you do not hold yourself — removed: "
+                  f"{', '.join(overflow[:5])}{'…' if len(overflow) > 5 else ''}. "
+                  "Ask a Super Administrator for powers beyond your own.",
+                  "error")
 
     # THE ONE THING THIS SCREEN MUST NEVER ALLOW: the administrator untick-ing
     # their own way back in. Locking the only person who can fix a mistake out
@@ -186,6 +217,16 @@ def assign():
         d = db.session.get(Department, dept_id)
         if not d or d.org_id != _org():
             flash("Unknown department.", "error")
+            return redirect(url_for("rolesadmin.assign_form"))
+
+    # Privilege-escalation guard: never grant a hat carrying powers the
+    # granter does not wear themselves (delegated role managers only).
+    if not _acting_super():
+        mine = R.permissions_of(current_user)
+        overflow = [k for k in role.permission_keys if k not in mine]
+        if overflow:
+            flash(f"You cannot hand out '{role.name}' — it carries powers you "
+                  "do not hold yourself. Ask a Super Administrator.", "error")
             return redirect(url_for("rolesadmin.assign_form"))
 
     R.grant(user, role, department_id=dept_id, granted_by=current_user)

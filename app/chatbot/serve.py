@@ -99,7 +99,9 @@ def respond(text: str, *, org, lang: str = "en", session) -> dict:
     """
     org_id = getattr(org, "id", None)
 
-    # Phase 1 & 14: privacy & prompt injection — backend enforced, never frontend only
+    # Guardrail prefilter — backend enforced, never frontend only. Best-effort
+    # filter, not a security boundary; the boundary is that the assistant only
+    # ever answers from the hospital's published KB.
     if engine.is_privacy_attack(text) or engine.is_prompt_injection(text):
         body, links = decorate(engine.PRIVACY_REFUSAL if lang != "pcm" else engine.PRIVACY_REFUSAL_PCM, None, org)
         return {"text": body, "action": None, "links": links,

@@ -243,6 +243,18 @@ def roster_add():
             if rd.leave_on(current_user.org_id, person.id, d):
                 skipped += 1
                 continue
+            # Roster audit: refuse to also put somebody on leave on a day they
+            # are already rostered for duty — the reverse direction is refused
+            # too. Say where, so the HOD can remove the duty entry explicitly.
+            duty = (db.session.query(RosterEntry)
+                    .filter_by(org_id=current_user.org_id, user_id=person.id,
+                               duty_date=d, kind="DUTY").first())
+            if duty:
+                flash(f"{person.name} is already on duty ({duty.display_shift} at "
+                      f"{duty.place_label}) on {d.strftime('%a %d %b')} — remove that "
+                      "duty entry first if they should be on leave that day. Nothing was saved.",
+                      "error")
+                return redirect(_back(place))
             db.session.add(RosterEntry(
                 org_id=current_user.org_id, duty_date=d, user_id=person.id, kind="LEAVE",
                 shift="LEAVE", leave_type=leave_type, scope=place["scope"],

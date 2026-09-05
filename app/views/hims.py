@@ -10,6 +10,8 @@ searching first is what stops duplicate folders being created.
 """
 from __future__ import annotations
 
+import re
+
 from flask import (Blueprint, Response, abort, flash, redirect, render_template,
                    request, url_for)
 from flask_login import current_user
@@ -21,7 +23,8 @@ from ..models import (ASSISTANCE_LABELS, ASSISTANCE_NEEDS, CATEGORY_LABELS,
                       PAYER_TYPES, SEXES, VISIT_TYPES, Department, Patient,
                       PatientVisit, db, now_naive)
 from ..navigation import require_permission
-from ..security import require_role
+from ..security import rate_limit, require_role
+from ..timefmt import mask_phone
 
 bp = Blueprint("hims", __name__, url_prefix="/hims")
 
@@ -599,38 +602,66 @@ def view_photo(pid: int):
 @bp.get("/api/lookup")
 @require_role(*VIEWERS)
 @require_permission("hims")
+@rate_limit(limit=30, window=60.0, key_extra="hims_lookup")
 def api_lookup():
-    """JSON lookup for returning patient — used by Reception/HIMS auto-fill."""
-    from flask import jsonify
+    """JSON lookup for returning patient — used by Reception/HIMS auto-fill.
+
+    F-011: this returns full patient PII (phone, DOB, address, next of kin)
+    and used to be unlimited and unaudited — a single compromised staff login
+    could harvest the whole register silently at line speed. It is now
+    rate-limited per client and every read lands in the hash-chained audit
+    trail (search term masked, result count recorded), so bulk harvesting is
+    both throttled and visible. F-020: errors no longer echo raw exception
+    text to the client; they log server-side instead.
+    """
+    from flask import current_app, jsonify
     term = (request.args.get("q") or "").strip()
     if not term or len(term) < 2:
         return jsonify([])
     try:
         results = hims.search(current_user.org_id, term, limit=5)
-        out = []
-        for p in results:
-            out.append({
-                "id": p.id,
-                "hospital_number": p.hospital_number,
-                "surname": p.surname,
-                "first_name": p.first_name,
-                "other_names": p.other_names or "",
-                "sex": p.sex,
-                "phone": p.phone or "",
-                "age_years": p.age_years,
-                "date_of_birth": p.date_of_birth.isoformat() if p.date_of_birth else "",
-                "address": p.address or "",
-                "lga": p.lga or "",
-                "state": p.state or "",
-                "nok_name": p.nok_name or "",
-                "nok_phone": p.nok_phone or "",
-                "nok_relationship": p.nok_relationship or "",
-                "payer_type": p.payer_type,
-                "full_name": p.full_name,
-            })
-        return jsonify(out)
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:                                    # noqa: BLE001 — F-020
+        current_app.logger.exception("hims api_lookup failed")
+        db.session.rollback()
+        return jsonify({"error": "lookup failed"}), 500
+    out = []
+    for p in results:
+        out.append({
+            "id": p.id,
+            "hospital_number": p.hospital_number,
+            "surname": p.surname,
+            "first_name": p.first_name,
+            "other_names": p.other_names or "",
+            "sex": p.sex,
+            "phone": p.phone or "",
+            "age_years": p.age_years,
+            "date_of_birth": p.date_of_birth.isoformat() if p.date_of_birth else "",
+            "address": p.address or "",
+            "lga": p.lga or "",
+            "state": p.state or "",
+            "nok_name": p.nok_name or "",
+            "nok_phone": p.nok_phone or "",
+            "nok_relationship": p.nok_relationship or "",
+            "payer_type": p.payer_type,
+            "full_name": p.full_name,
+        })
+    # Audit the READ (F-011). The term is masked so the audit trail never
+    # stores a raw phone/address typed at the desk; ids stay out — the trail
+    # answers "who searched how often for what shape of thing", not a PII copy.
+    masked = _mask_search_term(term)
+    audit("HIMS_LOOKUP", "patient", None,
+          {"q": masked, "results": len(out)}, user=current_user,
+          org_id=current_user.org_id)
+    db.session.commit()
+    return jsonify(out)
+
+
+def _mask_search_term(term: str) -> str:
+    """Mask digit runs (phone numbers) in audited search terms."""
+    digits = re.sub(r"\D", "", term)
+    if len(digits) >= 7:
+        return mask_phone(term)
+    return term[:24]
 
 
 

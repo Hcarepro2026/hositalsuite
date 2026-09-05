@@ -46,7 +46,36 @@ def _connect_args() -> dict:
 
 class Config:
     APP_VERSION = "1.8.1"
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-key-change-me")
+    # F-004: a hardcoded fallback key is worse than no key — every session it
+    # signs is forgeable by anyone who has read this file (it is public on
+    # GitHub). Missing SECRET_KEY must therefore FAIL LOUDLY at boot, not
+    # silently weaken the app. Render sets it via generateValue: true in
+    # render.yaml; tests set their own in conftest. Local development opts in
+    # explicitly with FLASK_ENV=development, which generates an ephemeral key
+    # and says so loudly (sessions do not survive a restart — by design).
+    if not (os.environ.get("SECRET_KEY") or "").strip():
+        if os.environ.get("FLASK_ENV") == "development":
+            import secrets as _secrets
+            import sys as _sys
+            print("=" * 72, file=_sys.stderr)
+            print("WARNING: SECRET_KEY is not set — using an EPHEMERAL random key.",
+                  file=_sys.stderr)
+            print("Everyone is logged out on every restart. For anything beyond a",
+                  file=_sys.stderr)
+            print("laptop demo: export SECRET_KEY=$(python -c \"import secrets;"
+                  "print(secrets.token_hex(32))\")",
+                  file=_sys.stderr)
+            print("=" * 72, file=_sys.stderr)
+            SECRET_KEY = _secrets.token_hex(32)
+        else:
+            raise RuntimeError(
+                "SECRET_KEY is not set — refusing to start with a guessable "
+                "session key. Fix: on Render it is generated automatically "
+                "(render.yaml generateValue); anywhere else run "
+                "`export SECRET_KEY=$(python -c \"import secrets; "
+                "print(secrets.token_hex(32))\")` and redeploy/restart.")
+    else:
+        SECRET_KEY = os.environ["SECRET_KEY"].strip()
     SQLALCHEMY_DATABASE_URI = _data_uri("app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Resilient connections: validate before use (pool_pre_ping) and recycle
@@ -91,6 +120,11 @@ class Config:
     REPORT_DIR = os.path.join(DATA_DIR, "reports")
     BACKUP_DIR = os.environ.get("BACKUP_DIR") or os.path.join(DATA_DIR, "backups")
     BACKUP_KEEP = int(os.environ.get("BACKUP_KEEP", "7"))
+    # Hard floor between backups, in hours. A backup reads EVERY table — on a
+    # metered-egress database a runaway backup loop is the most expensive
+    # thing this app can do. The Setting-based per-day guard is primary; this
+    # in-memory floor survives the case where settings are unreadable.
+    MIN_BACKUP_INTERVAL_HOURS = float(os.environ.get("MIN_BACKUP_INTERVAL_HOURS", "20"))
     MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB evidence photos/files
 
     PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8077")

@@ -612,6 +612,16 @@ def build_preview(org_id: int, raw_rows: list[dict], *, place: dict,
                         warnings.append(f"{person.name} is already recorded as on leave on {d} "
                                         "— that day will be skipped.")
                         continue
+                    # F-(roster audit): a person cannot be on duty AND on leave
+                    # the same day — refuse with the place, like the reverse
+                    # direction (duty-over-leave) already does.
+                    duty_places = anywhere.get((person.id, d), [])
+                    if duty_places:
+                        errors.append(
+                            f"{person.name} is already rostered for duty on {d} at "
+                            f"{', '.join(duty_places[:2])}. Remove that duty entry first "
+                            "if they should be on leave that day.")
+                        break
                 seen.add((d, person.id, shift))
 
         out.append({
@@ -701,6 +711,10 @@ def commit_rows(org_id: int, rows: list[dict], *, place: dict, created_by_id: in
     leave_days = _existing_leave(org_id)
     existing = _existing_slots(org_id, place)
     org_dates = {r.duty_date for r in db.session.query(DutyRoster).filter_by(org_id=org_id).all()}
+    # re-check at commit time: nobody may be on duty AND on leave the same day
+    duty_anywhere = {(r.user_id, r.duty_date)
+                     for r in db.session.query(RosterEntry)
+                     .filter_by(org_id=org_id, kind="DUTY").all()}
 
     for row in rows:
         if not row.get("ok") or not row.get("person_id"):
@@ -714,8 +728,8 @@ def commit_rows(org_id: int, rows: list[dict], *, place: dict, created_by_id: in
         uid = row["person_id"]
         for d in days_between(start, end):
             if row["kind"] == "LEAVE":
-                if (uid, d) in leave_days:
-                    skipped += 1
+                if (uid, d) in leave_days or (uid, d) in duty_anywhere:
+                    skipped += 1          # already leave, or still on duty that day
                     continue
                 db.session.add(RosterEntry(
                     org_id=org_id, duty_date=d, user_id=uid, kind="LEAVE",
@@ -765,36 +779,22 @@ def autofill_next_week(org_id: int, place: dict, *, source_start: date, target_s
     source_end = source_start + timedelta(days=6)
     target_end = target_start + timedelta(days=6)
 
-    # Load source week
-    src_rows = (db.session.query(RosterEntry)
-                .filter(RosterEntry.org_id == org_id,
-                        RosterEntry.duty_date >= source_start,
-                        RosterEntry.duty_date <= source_end,
-                        RosterEntry.kind == "DUTY")
-                .all())
-    # Filter by place
-    if place.get("scope") and place["scope"] != "ORG":
-        src_rows = [r for r in src_rows if r.scope == place["scope"]]
-        for col in ("department_id", "section_id", "unit_id"):
-            if place.get(col):
-                src_rows = [r for r in src_rows if getattr(r, col) == place[col]]
-    elif place.get("scope") == "ORG":
-        src_rows = [r for r in src_rows if r.scope == "ORG"]
-
-    leave_days = _existing_leave(org_id)
-    existing = _existing_slots(org_id, place)
     org_dates = {r.duty_date for r in db.session.query(DutyRoster).filter_by(org_id=org_id).all()}
-
+    leave_days = _existing_leave(org_id)
     added = skipped = 0
-    for src in src_rows:
-        offset = (src.duty_date - source_start).days
-        target_date = target_start + timedelta(days=offset)
-        # Skip if target is leave day
-        if (src.user_id, target_date) in leave_days:
-            skipped += 1
-            continue
-        if place["scope"] == "ORG":
-            if target_date in org_dates:
+
+    # F-(roster audit): the ORG (Admin Manager) roster lives in duty_roster,
+    # not roster_entry — the old code read the wrong table and silently
+    # autofilled nothing for the hospital-wide roster.
+    if place.get("scope") == "ORG":
+        src_rows = (db.session.query(DutyRoster)
+                    .filter(DutyRoster.org_id == org_id,
+                            DutyRoster.duty_date >= source_start,
+                            DutyRoster.duty_date <= source_end).all())
+        for src in src_rows:
+            offset = (src.duty_date - source_start).days
+            target_date = target_start + timedelta(days=offset)
+            if (src.user_id, target_date) in leave_days or target_date in org_dates:
                 skipped += 1
                 continue
             db.session.add(DutyRoster(org_id=org_id, duty_date=target_date,
@@ -803,6 +803,30 @@ def autofill_next_week(org_id: int, place: dict, *, source_start: date, target_s
                                       created_by=created_by_id))
             org_dates.add(target_date)
             added += 1
+        return {"added": added, "skipped": skipped}
+
+    # Department / section / unit scope: copy RosterEntry duty rows.
+    src_rows = (db.session.query(RosterEntry)
+                .filter(RosterEntry.org_id == org_id,
+                        RosterEntry.duty_date >= source_start,
+                        RosterEntry.duty_date <= source_end,
+                        RosterEntry.kind == "DUTY")
+                .all())
+    # Filter by place
+    if place.get("scope"):
+        src_rows = [r for r in src_rows if r.scope == place["scope"]]
+        for col in ("department_id", "section_id", "unit_id"):
+            if place.get(col):
+                src_rows = [r for r in src_rows if getattr(r, col) == place[col]]
+
+    existing = _existing_slots(org_id, place)
+
+    for src in src_rows:
+        offset = (src.duty_date - source_start).days
+        target_date = target_start + timedelta(days=offset)
+        # Skip if target is leave day
+        if (src.user_id, target_date) in leave_days:
+            skipped += 1
             continue
         key = (target_date, src.user_id, src.shift)
         if key in existing:

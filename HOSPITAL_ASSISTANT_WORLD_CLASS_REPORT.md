@@ -1,6 +1,17 @@
 # Hospital Assistant — World-Class Rebuild Report v2.0
 Date: 2026-09-01 — Master Instruction 20 Phases Implemented
 
+> **Reader, beware — self-reported status.** This document was written by the
+> same session that did the work, and an independent review (2026-09-03) found
+> real problems the "✅ DONE" marks had glossed over: a VAPID private key
+> published in this very file (removed — see
+> `docs/SECURITY_INCIDENT_2026-09-03_VAPID_KEY_ROTATION.md`) and a privacy
+> filter described as complete security when it was a keyword list. The status
+> column below is the author grading its own homework. The only status that
+> counts is the test suite: run `pytest` and read
+> `tests/test_chatbot_guardrails_adversarial.py` before trusting any security
+> claim here.
+
 ## Summary (Plain English)
 
 Your chatbot is now world-class, privacy-first, Nigeria-focused, patient-centred.
@@ -20,7 +31,7 @@ Your chatbot is now world-class, privacy-first, Nigeria-focused, patient-centred
 | 11 Nigeria-First | English, Pidgin, Yoruba, Hausa, Igbo, mobile-first, slow internet <1KB, feature phone USSD, cultural respect | ✅ DONE |
 | 12 Patient Experience First | Clarity → Confidence → Convenience → Speed → Satisfaction, one next step, not three | ✅ DONE |
 | 13 Safety Clinical Boundaries | Never diagnoses, never prescribes, emergency → A&E immediately, belt and braces guardrail before and after model | ✅ DONE |
-| 14 Prompt Injection Security | Detects "ignore instructions", "reveal system prompt", "pretend admin", "disable safety" → polite refusal + redirect | ✅ DONE |
+| 14 Prompt Injection Security | Layered guardrail: phrase list + intent regexes + typo-tolerant probe + separator/homoglyph folding, adversarially tested in `tests/test_chatbot_guardrails_adversarial.py` → polite refusal + redirect. **Best-effort prefilter, not a security boundary** — the real boundary is that the assistant only answers from the published KB and is never given secrets | ✅ DONE (with the honest limits stated) |
 | 15 Response Quality Standard | Accuracy, Authorization, Privacy, Safety, Relevance, Clarity, Tone, Actionability, Brevity checks | ✅ DONE |
 | 16 Human Escalation | When AI cannot answer, clinical, emergency, sensitive, complaint → alerts front desk + phone + staff | ✅ DONE |
 | 17 Continuous Learning | Unanswered → saved as teaching_note, Admin → KB Learning list, human review → approve → live | ✅ DONE |
@@ -91,9 +102,17 @@ Your chatbot is now world-class, privacy-first, Nigeria-focused, patient-centred
 
 ### 3. VAPID Permanent Keys + .gitignore
 
-- Generated permanent production keys (REDACTED 2026-09-04 — leaked key rotated):
-  - PUBLIC: `BFTnObyKabMVbeqvg8wWXvrO1or_8zOL_0wA4PVhQIXwUDjp7VV6pGvBQo8QNN9OmVcoQIDN0Zd3Lt9gqoDJkwM` (example — generate your own via `python -m py_vapid --gen`)
-  - PRIVATE: `REDACTED — was [OLD KEY REMOVED] — rotated immediately, new key in Render env VAPID_PRIVATE_KEY only, never in repo. See VAPID_SETUP_GUIDE.md. If you deployed with the old key, generate a new pair and update Render env now; old subscriptions will need to re-enable.`
+> ⚠️ **SECURITY NOTE (2026-09-03):** The keypair that was originally written
+> here was removed in a security remediation — a private key must NEVER be
+> written in any file, even a "private" report. Because it appeared in a
+> committed document, treat it as COMPROMISED: generate a new keypair and set
+> `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` in the Render environment (see
+> `VAPID_SETUP_GUIDE.md`), then redeploy. Push subscriptions created with the
+> old key stop working; the app deactivates them automatically on the first
+> failed send and browsers re-subscribe on the next visit.
+>
+> - PUBLIC: `<set VAPID_PUBLIC_KEY in Render env — safe to ship to browsers>`
+> - PRIVATE: `<set VAPID_PRIVATE_KEY in Render env — SECRET, never in any file>`
 - Added `instance/`, `vapid_keys.json`, `*.pem`, `*.key` to `.gitignore` — private never committed
 - Added auto-generation fallback in `app/push.py` `_ensure_global_vapid()` — works out-of-box if env missing, saves to instance file, logs warning
 - Created `VAPID_SETUP_GUIDE.md` with instructions where to paste in Render (without private key in repo)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import time
 
 from flask import Blueprint, current_app, jsonify, request
 
@@ -13,6 +14,21 @@ from ..security import csrf_exempt, rate_limit
 from .. import scoring
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
+
+# ---------------------------------------------------------------------------
+# Probe result caches. /health and /ready are pinged by Render, UptimeRobot
+# and the founder's dashboards every few seconds, around the clock. The
+# schema-drift check in /ready is a FULL introspection of 100+ tables — small
+# per call, but 24/7 polling on a metered-egress database (Supabase counts
+# every byte shipped, and this org once shipped 424 GB in a month) makes
+# per-ping introspection pure waste: schema drift does not appear and vanish
+# between two pings 60 seconds apart. Both caches are per-process and expire
+# quickly; a drift incident is therefore visible within a minute.
+_READY_CACHE_TTL = 60.0
+_ready_cache = {"at": 0.0, "payload": None, "status": 200}
+_backup_cache = {"at": 0.0, "value": None}
+_HEALTH_CACHE_TTL = 30.0
+_health_extra = {"at": 0.0, "last_backup": None}
 
 
 @bp.get("/health")
@@ -43,14 +59,20 @@ def health():
     except Exception:                                 # noqa: BLE001
         scheduler_ok = None
 
-    last_backup = None
-    try:
-        from ..backup import list_backups
-        rows = list_backups(limit=1)
-        if rows:
-            last_backup = rows[0].created_at.isoformat()
-    except Exception:                                 # noqa: BLE001
-        db.session.rollback()
+    last_backup = _health_extra["last_backup"]
+    now = time.monotonic()
+    if (current_app.config.get("TESTING")
+            or now - _health_extra["at"] > _HEALTH_CACHE_TTL):
+        try:
+            from ..backup import list_backups
+            rows = list_backups(limit=1)
+            last_backup = rows[0].created_at.isoformat() if rows else None
+            _health_extra.update(at=now, last_backup=last_backup)
+        except Exception:                             # noqa: BLE001
+            # never cache a failed lookup — the next ping retries at once
+            db.session.rollback()
+            _health_extra.update(at=0.0, last_backup=None)
+            last_backup = None
 
     healthy = db_ok and (scheduler_ok is not False)
     # v2 push + queue estimator + personal TV
@@ -113,6 +135,18 @@ def ready():
     # Connectivity looked perfect throughout. This compares what the app
     # expects against what the database actually has, so the next drift is
     # visible from outside instead of being discovered by a patient.
+    #
+    # CACHED for _READY_CACHE_TTL — but ONLY the healthy answer. Success is
+    # the steady state that monitors hammer every few seconds; failure is
+    # rare and must always be evaluated fresh so recovery is instant.
+    # Under TESTING the cache is bypassed entirely: the test suite recreates
+    # the database between tests, so a cached answer would lie.
+    now = time.monotonic()
+    if (not current_app.config.get("TESTING")
+            and _ready_cache["status"] == 200
+            and now - _ready_cache["at"] <= _READY_CACHE_TTL
+            and _ready_cache["payload"] is not None):
+        return _ready_cache["payload"], 200
     try:
         from sqlalchemy import inspect as _inspect
         insp = _inspect(db.engine)
@@ -126,13 +160,15 @@ def ready():
             missing.extend(f"{tname}.{c.name}" for c in table.columns
                            if c.name not in cols)
         if missing:
+            _ready_cache.update(at=0.0, payload=None, status=503)
             return jsonify(ready=False, reason="schema drift",
                            missing=sorted(missing)[:20]), 503
+        _ready_cache.update(at=now, payload=jsonify(ready=True), status=200)
+        return _ready_cache["payload"], 200
     except Exception as exc:                          # noqa: BLE001
         db.session.rollback()
+        _ready_cache.update(at=0.0, payload=None, status=503)
         return jsonify(ready=False, reason=f"schema check failed: {exc}"[:200]), 503
-
-    return jsonify(ready=True), 200
 
 
 # ================================================================ live alerts (§19/§37)
@@ -280,13 +316,26 @@ def whatsapp_verify():
 @csrf_exempt("api.whatsapp_webhook_post")
 @bp.post("/whatsapp/webhook")
 def whatsapp_webhook():
-    """Receive delivery statuses + inbound messages from the Cloud API."""
-    secret = current_app.config.get("WHATSAPP_APP_SECRET", "")
-    if secret:
-        signature = request.headers.get("X-Hub-Signature-256", "")
-        expected = "sha256=" + hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            return "invalid signature", 403
+    """Receive delivery statuses + inbound messages from the Cloud API.
+
+    F-005: this used to SKIP signature verification when WHATSAPP_APP_SECRET
+    was unset — anyone on the internet could POST fake inbound messages or
+    delivery statuses. It now fails CLOSED: no secret configured means the
+    webhook is not deployed, and requests are refused with 503 until an
+    operator sets the secret. With the secret set, the Meta signature is
+    mandatory (constant-time compare) and mismatched signatures get 403.
+    """
+    secret = (current_app.config.get("WHATSAPP_APP_SECRET") or "").strip()
+    if not secret:
+        current_app.logger.error(
+            "WhatsApp webhook POST received while WHATSAPP_APP_SECRET is not "
+            "configured — REJECTING (fail-closed). Set the secret in the "
+            "Meta app dashboard and the environment before enabling.")
+        return "webhook not configured", 503
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    expected = "sha256=" + hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        return "invalid signature", 403
     data = request.get_json(silent=True) or {}
     for entry in data.get("entry", []):
         for change in entry.get("changes", []):
@@ -303,7 +352,27 @@ def whatsapp_webhook():
                 try:
                     from ..chatbot.serve import handle_whatsapp
                     from ..services import current_org
-                    handle_whatsapp(current_org(), frm, body)
+                    # F-019: route by the business number that received the
+                    # message — each hospital records its own Meta number
+                    # identity (whatsapp_phone_number_id / _display_number
+                    # settings). Only a genuinely single-hospital deployment
+                    # may fall back to "the" org; on a multi-hospital server
+                    # an unmapped number is logged and ignored, never guessed.
+                    meta = value.get("metadata") or {}
+                    org = whatsapp.org_for_number(meta.get("phone_number_id"),
+                                                  meta.get("display_phone_number"))
+                    if org is None:
+                        fallback = current_org()
+                        multi = db.session.query(Organization).count() > 1
+                        if multi:
+                            current_app.logger.error(
+                                "Inbound WhatsApp for number id=%s display=%s matches "
+                                "no hospital's number mapping — NOT routing (multi-tenant). "
+                                "Set the hospital's whatsapp_phone_number_id setting.",
+                                meta.get("phone_number_id"), meta.get("display_phone_number"))
+                            continue
+                        org = fallback
+                    handle_whatsapp(org.id, frm, body)
                 except Exception:                        # noqa: BLE001
                     current_app.logger.exception("whatsapp inbound chat failed")
                     db.session.rollback()
@@ -778,7 +847,21 @@ def ussd_callback():
             code_input = remaining[1].strip().upper()
             try:
                 from ..models import QueueTicket
-                t = db.session.query(QueueTicket).filter_by(org_id=org.id, code=code_input).first()
+                # USSD audit: ticket codes recycle EVERY day (G-001 is today's
+                # first ticket and last month's). Match today's ticket first;
+                # for an older code, only the caller's own number may resolve
+                # it — a bare sequential code must not reveal a stranger's
+                # queue status.
+                t = (db.session.query(QueueTicket)
+                     .filter_by(org_id=org.id, code=code_input,
+                                queue_date=now_naive().date()).first())
+                if t is None and (phone_norm or phone_raw):
+                    t = (db.session.query(QueueTicket)
+                         .filter(QueueTicket.org_id == org.id,
+                                 QueueTicket.code == code_input,
+                                 QueueTicket.phone.in_(
+                                     [p for p in (phone_norm, phone_raw) if p]))
+                         .order_by(QueueTicket.id.desc()).first())
                 if not t:
                     return Response("END Ticket not found. Check code.", mimetype="text/plain")
                 # Estimate position

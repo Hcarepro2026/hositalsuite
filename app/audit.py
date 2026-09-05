@@ -12,6 +12,21 @@ from .models import AuditLog, db, now_naive
 # cannot read the same "last hash" and fork the chain
 _chain_lock = threading.Lock()
 
+# F-002: the threading lock only guards ONE process. With WEB_CONCURRENCY>1
+# (or >1 dyno) two workers could read the same "last hash" and fork the
+# chain, silently destroying its tamper-evidence. On PostgreSQL a
+# TRANSACTION-scoped advisory lock closes this: it is held until the worker's
+# transaction COMMITS, so the next worker reads the committed tail (including
+# the winner's row) and chains from it. On SQLite the app is single-process
+# and the threading lock is sufficient.
+_AUDIT_CHAIN_LOCK_KEY = 736559102      # sibling of the migration lock in env.py
+
+
+def _acquire_chain_lock(conn) -> None:
+    if conn.dialect.name != "postgresql":
+        return
+    conn.execute(db.text(f"SELECT pg_advisory_xact_lock({_AUDIT_CHAIN_LOCK_KEY})"))
+
 
 def last_hash(org_id: int) -> str:
     row = db.session.query(AuditLog).filter_by(org_id=org_id).order_by(AuditLog.id.desc()).first()
@@ -28,6 +43,7 @@ def audit(action: str, entity_type: str = None, entity_id: int = None,
     at = now_naive()
     with _chain_lock:
         db.session.flush()   # include rows added in this transaction
+        _acquire_chain_lock(db.session.connection())
         prev = last_hash(oid) if oid else "GENESIS"
         h = AuditLog.chain_hash(prev, oid, uid, action, entity_type, entity_id, detail_json, at)
         # Real client IP, not the proxy's — otherwise every audit row records

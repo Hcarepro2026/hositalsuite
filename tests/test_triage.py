@@ -329,3 +329,44 @@ def test_a_doctor_can_declare_ready_and_see_their_own_queue(app, client, seeded)
                     data={"_csrf": csrf(client, "/consulting-room")},
                     follow_redirects=True)
     assert "no longer taking new patients" in r.get_data(as_text=True).lower()
+
+
+# ------------------------------------------------------------------ F-006
+def test_emergency_alert_failures_are_logged_not_swallowed(app, seeded, monkeypatch, caplog):
+    """F-006: a failed emergency alert used to vanish into `except: pass`.
+
+    The alert IS the safety action here — a silent failure means the team was
+    never alarmed. Every channel failure must now log a loud, greppable ERROR
+    while triage itself still does not crash.
+    """
+    import logging
+
+    from app import triage
+
+    with app.app_context():
+        visit = type("V", (), {"org_id": 1})()
+        patient = type("P", (), {"spoken_name": "Test Patient"})()
+
+        def boom_station(*a, **kw):
+            raise RuntimeError("voice backend down")
+
+        calls = {"roles": []}
+
+        def boom_role(org_id, role, *a, **kw):
+            calls["roles"].append(role)
+            raise RuntimeError("announce backend down")
+
+        monkeypatch.setattr(triage.announce, "to_station", boom_station)
+        monkeypatch.setattr(triage.announce, "to_role", boom_role)
+
+        with caplog.at_level(logging.ERROR):
+            # must not raise, even though EVERY channel fails
+            triage.announce_emergency(visit, patient)
+
+        joined = " ".join(rec.getMessage() for rec in caplog.records)
+        assert "EMERGENCY ALERT FAILURE" in joined
+        assert "station broadcast" in joined
+        # every role was attempted and every failure was logged
+        assert len(calls["roles"]) == 13
+        assert "role alert DOCTOR" in joined
+        assert "role alert TRIAGE_NURSE" in joined

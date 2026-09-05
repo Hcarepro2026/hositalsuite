@@ -8,7 +8,10 @@ from datetime import datetime
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import validates as _sa_validates
 from werkzeug.security import check_password_hash, generate_password_hash
+
+from .crypto_fields import EncryptedDate, EncryptedString, EncryptedText, blind_index
 
 db = SQLAlchemy()
 
@@ -97,7 +100,11 @@ class Organization(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=False, index=True)
-    username = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    # F-021: usernames are scoped PER HOSPITAL, not globally — two hospitals
+    # may both have an "admin". Login resolves the hospital first (host / ?h=
+    # / single-tenant), then matches the username inside it; a context-free
+    # login with an ambiguous username is refused with guidance, never guessed.
+    username = db.Column(db.String(64), nullable=False, index=True)
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(160))
     phone = db.Column(db.String(32))            # E.164, used for WhatsApp/SMS
@@ -105,6 +112,9 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     active = db.Column(db.Boolean, default=True, nullable=False)
     must_change_password = db.Column(db.Boolean, default=False)
+
+    __table_args__ = (db.UniqueConstraint("org_id", "username",
+                                          name="uq_user_org_username"),)
     # Which department this member of staff belongs to (bulk uploads, rosters,
     # and "who works where" reporting all need this).
     # use_alter: user->department and department->user reference each other, so
@@ -972,11 +982,16 @@ class LoginAttempt(db.Model):
     """
     __tablename__ = "login_attempt"
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organization.id"), nullable=True,
+                       index=True)   # None = login without a hospital context
+    username = db.Column(db.String(80), nullable=False, index=True)
     failures = db.Column(db.Integer, default=0, nullable=False)
     locked_until = db.Column(db.DateTime, index=True)
     last_failure_at = db.Column(db.DateTime)
     last_ip = db.Column(db.String(64))
+
+    __table_args__ = (db.UniqueConstraint("org_id", "username",
+                                          name="uq_lock_org_username"),)
 
 
 # ---------------------------------------------------------------- NDPA data-subject requests
@@ -1151,24 +1166,39 @@ class Patient(db.Model):
     first_name = db.Column(db.String(80), nullable=False)
     other_names = db.Column(db.String(80))
     sex = db.Column(db.String(1), nullable=False)                 # F | M
-    date_of_birth = db.Column(db.Date)
+    # F-015: date_of_birth, address and next-of-kin contact are field-level
+    # encrypted (ciphertext at rest without FIELD_ENCRYPTION_KEY; plaintext
+    # passthrough while the key is unset — see app/crypto_fields.py).
+    date_of_birth = db.Column(EncryptedDate())
     # Many patients genuinely do not know their date of birth. Recording a
     # stated age is honest; inventing a birthday is not.
     age_years = db.Column(db.Integer)
     occupation = db.Column(db.String(80))
 
     # --- contact
+    # Patient.phone stays a plain, indexed column on purpose: it is the
+    # number the hospital dials and searches by partial match every day.
+    # The audit's field-encryption scope (F-015) is next-of-kin contact and
+    # addresses — the fields nobody needs to search by substring.
     phone = db.Column(db.String(32), index=True)
     phone_alt = db.Column(db.String(32))
-    address = db.Column(db.String(300))
+    address = db.Column(EncryptedText())
     lga = db.Column(db.String(80))                                # local government area
     state = db.Column(db.String(80))
 
     # --- next of kin (required: somebody must be reachable in an emergency)
     nok_name = db.Column(db.String(120))
     nok_relationship = db.Column(db.String(40))
-    nok_phone = db.Column(db.String(32))
-    nok_address = db.Column(db.String(300))
+    nok_phone = db.Column(EncryptedString(32))
+    nok_address = db.Column(EncryptedText())
+    # Blind search index (HMAC) so staff can still find a patient by NOK
+    # number without the DB storing a readable copy — see crypto_fields.
+    nok_phone_bx = db.Column(db.String(32), index=True)
+
+    @_sa_validates("nok_phone")
+    def _hash_nok_phone(self, _key, value):
+        self.nok_phone_bx = blind_index("patient.nok_phone", value)
+        return value
 
     # --- from the hospital's paper admission form. Demographic, never clinical.
     marital_status = db.Column(db.String(16))
@@ -1409,13 +1439,13 @@ class ReceptionIntake(db.Model):
 
     # --- contact
     phone = db.Column(db.String(32), index=True)
-    address = db.Column(db.String(300))
+    address = db.Column(EncryptedText())               # F-015 field-encrypted
 
     # --- the rest of the hospital's paper admission form (Aug 2026).
     # These are IDENTITY and DEMOGRAPHIC details, not clinical ones. Religion
     # and tribe are on the paper form for real reasons: dietary needs, burial
     # rites, and finding an interpreter who actually speaks the language.
-    date_of_birth = db.Column(db.Date)
+    date_of_birth = db.Column(EncryptedDate())         # F-015 field-encrypted
     marital_status = db.Column(db.String(16))
     religion = db.Column(db.String(40))
     state_of_origin = db.Column(db.String(60))
@@ -1425,8 +1455,14 @@ class ReceptionIntake(db.Model):
 
     # --- next of kin: name, phone AND relationship, as the founder specified
     nok_name = db.Column(db.String(120))
-    nok_phone = db.Column(db.String(32))
+    nok_phone = db.Column(EncryptedString(32))         # F-015 field-encrypted
+    nok_phone_bx = db.Column(db.String(32), index=True)
     nok_relationship = db.Column(db.String(40))
+
+    @_sa_validates("nok_phone")
+    def _hash_nok_phone(self, _key, value):
+        self.nok_phone_bx = blind_index("intake.nok_phone", value)
+        return value
 
     # --- health insurance / how they will pay
     payer_type = db.Column(db.String(16), default="SELF", nullable=False)

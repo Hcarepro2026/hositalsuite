@@ -54,7 +54,7 @@ _d("Internal Medicine", [
      "sugar, chest and breathing wahala, plus follow-up. Na dem dey know you well well over time.",
      _CTA_BOOK),
     ("book", ["book internal medicine", "see a physician", "appointment with internal medicine"],
-     "Absolutely — You can book. Internal Medicine runs clinic on weekday mornings, and "
+     "Yes — you can book. Internal Medicine runs clinic on weekday mornings, and "
      "mornings are usually calmest. Bring any old results or medicine packets you have; it helps "
      "the doctor enormously.", "No wahala, You fit book. Internal Medicine dey run clinic weekday "
      "morning, and morning dey calm pass. Carry your old result and medicine pack come — e go help doctor.",
@@ -140,7 +140,7 @@ _d("Internal Medicine", [
      "Only fast if dem tell you say na for particular test. If not, chop normal — to come weak and hungry "
      "no dey help anybody, especially you.", _CTA_HELP),
     ("interpreter", ["i don't speak english well", "translator internal medicine"],
-     "That's absolutely fine — tell reception which language you're most comfortable in and we'll find "
+     "That's perfectly fine — tell reception which language you're most comfortable in and we'll find "
      "someone on the team who speaks it. You should never have to struggle to explain how you feel.",
      "No wahala at all — tell reception which language you sabi pass and we go find person for the team "
      "wey dey speak am. You no suppose struggle to explain how you dey feel.", _CTA_DESK),
@@ -151,7 +151,7 @@ _d("Internal Medicine", [
      "wey wear uniform make dem carry you go. Na the correct thing, nobody go vex.",
      "🚑 Please go to A&E straight away."),
     ("complaint", ["complain about internal medicine", "unhappy with the doctor"],
-     "I'm sorry — that shouldn't have been your experience, and management genuinely wants to hear it. "
+     "I'm sorry — that shouldn't have been your experience, and management truly wants to hear it. "
      "You can file it here in under a minute and you'll get a reference number to track what happens next.",
      "Sorry o — your experience no suppose be like that, and management really wan hear am. You fit file "
      "am here for less than one minute, and you go get reference number to track am.",
@@ -232,7 +232,7 @@ _d("Surgery", [
      "Nobody go vex for you.", _CTA_DESK),
     ("consent", ["what is consent form", "sign for operation"],
      "The consent form is the surgeon explaining exactly what they plan to do, the risks, and the "
-     "alternatives — and you agreeing. Please don't sign until you genuinely understand it. Asking them "
+     "alternatives — and you agreeing. Please don't sign until you fully understand it. Asking them "
      "to explain again is completely normal.",
      "Consent form na the surgeon explaining wetin dem wan do, the risk, and other option — then you agree. "
      "No sign until you really understand am. To ask dem make dem explain again na normal thing.", _CTA_HELP),
@@ -267,7 +267,7 @@ _d("Surgery", [
      "Surgical outpatient clinic dey run weekday morning. Emergency surgical cover dey available 24 hours "
      "through Accident & Emergency.", _CTA_BOOK),
     ("complaint", ["complain about surgery", "unhappy with my operation"],
-     "I'm genuinely sorry. Please tell us — surgical concerns are taken very seriously and go straight to "
+     "I'm truly sorry. Please tell us — surgical concerns are taken very seriously and go straight to "
      "management. You'll get a reference number and a real response.",
      "I sorry well well. Abeg tell us — surgical matter dey serious and e dey go straight to management. You "
      "go get reference number and real response.", "Tap 'Make a Complaint' and open Make a complaint."),
@@ -320,7 +320,7 @@ _d("Obstetrics & Gynaecology", [
      "Dem dey do scan for our Imaging unit and your midwife go tell you when each one due. Some scan need "
      "full bladder — the request slip go talk am, abeg read am.", _CTA_BOOK),
     ("birth_partner", ["can my husband be present", "birth partner", "can someone stay with me"],
-     "Yes, in most cases you're welcome to have one support person with you, and it genuinely helps. "
+     "Yes, in most cases you're welcome to have one support person with you, and it helps more than you'd think. "
      "The midwife will explain the arrangements for the day.",
      "Yes, most times you fit get one person wey go support you, and e dey help well well. The midwife go "
      "explain the arrangement for that day.", _CTA_HELP),
@@ -367,7 +367,7 @@ _d("Obstetrics & Gynaecology", [
      "Antenatal clinic dey run some weekday morning — reception go confirm which day fit your booking group. "
      "But labour ward no dey close, day or night.", _CTA_BOOK),
     ("breastfeeding", ["breastfeeding help", "trouble feeding baby"],
-     "Our midwives and nurses genuinely love helping with this, and there's no such thing as a silly "
+     "Our midwives and nurses love helping with this, and there's no such thing as a silly "
      "question. Come to the postnatal clinic or ask any midwife — they'd rather help early than late.",
      "Our midwife and nurse dey really like to help with this one, and no question dey foolish. Come postnatal "
      "clinic or ask any midwife — dem prefer to help early than late.", _CTA_DESK),
@@ -413,7 +413,7 @@ _d("Laboratory", [
      "Result dey enter your file for your doctor, and you fit collect copy for lab window with your ID and "
      "receipt. We prefer make doctor explain am give you than make you read number alone.", _CTA_DESK),
     ("explain", ["what does my result mean", "explain my lab result", "is my result normal"],
-     "I can see why you'd want to know right away — but I genuinely can't interpret results, and I won't "
+     "I can see why you'd want to know right away — but I really can't interpret results, and I won't "
      "guess with your health. Numbers mean different things for different people. Let's get you in front "
      "of the doctor who ordered it.",
      "I understand say you wan know now now — but I no fit interpret result, and I no go guess with your "
@@ -440,7 +440,7 @@ _d("Laboratory", [
      "Our blood bank dey inside Laboratory. If patient need blood, the clinical team go arrange am — and if "
      "you wan donate, we go happy well well to see you.", _CTA_DESK),
     ("donate", ["donate blood", "blood donation"],
-     "Thank you — that's a genuinely generous thing to do, and it saves lives here. Come to the lab, bring "
+     "Thank you — that's a truly generous thing to do, and it saves lives here. Come to the lab, bring "
      "ID, eat properly beforehand and drink water. The whole thing takes well under an hour.",
      "Thank you — na correct generous thing, and e dey save life here. Come lab, bring ID, chop well before "
      "and drink water. The whole thing no go pass one hour.", _CTA_DESK),
@@ -465,7 +465,7 @@ _d("Laboratory", [
      "No problem — come lab window with your ID and file number, we go find you for system. E dey happen every "
      "time.", _CTA_DESK),
     ("wrong", ["my result looks wrong", "wrong result"],
-     "Please raise it — genuinely. Bring it to the lab window and they will check the record, and repeat "
+     "Please do raise it. Bring it to the lab window and they will check the record, and repeat "
      "the test if there's any doubt. We would much rather double-check than get it wrong.",
      "Abeg raise am — for real. Bring am come lab window make dem check the record, and dem go repeat the test "
      "if doubt dey. We prefer to double-check than to make mistake.", _CTA_DESK),
@@ -548,7 +548,7 @@ _d("Orthopaedics", [
      "Consultation na our normal rate; X-ray and plaster get dem own charge. Billing go give you exact figure "
      "before dem do anything.", _CTA_DESK),
     ("surgery", ["will i need surgery orthopaedic", "bone operation"],
-     "Only if it's genuinely the best option for you, and the surgeon will explain exactly why before "
+     "Only if it's truly the best option for you, and the surgeon will explain exactly why before "
      "anything is decided. Many things heal perfectly well without an operation.",
      "Only if na really the best option for you, and the surgeon go explain why before dem decide anything. "
      "Plenty thing dey heal well without operation.", _CTA_HELP),
@@ -598,7 +598,7 @@ _d("Orthopaedics", [
 _d("Public Health", [
     ("what", ["what is public health department", "public health unit"],
      "Public Health looks after the health of the whole community — immunisation, health education, "
-     "outreach, and disease prevention. Prevention is genuinely cheaper and kinder than treatment.",
+     "outreach, and disease prevention. Prevention is far cheaper and kinder than treatment.",
      "Public Health dey look after the health of the whole community — immunisation, health education, "
      "outreach, and disease prevention. To prevent cheaper and better pass to treat.", _CTA_DESK),
     ("immunisation", ["immunisation", "vaccination for my baby", "vaccine schedule"],
@@ -653,9 +653,9 @@ _d("Public Health", [
      "schedule. Come early; e dey calm.", _CTA_DESK),
     ("travel", ["travel vaccination", "yellow card"],
      "Ask at the Public Health desk about travel vaccinations and certificates — availability varies, and "
-     "they'll tell you honestly what we can and can't do here.",
+     "they'll tell you plainly what we can and can't do here.",
      "Ask for Public Health desk about travel vaccination and certificate — e no dey always available, and dem "
-     "go tell you honestly wetin we fit and no fit do here.", _CTA_DESK),
+     "go tell you straight wetin we fit and no fit do here.", _CTA_DESK),
     ("water", ["clean water advice", "water safety"],
      "Our Public Health and Environmental Health teams both advise on safe water and sanitation. Come and "
      "ask — it's exactly what they're here for.",
@@ -672,7 +672,7 @@ _d("Public Health", [
      "Family planning service dey available and completely confidential. Public Health or O&G clinic fit help "
      "you.", _CTA_BOOK),
     ("report", ["report a health hazard", "public health complaint"],
-     "Please do report it — that's genuinely useful to us. Tell the Public Health desk, or file it through "
+     "Please do report it — that's really useful to us. Tell the Public Health desk, or file it through "
      "the complaint form and it'll reach the right people.",
      "Abeg report am — e dey really useful to us. Tell Public Health desk, or file am through complaint form "
      "and e go reach the right people.", _CTA_DESK),
@@ -820,7 +820,7 @@ _d("Finance & Accounts", [
      "Come cash office with your file number and the rough date; dem fit find the payment and print am again.",
      _CTA_DESK),
     ("overcharge", ["i was overcharged", "wrong bill", "billing mistake"],
-     "Please raise it — genuinely, and don't feel awkward about it. Take your receipt to the billing desk "
+     "Please raise it — truly, and don't feel awkward about it. Take your receipt to the billing desk "
      "and ask them to review it. If we've made a mistake we'll correct it.",
      "Abeg raise am — for real, no feel shy. Carry your receipt go billing desk make dem review am. If we make "
      "mistake, we go correct am.", _CTA_DESK),
@@ -952,7 +952,7 @@ _d("Administration & Human Resources", [
      "Training and development dey coordinated through Admin and the Director of Clinical Services & Training. "
      "Ask for Admin office.", _CTA_DESK),
     ("suggestion", ["i have a suggestion", "idea to improve the hospital"],
-     "We'd genuinely like to hear it — good ideas often come from patients and visitors. Use the feedback "
+     "We'd really like to hear it — good ideas often come from patients and visitors. Use the feedback "
      "form or drop it at the Admin office.",
      "We really wan hear am — good idea plenty times dey come from patient and visitor. Use the feedback form or "
      "drop am for Admin office.", "Tap 'Feedback' to share it."),
@@ -999,7 +999,7 @@ _d("Environmental Health", [
     ("dirty", ["the toilet is dirty", "this area is not clean", "report dirty ward",
                "the ward is dirty", "ward is dirty", "the place is dirty", "it is dirty here",
                "room is dirty", "not clean", "dirty", "needs cleaning", "no one has cleaned"],
-     "Thank you for telling us — please do, we genuinely want to know. Tell any staff member or reception "
+     "Thank you for telling us — please do, we truly want to know. Tell any staff member or reception "
      "and the cleaning team will be sent. You can also file it formally if it keeps happening.",
      "Thank you for telling us — abeg do, we really wan know. Tell any staff or reception and dem go send the "
      "cleaning team. You fit file am formally too if e dey happen again and again.",
@@ -1168,7 +1168,7 @@ _d("ICT", [
      "Correct instinct. We no dey ask for your password or payment enter personal account through message. If "
      "something no correct, call help desk before you do anything.", _CTA_DESK),
     ("suggestion", ["suggest a feature", "the app should have"],
-     "We'd love to hear it — this system genuinely improves from patient suggestions. Use the feedback form.",
+     "We'd love to hear it — this system actually improves from patient suggestions. Use the feedback form.",
      "We go like to hear am — this system dey really improve from patient suggestion. Use the feedback form.",
      "Tap 'Feedback' to tell us."),
     ("where", ["where is ict"],
@@ -1368,7 +1368,7 @@ _d("Internal Audit", [
     ("report_fraud", ["report fraud", "someone asked for a bribe", "extortion", "bribe",
                       "report a bribe", "asked me for money", "demanded money", "corruption",
                       "staff collected money", "illegal payment"],
-     "Thank you for speaking up — that takes courage and it genuinely helps the hospital. Report it through "
+     "Thank you for speaking up — that takes courage and it truly helps the hospital. Report it through "
      "the complaint form; you can do so ANONYMOUSLY, and it reaches management and Audit directly.",
      "Thank you say you talk — e need courage and e dey really help the hospital. Report am through complaint "
      "form; you fit do am ANONYMOUS, and e dey reach management and Audit direct.",
@@ -1420,7 +1420,7 @@ _d("Planning, Research & Statistics", [
      "Aggregate statistics dey available through official request — individual patient data no dey available at "
      "all.", _CTA_DESK),
     ("survey", ["patient survey", "can i give feedback"],
-     "Yes please — your feedback genuinely shapes what we improve. It takes about ten seconds.",
+     "Yes please — your feedback directly shapes what we improve. It takes about ten seconds.",
      "Yes abeg — your feedback dey really shape wetin we go improve. E no go take pass ten seconds.",
      "Tap 'Feedback' to rate your visit."),
     ("my_data", ["is my data used for research"],
@@ -1456,7 +1456,7 @@ _d("Public Affairs", [
      "Ask Public Affairs what's coming up — we'd be glad to see you there.",
      "Ask Public Affairs wetin dey come — we go happy to see you there.", _CTA_DESK),
     ("thanks", ["i want to thank the staff", "commend a nurse", "praise"],
-     "That would genuinely make someone's week — thank you. Leave it as feedback with the person's name and "
+     "That would make someone's week — thank you. Leave it as feedback with the person's name and "
      "we'll make sure they and their head of department hear it.",
      "That one go really sweet person belle — thank you. Leave am as feedback with the person name and we go make "
      "sure say dem and dem head of department hear am.", "Tap 'Feedback' to send your praise."),
@@ -1466,7 +1466,7 @@ _d("Public Affairs", [
      "Public Affairs fit tell you about our service, department and how to access dem. Reception get leaflet too.",
      _CTA_DESK),
     ("where", ["where is public affairs"],
-     "Public Affairs sits near the main reception, and they are genuinely happy to help you find "
+     "Public Affairs sits near the main reception, and they are always happy to help you find "
      "whoever or whatever you need. If you are unsure who to ask, start there.",
      "Public Affairs dey near the main reception, and dem dey really happy to help you find whoever "
      "or whatever you need. If you no sure who to ask, start from there.", _CTA_DESK),
@@ -1488,7 +1488,7 @@ _d("Laundry", [
      "Tell ward nurse and dem go change am. You no suppose lie down on dirty bedding — abeg talk, nobody go vex.",
      _CTA_DESK),
     ("own_clothes", ["can i bring my own wrapper", "own bedsheet"],
-     "Many patients do bring their own wrapper or towel and that's absolutely fine. Please label anything "
+     "Many patients do bring their own wrapper or towel and that's perfectly fine. Please label anything "
      "you'd hate to lose.",
      "Plenty patient dey bring dem own wrapper or towel and e dey okay. Abeg write your name for anything wey you "
      "no wan lose.", _CTA_HELP),
@@ -1512,7 +1512,7 @@ _d("Nursing Services", [
      "with you pass anybody during your stay — na dem be your first place to run go.", _CTA_DESK),
     ("call_nurse", ["how do i call a nurse", "need a nurse"],
      "Use the call bell by the bed, or ask any passing staff member. Never feel you're bothering them — "
-     "that's genuinely what they're there for.",
+     "that's exactly what they're there for.",
      "Use the call bell near the bed, or tell any staff wey dey pass. No feel say you dey disturb dem — na exactly "
      "wetin dem dey there for.", _CTA_DESK),
     ("pain", ["i am in pain", "pain relief"],
@@ -1546,7 +1546,7 @@ _d("Nursing Services", [
      "Doctor go decide with nursing team, and dem go give you notice plus discharge instruction. Abeg read the "
      "instruction — e dey important pass wetin people think.", _CTA_HELP),
     ("praise", ["thank a nurse", "the nurse was wonderful"],
-     "Please tell us — nursing is hard work and hearing this genuinely lifts a whole ward. Leave feedback "
+     "Please tell us — nursing is hard work and hearing this lifts a whole ward. Leave feedback "
      "with the nurse's name.",
      "Abeg tell us — nursing na hard work and to hear this dey really lift the whole ward. Leave feedback with the "
      "nurse name.", "Tap 'Feedback' to send your praise."),
@@ -1698,7 +1698,7 @@ _d("Catering Services", [
      _CTA_DESK),
     ("bring_food", ["can i bring food for my patient", "outside food"],
      "Please check with the nurse first — some patients are on restricted or special diets for medical "
-     "reasons, and the wrong food can genuinely set them back.",
+     "reasons, and the wrong food can really set them back.",
      "Abeg check with nurse first — some patient dey on restricted or special diet for medical reason, and wrong "
      "food fit really set dem back.", _CTA_DESK),
     ("special_diet", ["diabetic meal", "special diet", "no salt diet"],
@@ -1745,6 +1745,400 @@ _d("Catering Services", [
 # few natural variants, so "laboratory opening hours", "hours for the lab" and
 # "when is the lab open" all reach the same answer.
 # --------------------------------------------------------------------------
+# ============================================================ PAEDIATRICS
+_d("Paediatrics", [
+    ("what", ["what does paediatrics do", "what is paediatrics", "children clinic", "wetin children clinic dey do"],
+     "Paediatrics is our children's clinic — the doctors and nurses who look after children from "
+     "newborn to their teenage years. They handle everything from fevers and coughs to check-ups, "
+     "growth reviews and immunisations, in a space set up to put children at ease.",
+     "Paediatrics na our children clinic — the doctor and nurse wey dey look after pikin from newborn "
+     "reach teenage years. Dem dey handle fever, cough, check-up, growth check and immunization for "
+     "place wey go make pikin calm.",
+     _CTA_BOOK),
+    ("book", ["book paediatrics", "book children clinic", "see a children doctor", "appointment for my child"],
+     "Yes — you can book a children's clinic slot for your child. Weekday mornings are usually "
+     "calmest if your child's visit can wait. Bring your child's immunisation card and any old "
+     "notes along.",
+     "Yes, you fit book children clinic slot for your pikin. Weekday morning dey calm pass if the "
+     "visit fit wait. Carry your pikin immunization card and any old note come.",
+     _CTA_BOOK),
+    ("bring", ["what to bring paediatrics", "paediatrics what to bring", "children clinic documents", "wetin i go bring for children clinic"],
+     "Please bring your child's immunisation card, any medicines they are already taking, and a "
+     "note of what you've observed at home — when it started, what makes it better or worse. You "
+     "know your child best; that story helps the doctor most.",
+     "Abeg carry your pikin immunization card, any medicine wey dem dey take already, and wetin you "
+     "don notice for house — when e start, wetin dey make am better or worse. Na you know your "
+     "pikin pass; that story go help doctor well.",
+     _CTA_DESK),
+    ("immunisation", ["immunisation", "child immunisation", "vaccination for child", "child vaccination schedule"],
+     "Our children's clinic gives routine immunisations and keeps your child's card up to date each "
+     "visit. If you've missed any dose, don't worry — come in and the team will review the card and "
+     "plan the catch-ups with you.",
+     "Our children clinic dey give normal immunization and dem go update your pikin card every visit. "
+     "If you miss any dose, no worry — come make the team check the card and plan the catch-up with you.",
+     _CTA_BOOK),
+    ("fever_child", ["my child has fever", "sick child", "child fever what to do", "my pikin dey hot"],
+     "A sick child deserves to be seen — you don't have to guess at home. If your child is small, "
+     "unusually drowsy, refusing feeds or you're simply worried, bring them in; out of hours our "
+     "Accident & Emergency is open 24/7. Trust your instinct — you're right to check.",
+     "Sick pikin suppose see doctor — you no need guess for house. If your pikin small, dey sleep "
+     "pass normal, no gree feed, or you just dey worried, bring dem come; our A&E dey open 24/7. "
+     "Trust your mind — e good say you check.",
+     _CTA_DESK),
+    ("newborn", ["newborn check", "new baby checkup", "baby clinic", "newborn jaundice"],
+     "Congratulations! Newborns are seen in the children's clinic for routine checks, and our "
+     "neonatal team cares for babies who need extra help. If your newborn looks yellow, feeds "
+     "poorly or feels unusually hot or cold, come in the same day — little ones are checked quickly.",
+     "Congratulations o! Newborn dey come children clinic for normal check, and our neonatal team "
+     "dey care for babies wey need extra help. If your newborn yellow, no dey feed well, or dey "
+     "hot or cold pass normal, come that same day — small pikin dey check sharp sharp.",
+     _CTA_DESK),
+    ("growth", ["child growth check", "my child is not gaining weight", "child nutrition advice", "growth monitoring"],
+     "Growth reviews are a normal part of children's clinic visits — the team weighs and measures "
+     "your child and plots it on the card with you. If you're worried your child isn't gaining "
+     "weight or eating well, book a slot and bring any feeding notes; early worries are easiest to sort.",
+     "Growth check na normal part of children clinic visit — the team go weigh and measure your "
+     "pikin, dem go mark am for card with you. If you worry say your pikin no dey add weight or no "
+     "dey chop well, book slot come with feeding note — early worry easy to settle.",
+     _CTA_BOOK),
+    ("emergency", ["child emergency", "child accident", "my child swallowed something", "child emergency now"],
+     "For anything urgent — a fall, a burn, swallowing something, trouble breathing — come straight "
+     "to Accident & Emergency; it's open 24/7 and children are seen promptly. If you can, bring what "
+     "they swallowed or the medicine packet with you. Don't wait to book online.",
+     "For anything urgent — fall, burn, swallow something, breathing wahala — come straight to A&E; "
+     "e dey open 24/7 and pikin dey see quick. If you fit, carry wetin dem swallow or the medicine "
+     "pack come. No wait to book online.",
+     _CTA_DESK),
+    ("cost", ["paediatrics cost", "how much is children clinic", "child consultation fee", "children clinic price"],
+     "I'd rather not guess at a figure. Children's clinic fees follow the standard consultation "
+     "rates — the billing desk or the booking page will give you the current amount before you "
+     "commit to anything.",
+     "I no go guess figure. Children clinic fee follow the normal consultation rate — billing desk "
+     "or the booking page go give you the current amount before you pay anything.",
+     _CTA_DESK),
+    ("hours", ["paediatrics opening hours", "children clinic hours", "when is children clinic", "children clinic today"],
+     "The children's clinic runs on weekdays, and mornings are usually the calmest time. For "
+     "evenings, weekends or anything urgent, Accident & Emergency cares for children around the "
+     "clock. Today's times are on the booking page.",
+     "Children clinic dey run weekday, morning dey calm pass. For evening, weekend or anything "
+     "urgent, A&E dey care for pikin 24/7. Today time dey the booking page.",
+     _CTA_BOOK),
+    ("where", ["where is paediatrics", "where is children clinic", "paediatrics location", "children clinic direction"],
+     "I can't point you round the building myself, but reception will walk you straight to the "
+     "children's clinic — ask at the front desk or check the booking page for the location. "
+     "Staff will guide you and your little one the whole way.",
+     "I no fit point you inside building, but reception go direct you go children clinic — ask for "
+     "front desk or check the booking page for location. Staff go guide you and your pikin reach there.",
+     _CTA_DESK),
+    ("adolescent", ["teenager clinic", "adolescent health", "clinic for teenagers", "teen health talk"],
+     "Teenagers are welcome too — the children's team cares for patients right into their teenage "
+     "years, and they're used to questions young people find awkward. Anything your teen shares is "
+     "treated with respect and privacy.",
+     "Teenagers dey welcome too — the children team dey care for patient reach teenage years, and "
+     "dem use the kind question wey young people find hard to ask. Anything your teen talk na with "
+     "respect and privacy.",
+     _CTA_BOOK),
+    ("complaint", ["paediatrics complaint", "children clinic problem", "complain about children clinic", "children clinic no well"],
+     "I'm sorry something went wrong — especially when it involves your child. You can raise it "
+     "formally through the complaint form on this app and it will reach the right people, or speak "
+     "to the nurse in charge at the children's clinic straight away.",
+     "I dey sorry say wetin happen — especially when e concern your pikin. You fit raise am through "
+     "the complaint form for this app and e go reach the right people, or talk to the nurse in "
+     "charge for children clinic sharp sharp.",
+     _CTA_DESK),
+    ("results", ["child test results", "paediatrics results", "children lab results", "my pikin result"],
+     "Your child's results come back to the children's clinic, and the team will explain them in "
+     "plain language and what happens next. Ask at the clinic desk, or bring the child's folder — "
+     "results are always explained with you present.",
+     "Your pikin result go return to children clinic, and the team go explain am for plain language "
+     "and wetin next. Ask for clinic desk, or carry the pikin folder come — na with you dem go "
+     "explain am.",
+     _CTA_DESK),
+])
+
+# ============================================================ DENTAL SERVICES
+_d("Dental Services", [
+    ("what", ["dental services", "what does dental do", "what is dental services", "about the dental clinic", "wetin dental clinic dey do"],
+     "Dental Services looks after your teeth and mouth — check-ups and cleaning, fillings, "
+     "extractions, dentures and urgent toothache care. Regular check-ups catch small problems "
+     "before they become big, painful ones.",
+     "Dental Services dey look after your teeth and mouth — check-up and cleaning, filling, "
+     "extraction, denture and urgent toothache care. Regular check-up dey catch small problem "
+     "before e turn big painful one.",
+     _CTA_BOOK),
+    ("book", ["book dental appointment", "dental booking", "see a dentist", "book tooth checkup"],
+     "You can book a dental slot right on this app. If it's your first visit, a check-up and "
+     "cleaning is a gentle way to start — the dentist will examine, explain and plan anything "
+     "else with you first.",
+     "You fit book dental slot for this app. If na your first visit, check-up and cleaning na the "
+     "gentle way to start — dentist go examine, explain, and plan anything else with you first.",
+     _CTA_BOOK),
+    ("bring", ["dental what to bring", "what to bring dentist", "dental documents", "wetin i go bring for dentist"],
+     "Just yourself and, if you have them, any previous dental records or X-rays — they help the "
+     "dentist see your history at a glance. If you're on any regular medicines, bring the list "
+     "along too.",
+     "Just you, and if you get am, any old dental record or X-ray — e go help dentist see your "
+     "history quick. If you dey take any medicine regular, carry the list come too.",
+     _CTA_DESK),
+    ("toothache", ["bad toothache", "tooth pain relief", "urgent toothache", "my tooth dey pain me"],
+     "A bad toothache can stop your whole day — come in and we'll get you comfortable. Dental "
+     "urgencies are seen promptly, and if it's after hours, Accident & Emergency can help with "
+     "the pain until the dental team sees you.",
+     "Bad toothache fit spoil your whole day — come make we comfort you. Dental emergency dey see "
+     "quick, and if e pass working hours, A&E fit help with the pain before dental team see you.",
+     _CTA_DESK),
+    ("extraction", ["tooth removal", "having a tooth out", "dental extraction", "wax go remove my tooth"],
+     "If a tooth needs to come out, the dentist will examine it, explain the plan and make sure "
+     "the area is fully numbed before anything happens — you'll feel pressure, not pain. Ask as "
+     "many questions as you like before you agree to anything.",
+     "If tooth suppose comot, dentist go examine am, explain the plan, and make the place num well "
+     "before anything — you go feel pressure, no be pain. Ask any question wey you wan ask before "
+     "you agree.",
+     _CTA_DESK),
+    ("cleaning", ["teeth cleaning", "scaling and polishing", "dental cleaning booking", "clean my teeth"],
+     "Cleaning (scaling and polishing) is one of the kindest things you can do for your teeth — "
+     "it removes the build-up brushing can't, and your mouth feels new afterwards. You can book "
+     "it as a stand-alone visit.",
+     "Cleaning (scaling and polishing) na one of the best thing wey you fit do for your teeth — e "
+     "remove the build-up wey brush no fit remove, and your mouth go fresh after. You fit book am "
+     "as e own visit.",
+     _CTA_BOOK),
+    ("children_dental", ["child dental", "children teeth", "my child tooth", "pickin teeth"],
+     "Children are welcome at the dental clinic — early visits build comfortable, confident "
+     "patients for life. The team keeps it gentle and friendly, and will show you and your child "
+     "how to keep those little teeth clean.",
+     "Pikin dey welcome for dental clinic — early visit go make dem grow dey calm and sure of "
+     "dentist. The team dey gentle and friendly, and dem go show you and your pikin how to keep "
+     "the small teeth clean.",
+     _CTA_BOOK),
+    ("dentures", ["dentures", "false teeth", "replacement teeth", "denture fitting"],
+     "Dentures and other tooth replacements are discussed at the dental clinic — the dentist will "
+     "examine, talk through the options that suit you and give you a written estimate before "
+     "anything is made. Nothing happens without your say-so.",
+     "Denture and other teeth replacement — you go discuss am for dental clinic — dentist go "
+     "examine, talk the options wey suit you, and give you written estimate before dem make "
+     "anything. Nothing go happen without your approval.",
+     _CTA_DESK),
+    ("cost", ["dental cost", "how much is dentist", "tooth extraction price", "dental fee"],
+     "Dental costs depend on exactly what your teeth need, so I won't guess a figure. You'll get "
+     "a written estimate at the billing desk before any treatment is booked — no surprises.",
+     "Dental cost depend on wetin your teeth need, so I no go guess figure. You go get written "
+     "estimate for billing desk before any treatment — no surprise.",
+     _CTA_DESK),
+    ("hours", ["dental opening hours", "dental clinic hours", "when is dental open", "dental today"],
+     "The dental clinic runs on weekdays; the booking page shows today's slots. For urgent "
+     "tooth trouble outside those hours, come through Accident & Emergency and they'll get you "
+     "started.",
+     "Dental clinic dey run weekday; booking page go show today slots. For urgent tooth wahala "
+     "outside those hours, enter through A&E and dem go start your care.",
+     _CTA_BOOK),
+    ("where", ["where is dental clinic", "dental location", "dental clinic direction", "where dentist dey"],
+     "Ask at reception and they'll point you straight to the dental clinic — or check the "
+     "booking page, which shows the location with your appointment. You won't have to hunt for it.",
+     "Ask for reception and dem go direct you go dental clinic — or check booking page, e dey "
+     "show location with your appointment. You no go dey find am up and down.",
+     _CTA_DESK),
+    ("complaint", ["dental complaint", "complain about dentist", "dental treatment problem", "dental no well"],
+     "I'm sorry your dental visit wasn't right. You can log it on the complaint form in this app "
+     "— it reaches the dental team's lead and the hospital's complaint desk — or speak to the "
+     "dental nurse in charge before you leave.",
+     "I dey sorry say your dental visit no go well. You fit log am for the complaint form for "
+     "this app — e go reach dental team lead and the hospital complaint desk — or talk to the "
+     "dental nurse in charge before you comot.",
+     _CTA_DESK),
+])
+
+# ==================================================== OPHTHALMOLOGY (EYE CLINIC)
+_d("Ophthalmology (Eye Clinic)", [
+    ("what", ["what does ophthalmology do", "what is eye clinic", "about eye clinic", "wetin eye clinic dey do"],
+     "The Eye Clinic (Ophthalmology) cares for your vision — routine eye checks, glasses "
+     "prescriptions, eye infections, injuries and follow-up for long-term eye conditions. "
+     "Bringing your old glasses or prescription helps the team compare and track changes.",
+     "The Eye Clinic (Ophthalmology) dey care for your sight — normal eye check, glasses, eye "
+     "infection, injury and follow-up for long-term eye matter. Carry your old glasses or "
+     "prescription come — e go help the team compare.",
+     _CTA_BOOK),
+    ("book", ["book eye clinic", "eye test booking", "book ophthalmology", "see eye doctor"],
+     "You can book an eye clinic slot on this app. If your visit can wait, weekday mornings are "
+     "usually calmest — and bring any glasses, prescriptions or eye drops you're already using.",
+     "You fit book eye clinic slot for this app. If your visit fit wait, weekday morning dey calm "
+     "pass — carry any glasses, prescription or eye drop wey you dey use come.",
+     _CTA_BOOK),
+    ("bring", ["eye clinic what to bring", "what to bring ophthalmology", "eye documents", "wetin i go bring for eye clinic"],
+     "Bring your old glasses or last prescription, any eye drops you use, and your list of "
+     "regular medicines — several of them matter to eye care. If someone usually helps you read "
+     "or walk, bring them along too; your eyes may be dilated for checking.",
+     "Carry your old glasses or last prescription, any eye drop wey you dey use, and the list of "
+     "your regular medicine — some of dem matter for eye care. If person dey help you read or "
+     "waka, bring dem come too; dem fit widen your eye for check.",
+     _CTA_DESK),
+    ("red_eye", ["red eye", "eye infection", "stingy eye", "eye discharge"],
+     "A red, sticky or painful eye is worth having looked at properly — please don't just buy "
+     "drops from a stall. Book into the eye clinic, and if the eye is very painful or your "
+     "vision is affected, come in promptly rather than wait.",
+     "Red eye wey dey sting or pain you suppose see doctor — abeg no just buy drop for stall. Book "
+     "eye clinic, and if the eye dey pain you well or your vision dey affected, come sharp no wait.",
+     _CTA_BOOK),
+    ("injury", ["eye injury", "something in my eye", "eye accident", "chemical in eye"],
+     "For anything in the eye that shouldn't be — a scratch, a foreign body, a splash of "
+     "chemical — come straight to Accident & Emergency, day or night. Don't rub it and don't "
+     "try to remove anything yourself; let the team look after your sight.",
+     "For anything wey enter your eye wey no suppose dey — scratch, foreign thing, chemical splash "
+     "— come straight to A&E, day or night. No rub am and no try remove am yourself; make the "
+     "team protect your sight.",
+     _CTA_DESK),
+    ("vision_change", ["sudden vision change", "blurry vision suddenly", "losing sight", "my eye dey dim"],
+     "Any sudden change in your vision deserves same-day attention — come in promptly and tell "
+     "reception it's your sight. Gradual changes can wait for a booked clinic slot, but sudden "
+     "ones should never wait at home.",
+     "Any sudden change for your vision deserve same-day attention — come sharp and tell reception "
+     "say na your sight. The one wey dey come slow fit wait for booked slot, but sudden one no "
+     "suppose wait for house.",
+     _CTA_DESK),
+    ("glasses", ["glasses", "reading glasses", "prescription glasses", "eye glass"],
+     "The clinic's refraction unit tests your vision and, if you need glasses, gives you a "
+     "current prescription to fill. Bring your old glasses along — comparing old and new helps "
+     "fine-tune the result.",
+     "The clinic refraction unit go test your vision and if you need glasses, dem go give you "
+     "current prescription wey you go use. Carry your old glasses come — to compare old and new "
+     "go make the result better.",
+     _CTA_BOOK),
+    ("children_eye", ["child eye test", "children vision", "my child eye", "pickin eye"],
+     "Children's eyes can be checked gently at the eye clinic — squints, lazy eye and school "
+     "vision worries are all routine here. Early checks make treatment easier, so if you or a "
+     "teacher has noticed something, book a children's eye slot.",
+     "Pikin eye dey check gently for eye clinic — squint, lazy eye and school vision wahala na "
+     "normal here. Early check make treatment easy, so if you or their teacher notice something, "
+     "book children eye slot.",
+     _CTA_BOOK),
+    ("cost", ["eye clinic cost", "how much is eye test", "ophthalmology price", "eye clinic fee"],
+     "Eye clinic fees depend on the visit type — a routine test differs from treatment — so I "
+     "won't guess a figure. The billing desk will confirm the amount for your visit before "
+     "anything happens.",
+     "Eye clinic fee depend on the visit type — normal test different from treatment — so I no go "
+     "guess figure. Billing desk go confirm the amount for your visit before anything.",
+     _CTA_DESK),
+    ("hours", ["eye clinic hours", "ophthalmology opening hours", "when is eye clinic", "eye clinic today"],
+     "The eye clinic runs on weekdays and the booking page shows the current slots. For sudden "
+     "eye problems in the evening or at night, Accident & Emergency is open 24/7 and will "
+     "protect your sight first.",
+     "Eye clinic dey run weekday and booking page go show the current slots. For sudden eye "
+     "wahala for evening or night, A&E dey open 24/7 and dem go protect your sight first.",
+     _CTA_BOOK),
+    ("where", ["where is eye clinic", "ophthalmology location", "eye clinic direction", "where eye doctor dey"],
+     "Reception will point you straight to the eye clinic — or the booking page shows the "
+     "location with your appointment. If walking across the grounds is hard for you, tell the "
+     "front desk; they'll help.",
+     "Reception go direct you straight go eye clinic — or booking page dey show location with "
+     "your appointment. If to waka far hard for you, tell front desk; dem go help.",
+     _CTA_DESK),
+    ("complaint", ["eye clinic complaint", "complain about eye clinic", "ophthalmology problem", "eye clinic no well"],
+     "I'm sorry your eye visit didn't go well — your sight is too important to leave with a bad "
+     "feeling. Raise it on the complaint form in this app, or speak to the nurse in charge at "
+     "the clinic before you leave.",
+     "I dey sorry say your eye visit no go well — your sight too important to leave with bad "
+     "feeling. Raise am for the complaint form for this app, or talk to the nurse in charge for "
+     "the clinic before you comot.",
+     _CTA_DESK),
+])
+
+# ==================================================== ENT (EAR, NOSE & THROAT)
+_d("ENT (Ear, Nose & Throat)", [
+    ("what", ["what does ent do", "what is ent clinic", "ear nose throat clinic", "wetin ent clinic dey do"],
+     "The ENT clinic looks after ears, nose and throat — hearing checks, ear infections, "
+     "sinus and tonsil trouble, nosebleeds and voice concerns. The audiology unit does proper "
+     "hearing tests, so a hearing worry is well worth bringing here.",
+     "The ENT clinic dey look after ear, nose and throat — hearing check, ear infection, sinus "
+     "and tonsil wahala, nosebleed and voice matter. The audiology unit dey do correct hearing "
+     "test, so hearing worry suppose come here.",
+     _CTA_BOOK),
+    ("book", ["book ent appointment", "ent booking", "see ent doctor", "book ear clinic"],
+     "You can book an ENT slot on this app. Bring any previous hearing tests, scans or "
+     "prescriptions — the specialist can decide much faster with them in hand.",
+     "You fit book ENT slot for this app. Carry any old hearing test, scan or prescription come — "
+     "the specialist go decide quick when dem see am.",
+     _CTA_BOOK),
+    ("bring", ["ent what to bring", "what to bring ent clinic", "ent documents", "wetin i go bring for ent"],
+     "Bring any old hearing tests or scans, the medicines you're using, and — for hearing "
+     "questions — the person you usually talk with, if they can come. Two ears and two "
+     "perspectives make the assessment easier.",
+     "Carry any old hearing test or scan, the medicine wey you dey use, and — for hearing matter — "
+     "the person wey you dey usually talk with, if dem fit come. Two ear and two perspective go "
+     "make the check easy.",
+     _CTA_DESK),
+    ("ear_pain", ["ear pain", "earache", "my ear dey pain me", "blocked ear pain"],
+     "Earache is miserable — you don't have to endure it. Book into ENT and let the doctor look "
+     "inside the ear properly. If the pain is severe, comes with fever, or it's a small child "
+     "suffering, come in the same day.",
+     "Earache dey pain person well well — you no suppose endure am. Book ENT make doctor look "
+     "inside the ear well. If the pain strong, e come with fever, or na small pikin, come that "
+     "same day.",
+     _CTA_BOOK),
+    ("hearing", ["hearing loss", "i can't hear well", "hearing test", "my ear dey block"],
+     "A hearing worry deserves a proper hearing test, not a guess — our audiology unit does "
+     "exactly that, and the ENT doctor reviews the result with you. Sudden hearing loss should "
+     "be seen the same day; gradual changes can take a booked slot.",
+     "Hearing wahala deserve correct hearing test, no be guess — our audiology unit dey do am, and "
+     "the ENT doctor go review the result with you. Sudden hearing loss suppose see doctor same "
+     "day; the slow one fit take booked slot.",
+     _CTA_BOOK),
+    ("throat", ["sore throat", "strep throat", "tonsils", "my throat dey pain me"],
+     "A sore throat that won't settle, or tonsils that keep flaring, is exactly what the ENT "
+     "clinic assesses. Come in and let a doctor look properly — you'll get a clear plan rather "
+     "than guesses from a pharmacy counter.",
+     "Sore throat wey no gree settle, or tonsil wey dey flare every time — na wetin ENT clinic dey "
+     "check. Come make doctor look am well — you go get clear plan, no be guess from chemist.",
+     _CTA_BOOK),
+    ("nosebleed", ["nosebleed", "my nose dey bleed", "nose bleeding often", "bleeding nose"],
+     "A one-off nosebleed usually settles with simple first aid, but bleeding that keeps coming "
+     "back should be looked at — book into ENT. If a nosebleed won't stop now, come straight to "
+     "Accident & Emergency.",
+     "One-time nosebleed dey usually settle with simple first aid, but the one wey dey come back "
+     "every time suppose see doctor — book ENT. If nosebleed no gree stop now, come straight to A&E.",
+     _CTA_DESK),
+    ("foreign_object", ["something stuck in ear", "something in nose", "child put bead in ear", "insect in ear"],
+     "If something is stuck in an ear or nose — a bead, a button, an insect — please don't poke "
+     "or pull it. Come in and the team will remove it safely with the right instruments; "
+     "children are handled gently and quickly.",
+     "If something stuck for ear or nose — bead, button, insect — abeg no poke am or pull am. Come "
+     "make the team remove am safe with the right instrument; pikin go handle am gentle and quick.",
+     _CTA_DESK),
+    ("sinus", ["sinus problem", "blocked nose always", "catarrh", "sinusitis"],
+     "A nose that's always blocked, facial pressure and stubborn catarrh are routine ENT "
+     "questions. The doctor will examine and talk through what will actually help, rather than "
+     "you cycling through counter medicines on your own.",
+     "Nose wey dey block every time, face pressure and stubborn catarrh na normal ENT matter. The "
+     "doctor go examine and talk wetin go really help — instead make you dey cycle counter "
+     "medicine alone.",
+     _CTA_BOOK),
+    ("cost", ["ent cost", "how much is ent clinic", "hearing test price", "ent fee"],
+     "ENT fees depend on the visit and any tests — I'd rather not guess. The billing desk will "
+     "give you the figure for your visit before anything is booked.",
+     "ENT fee depend on the visit and any test — I no go guess. Billing desk go give you the "
+     "figure for your visit before dem book anything.",
+     _CTA_DESK),
+    ("hours", ["ent opening hours", "ent clinic hours", "when is ent clinic", "ent today"],
+     "The ENT clinic runs on weekdays — the booking page shows today's slots. Urgent ear, nose "
+     "or throat problems outside those hours go through Accident & Emergency, open 24/7.",
+     "ENT clinic dey run weekday — booking page dey show today slots. Urgent ear, nose or throat "
+     "wahala outside those hours dey go through A&E, wey dey open 24/7.",
+     _CTA_BOOK),
+    ("where", ["where is ent clinic", "ent location", "ent direction", "where ent dey"],
+     "Ask at reception and they'll walk you to the ENT clinic, or check the location shown with "
+     "your appointment on the booking page. The audiology unit is signposted from the same place.",
+     "Ask for reception and dem go walk you go ENT clinic, or check the location wey dey show "
+     "with your appointment for booking page. The audiology unit dey signpost from the same place.",
+     _CTA_DESK),
+    ("complaint", ["ent complaint", "complain about ent", "ent clinic problem", "ent no well"],
+     "I'm sorry your ENT visit wasn't right. Please raise it on the complaint form in this app "
+     "so it reaches the clinic lead and the hospital complaint desk, or speak to the nurse in "
+     "charge before you leave.",
+     "I dey sorry say your ENT visit no go well. Abeg raise am for the complaint form for this "
+     "app make e reach clinic lead and the hospital complaint desk, or talk to the nurse in "
+     "charge before you comot.",
+     _CTA_DESK),
+])
+
 _SHORT = {
     "Internal Medicine": ["internal medicine", "physician", "medical clinic"],
     "Surgery": ["surgery", "surgical", "surgeon", "operation"],
@@ -1767,6 +2161,10 @@ _SHORT = {
     "Public Affairs": ["public affairs", "public relations", "enquiries"],
     "Laundry": ["laundry", "linen"],
     "Nursing Services": ["nursing", "nurse", "matron", "apex nurse"],
+    "Paediatrics": ["paediatrics", "pediatrics", "children clinic", "child health"],
+    "Dental Services": ["dental", "dentist", "tooth"],
+    "Ophthalmology (Eye Clinic)": ["ophthalmology", "eye clinic", "eye"],
+    "ENT (Ear, Nose & Throat)": ["ent", "ear nose throat", "ent clinic"],
     "Radiology / Imaging": ["radiology", "imaging", "x ray", "xray", "scan", "ultrasound"],
     "Family Medicine / General Outpatient": ["family medicine", "general outpatient", "gopd",
                                              "general clinic", "outpatient"],

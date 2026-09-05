@@ -59,18 +59,7 @@ dict(cat="laboratory", intent="lab_results", kw=[
  cta="Ask the front desk, or say talk to a human."),
 
 # ---------------------------------------------------------------- DENTAL / EYE
-dict(cat="dental", intent="dental", kw=[
-    "dental","dentist","tooth","toothache","teeth","tooth pain","dental clinic","bleeding gums",
-    "clean my teeth","dental appointment"],
- en="We've got you covered for smiles — our dental team handles check-ups, cleaning, fillings, and urgent tooth pain. For a bad toothache, don't wait; come in and we'll get you comfortable quickly. Shall I book you a dental slot?",
- pcm="We get you covered for smile o — our dental team dey handle check-up, cleaning, filling, and urgent tooth pain. If tooth dey pain you well, no wait; come make we make you comfortable quick. Make I book you dental slot?",
- cta="Open Book a visit — the address is on this reply."),
-dict(cat="ophthalmology", intent="eye", kw=[
-    "eye","eyes","ophthalmology","eye clinic","vision","eyesight","eye check","glasses","eye pain",
-    "blurry vision","eye test"],
- en="Your eyes deserve expert care, and our eye clinic is here for you — from routine vision checks and glasses to urgent eye problems. If you have sudden vision changes or eye pain, please come in promptly. Would you like me to book an eye review?",
- pcm="Your eye deserve expert care o, and our eye clinic dey here for you — from normal vision check and glasses to urgent eye wahala. If your eye sight suddenly change or eye dey pain you, abeg come sharp. You wan make I book eye review?",
- cta="Open Book a visit — the address is on this reply."),
+# dental & eye now live in the full DEPARTMENT library (kb_departments_full.py — F-042)
 
 # ---------------------------------------------------------------- ICU / NEONATAL / PAEDS
 dict(cat="icu", intent="icu_visiting", kw=[
@@ -78,12 +67,8 @@ dict(cat="icu", intent="icu_visiting", kw=[
  en="We know how worrying it is when a loved one is in ICU, and we're doing everything for them. For their safety, visiting is in short, guided windows with one or two family members at a time. The nursing lead will give you a clear update at each window. Would you like me to find your family's visiting time?",
  pcm="We know say e dey worry person when person wey you love dey ICU, and we dey do everything for dem. For their safety, visiting na short window with one or two family at a time. The nursing lead go give you clear update each window. You wan make I find your family visiting time?",
  cta="Ask the front desk, or say talk to a human."),
-dict(cat="paediatrics", intent="paeds", kw=[
-    "child","children","paediatrics","pediatrics","my baby","sick child","child clinic","child fever",
-    "kids doctor","child appointment","immunization","vaccination"],
- en="Your little one is in caring hands. Our paediatric team sees children for illness, check-ups, and immunisations in a friendly, child-calming space. For a very young baby with fever, please come in promptly rather than wait. Shall I book a children's clinic slot?",
- pcm="Your pikin dey safe hands o. Our children team dey see pikin for sickness, check-up, and immunization for friendly place wey go calm pikin. If small baby get fever, abeg come sharp sharp, no wait. Make I book children clinic slot?",
- cta="Open Book a visit — the address is on this reply."),
+# paediatrics now lives in the full DEPARTMENT library (kb_departments_full.py — F-042)
+
 dict(cat="neonatal", intent="neonatal", kw=[
     "nicu","neonatal","newborn","new baby","premature","baby in nicu","visit newborn"],
  en="Congratulations on your new baby, and we understand the worry when they need extra care. Our neonatal team are specialists in tiny patients, and we keep parents closely involved with guided visits and clear updates. Would you like today's update time for your baby?",

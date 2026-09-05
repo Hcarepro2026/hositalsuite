@@ -21,6 +21,7 @@ When a hospital signs up, they are the Data Controller. You (Hcarepro) are the D
 | 8 | **Sentry** (if enabled) | Error tracking | Stack traces, request path, user ID (if logged in), no patient data by default | US/EU | Sentry DPA |
 | 9 | **OpenStreetMap** | Map tiles for branch location | No personal data — only map imagery requests, no patient data sent | EU | OSM policy |
 | 10 | **Supabase Storage / Cloudflare R2 / AWS S3** (when you move from `STORAGE_BACKEND=db`) | Object storage for photos, PDFs, backups | Complaint evidence photos, inspection photos, hospital logo, generated PDFs, backup zips | Same region as DB if Supabase Storage, or chosen R2/S3 region | Same as DB provider |
+| 11 | **Groq / Google Gemini / OpenRouter** (AI fallback chain — only when AI_FALLBACK=1 and the hospital enables it) | Generates assistant-chat replies when the hospital's own prepared answers can't | The patient's typed chat message and recent conversation history (no hospital metadata beyond public info) | US (Groq, OpenRouter) / provider regions (Google) — cross-border | Each provider's API terms; disclose in privacy notice §3 (F-036) |
 
 ## What to do with this list
 

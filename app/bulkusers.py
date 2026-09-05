@@ -302,7 +302,9 @@ def build_preview(org_id: int, raw_rows: list[dict], *,
     """Validate every row and describe exactly what will happen to it."""
     depts = {d.name.strip().lower(): d for d in
              db.session.query(Department).filter_by(org_id=org_id).all()}
-    existing_users = {u.username.lower() for u in db.session.query(User).all()}
+    # F-021: uniqueness is per hospital — only THIS org's names are taken
+    existing_users = {u.username.lower()
+                      for u in db.session.query(User).filter_by(org_id=org_id).all()}
     existing_phones = {(u.phone or "").strip(): u.name
                        for u in db.session.query(User).filter_by(org_id=org_id).all()
                        if u.phone}
