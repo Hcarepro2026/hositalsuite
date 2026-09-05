@@ -8,12 +8,17 @@ Founder requirement: adjust queueing time based on available patients at:
 
 Design for Africa: slow internet, low battery, works offline with cached averages.
 
-How it works (Little's Law + Exponential Moving Average + Load Factor):
-- Each stage has historical avg_seconds per hour_of_day + day_of_week
-- Real-time load: count of open JourneySegments in that stage
-- Staff availability: count of active DoctorSessions, WorkClaims, UserPresence
-- Adaptive: if load high and staff low, estimated wait goes up
-- Free: no ML API, just math that runs in 5ms on cheap phone
+How it works (Little's Law + Exponential Moving Average):
+- Each stage has historical avg_seconds per hour_of_day + day_of_week (EMA alpha 0.3)
+- Wait ≈ (patients ahead of YOU) ÷ (staff ÷ seconds_per_patient) — staff enters
+  the math exactly ONCE, as throughput (F-014 fix; the old dual load/staff
+  factor double-penalized low staffing and went deaf above ~4 staff)
+- Real position via position_in_stage() — no more "everyone sees the same wait"
+  (F-013 fix; the old code hardcoded position=0 for every journey estimate)
+- Fast Track shortens the wait WITHIN a triage tier only (effective position
+  halved); it can never express cross-tier priority (F-012, enforced in the
+  queue ordering and pinned by tests)
+- Free: no ML API, just math that runs in ~5ms on a cheap phone
 
 Multi-hospital: per org_id, per stage, per hour, per day.
 
@@ -229,47 +234,146 @@ def count_staff_available(org_id: int, stage: str) -> int:
     return 1
 
 def estimate_wait_minutes(org_id: int, stage: str, position: int = 0, is_fast_track: bool = False, now: datetime | None = None) -> int:
-    """
-    Smart estimate: (position * avg) / staff_available * load_factor * fast_track_factor
+    """Wait estimate for ONE patient, from their REAL place in line.
 
-    position: 0-indexed, 0 = next, 1 = 2nd, etc.
-    is_fast_track: elderly/pregnant/child/wheelchair — premium, seen sooner
+    F-014 fix (2026-09-04 audit): the old formula multiplied the base wait by
+    BOTH a load factor containing staff AND a separate staff factor, so low
+    staffing was punished twice; the staff factor floored at 0.5, which made
+    everything stop responding above ~4 staff. It now applies staff EXACTLY
+    once, via throughput (Little's Law):
+
+        wait ≈ (patients ahead of you) ÷ (staff_count ÷ avg_seconds_per_patient)
+
+    `position` = number of patients AHEAD of you in this stage (0 = you are
+    next). All production callers already pass exactly that (queue index or
+    same-stage count created before you).
+
+    F-013: journey estimators below now derive this from live data instead of
+    hardcoding 0 — see position_in_stage().
+
+    is_fast_track: priority WITHIN the same triage tier — modelled as being
+    seen ahead of roughly half of the same-tier queue (effective position
+    halved, floored at 0). It NEVER lets the estimate cross a clinical
+    priority tier; see F-012 test in tests/test_queue_estimator.py.
     """
     now = now or now_naive()
-    avg_sec = get_historical_avg(org_id, stage, now)
-    open_count = count_open_segments(org_id, stage)
-    staff_count = count_staff_available(org_id, stage)
+    avg_sec = max(30, get_historical_avg(org_id, stage, now))
+    staff_count = max(1, count_staff_available(org_id, stage))
 
-    # Base: if you are 3rd in line, wait = 3 * avg per patient
-    base_min = ((position + 1) * avg_sec) / 60.0
+    # Little's Law, applied ONCE: patients served per second by this stage.
+    throughput_per_sec = staff_count / float(avg_sec)
 
-    # Load factor: if many patients open in stage, system slower
-    # load_factor = 1 + (open_count / (staff_count*5)) — capped 2.0
-    load_factor = 1.0 + min(open_count / max(1, staff_count * 5), 1.0)
+    ahead = max(0, int(position or 0))
+    if is_fast_track:
+        # Priority within the tier: pulled ahead of about half the queue.
+        ahead = ahead // 2
 
-    # Staff factor: if few staff, slower — inverse
-    # staff_factor = 1 / staff_count, but min 0.5 (more staff = faster)
-    staff_factor = max(0.5, 2.0 / max(1, staff_count))
+    wait_min = (ahead / throughput_per_sec) / 60.0
 
-    # Fast track: 50% faster
-    fast_factor = 0.5 if is_fast_track else 1.0
-
-    # Time of day factor: lunch 13-14 slower, morning faster
+    # Time of day friction: lunch 13-14 slower, late afternoon slower.
     hour = now.hour
-    time_factor = 1.2 if 13 <= hour <= 14 else 1.0
-    time_factor = 1.3 if hour >= 16 else time_factor  # late afternoon slower
+    time_factor = 1.2 if 13 <= hour <= 14 else (1.3 if hour >= 16 else 1.0)
+    wait_min *= time_factor
 
-    estimated = base_min * load_factor * staff_factor * fast_factor * time_factor
+    # Clamp: at least 1 min (you still wait to be called), at most 3 hours.
+    return max(1, min(180, int(wait_min)))
 
-    # Clamp: min 1 min, max 180 min (3h)
-    estimated = max(1, min(180, int(estimated)))
 
-    return estimated
+def position_in_stage(org_id: int, stage: str, *, intake=None, visit=None) -> int:
+    """How many patients are AHEAD of this one in this stage, right now.
+
+    F-013 fix: the personal ETA used to hardcode position=0, so every patient
+    in a stage saw the same wait. This counts the real competition in the
+    same sources count_open_segments() uses, strictly before this patient:
+
+      * JourneySegment rows in the stage, entered before mine
+      * ReceptionIntake rows in the stage, created today before mine
+      * VisitOnward rows pending for the destination, sent before mine
+
+    Falls back to the stage's full open count when the patient's own row
+    cannot be located (e.g. estimating a stage they have not entered yet —
+    they would join behind everyone there).
+    """
+    today_start = datetime.combine(now_naive().date(), datetime.min.time())
+
+    try:
+        # --- my own marker in this stage
+        mine = None
+        q = db.session.query(JourneySegment).filter(
+            JourneySegment.org_id == org_id,
+            JourneySegment.stage == stage,
+            JourneySegment.ended_at.is_(None))
+        if visit is not None and getattr(visit, "id", None):
+            mine = q.filter(JourneySegment.visit_id == visit.id).first()
+        if mine is None and intake is not None and getattr(intake, "id", None):
+            mine = q.filter(JourneySegment.intake_id == intake.id).first()
+
+        ahead = 0
+        # `placed` = we located this patient in this stage, so a position of 0
+        # is a REAL answer ("you are next"), not a failure to find them.
+        placed = mine is not None
+        if mine is not None and getattr(mine, "entered_at", None):
+            ahead += db.session.query(JourneySegment).filter(
+                JourneySegment.org_id == org_id,
+                JourneySegment.stage == stage,
+                JourneySegment.ended_at.is_(None),
+                db.or_(
+                    JourneySegment.entered_at < mine.entered_at,
+                    db.and_(JourneySegment.entered_at == mine.entered_at,
+                            JourneySegment.id < mine.id),
+                )).count()
+
+        # --- reception desk stages: the intake queue
+        if stage in ("RECEPTION", "BILLING", "PAYMENT", "HIMS", "TRIAGE"):
+            if intake is not None and getattr(intake, "stage", None) == stage \
+                    and getattr(intake, "created_at", None):
+                placed = True
+                ahead += db.session.query(ReceptionIntake).filter(
+                    ReceptionIntake.org_id == org_id,
+                    ReceptionIntake.stage == stage,
+                    ReceptionIntake.created_at >= today_start,
+                    ReceptionIntake.created_at < intake.created_at).count()
+
+        # --- onward destinations: pending referrals sent before mine
+        if stage in ("LABORATORY", "PHARMACY", "BILLING_OUT", "MEGALEX",
+                     "LAHSMA", "EMERGENCY") and visit is not None:
+            my_onward = (db.session.query(VisitOnward)
+                         .filter(VisitOnward.org_id == org_id,
+                                 VisitOnward.visit_id == visit.id,
+                                 VisitOnward.destination == stage,
+                                 VisitOnward.status == "PENDING")
+                         .order_by(VisitOnward.sent_at.asc()).first())
+            placed = True
+            if my_onward is not None and getattr(my_onward, "sent_at", None):
+                ahead += db.session.query(VisitOnward).filter(
+                    VisitOnward.org_id == org_id,
+                    VisitOnward.destination == stage,
+                    VisitOnward.status == "PENDING",
+                    VisitOnward.sent_at >= today_start,
+                    VisitOnward.sent_at < my_onward.sent_at).count()
+            else:
+                # referred here but no row yet — join behind everyone pending
+                ahead += db.session.query(VisitOnward).filter(
+                    VisitOnward.org_id == org_id,
+                    VisitOnward.destination == stage,
+                    VisitOnward.status == "PENDING",
+                    VisitOnward.sent_at >= today_start).count()
+
+        if placed:
+            return ahead
+    except Exception:                                    # noqa: BLE001 — an estimate must never crash a page
+        db.session.rollback()
+
+    # Fallback: we could not place this patient — they join behind everyone
+    # currently open in the stage.
+    return count_open_segments(org_id, stage)
 
 def estimate_remaining_journey(org_id: int, visit, now: datetime | None = None) -> Dict[str, Any]:
-    """
-    Estimate remaining journey for a visit — from current stage to end.
-    Considers all remaining stages: WAIT_DOCTOR, CONSULTATION, onward (LAB, PHARM, etc)
+    """Estimate remaining journey for a visit — from current stage to end.
+
+    F-013: the CURRENT stage uses the patient's real position
+    (position_in_stage); later stages assume they join behind everyone
+    already open in that stage. Never position=0 for everybody.
     """
     now = now or now_naive()
     remaining_stages = []
@@ -284,20 +388,29 @@ def estimate_remaining_journey(org_id: int, visit, now: datetime | None = None) 
     }
     current = status_to_stage.get(getattr(visit, 'status', ''), "TRIAGE")
 
+    def _wait(stage: str, *, current_stage: bool) -> int:
+        if current_stage:
+            pos = position_in_stage(org_id, stage, visit=visit)
+        else:
+            pos = count_open_segments(org_id, stage)   # join behind the queue
+        return estimate_wait_minutes(org_id, stage, position=pos,
+                                     is_fast_track=getattr(visit, 'is_fast_track', False),
+                                     now=now)
+
     # Stages to estimate
     if current in ("TRIAGE", "REGISTERED"):
         # Triage + wait doctor + consultation
         for st in ["TRIAGE", "WAIT_DOCTOR", "CONSULTATION"]:
-            wait = estimate_wait_minutes(org_id, st, position=0, is_fast_track=getattr(visit, 'is_fast_track', False), now=now)
+            wait = _wait(st, current_stage=(st == "TRIAGE"))
             remaining_stages.append({"stage": st, "minutes": wait})
             total_min += wait
     elif current == "WAIT_DOCTOR":
         for st in ["WAIT_DOCTOR", "CONSULTATION"]:
-            wait = estimate_wait_minutes(org_id, st, position=0, is_fast_track=getattr(visit, 'is_fast_track', False), now=now)
+            wait = _wait(st, current_stage=(st == "WAIT_DOCTOR"))
             remaining_stages.append({"stage": st, "minutes": wait})
             total_min += wait
     elif current == "CONSULTATION":
-        wait = estimate_wait_minutes(org_id, "CONSULTATION", position=0, is_fast_track=getattr(visit, 'is_fast_track', False), now=now)
+        wait = _wait("CONSULTATION", current_stage=True)
         remaining_stages.append({"stage": "CONSULTATION", "minutes": wait})
         total_min += wait
 
@@ -306,7 +419,7 @@ def estimate_remaining_journey(org_id: int, visit, now: datetime | None = None) 
         pending = [s for s in getattr(visit, 'onward_steps', []) if s.status == "PENDING"]
         for step in pending:
             dest = step.destination  # LABORATORY, PHARMACY, etc
-            wait = estimate_wait_minutes(org_id, dest, position=0, is_fast_track=getattr(visit, 'is_fast_track', False), now=now)
+            wait = _wait(dest, current_stage=True)
             remaining_stages.append({"stage": dest, "minutes": wait})
             total_min += wait
     except Exception:
@@ -315,7 +428,10 @@ def estimate_remaining_journey(org_id: int, visit, now: datetime | None = None) 
     return {"total": total_min, "stages": remaining_stages, "fast_track": bool(getattr(visit, 'is_fast_track', False))}
 
 def estimate_intake_journey(org_id: int, intake, now: datetime | None = None) -> Dict[str, Any]:
-    """Estimate for ReceptionIntake — from current stage to Triage."""
+    """Estimate for ReceptionIntake — from current stage to Triage.
+
+    F-013: current stage uses the patient's real position in that desk queue.
+    """
     now = now or now_naive()
     stage_order = ["RECEPTION", "BILLING", "PAYMENT", "HIMS", "TRIAGE"]
     try:
@@ -326,7 +442,13 @@ def estimate_intake_journey(org_id: int, intake, now: datetime | None = None) ->
     total = 0
     stages = []
     for st in remaining:
-        wait = estimate_wait_minutes(org_id, st, position=0, is_fast_track=getattr(intake, 'is_fast_track', False), now=now)
+        if st == getattr(intake, 'stage', None):
+            pos = position_in_stage(org_id, st, intake=intake)
+        else:
+            pos = count_open_segments(org_id, st)      # join behind the queue
+        wait = estimate_wait_minutes(org_id, st, position=pos,
+                                     is_fast_track=getattr(intake, 'is_fast_track', False),
+                                     now=now)
         stages.append({"stage": st, "minutes": wait})
         total += wait
     return {"total": total, "stages": stages, "fast_track": bool(getattr(intake, 'is_fast_track', False))}
@@ -338,11 +460,8 @@ def get_live_counts(org_id: int) -> Dict[str, int]:
     - Reception, Billing, MEGALEX/PayPoint, LAHSMA, HIMS, Triage,
     - patients waiting to see each doctor, and other Onward locations (Lab, Pharmacy, etc)
     
-    Africa optimized: cached 60s per-org to avoid DB hammer on slow internet, low battery.
-    FIX 2026-09-04: egress guard — was 30s cache, each call did 20+ COUNT(*) queries.
-    With personal TV polling every 10s and TV dashboard polling, 100 concurrent
-    patients => 2000+ COUNTs/min => 424 GB Supabase egress. Now 60s cache cuts
-    egress ~50% and still real-time enough; counts are estimates, not seconds.
+    Africa optimized: cached 30s per-org to avoid DB hammer on slow internet, low battery.
+    Premium: still real-time enough (30s) but saves 80% DB hits.
     Multi-hospital: per org_id, per-org timestamp (fixed cross-org stale bug).
     """
     global _cache, _cache_at
@@ -351,7 +470,7 @@ def get_live_counts(org_id: int) -> Dict[str, int]:
     # Check cache 30s per-org — fixed bug where global _cache_at caused cross-org stale
     try:
         last_at = _cache_at.get(cache_key)
-        if last_at and (now - last_at).total_seconds() < 60:
+        if last_at and (now - last_at).total_seconds() < 30:
             if cache_key in _cache:
                 return _cache[cache_key]
     except Exception:
@@ -434,7 +553,7 @@ def get_live_counts(org_id: int) -> Dict[str, int]:
     except Exception:
         pass
 
-    # Cache 60s per-org
+    # Cache 30s per-org
     try:
         _cache[cache_key] = counts
         _cache_at[cache_key] = now

@@ -28,8 +28,12 @@ def _default_org() -> Organization | None:
 
 
 # ================================================================ PUBLIC PORTAL
+# The SHORT path is canonical (it is what posters, QR cards and word of mouth
+# use), so it must be the endpoint's primary rule — url_for() builds the
+# LAST-registered rule for an endpoint, and /complaint/portal used to win,
+# changing the public URL patients see (F-024 follow-up). The long path stays
+# as an alias through a tiny forwarding endpoint.
 @bp.get("/complaint")
-@bp.get("/complaint/portal")
 @rate_limit(limit=20, window=60.0)
 def portal():
     org = _default_org()
@@ -44,6 +48,13 @@ def portal():
                   .filter_by(org_id=org.id, active=True).order_by(ComplaintCategory.name).all())
     return render_template("complaint_portal.html", org=org, depts=depts, categories=categories,
                            qr_loc=qr_loc)
+
+
+@bp.get("/complaint/portal")
+@rate_limit(limit=20, window=60.0)
+def portal_alias():
+    """Long-hand alias for /complaint — same page, kept for old printed QR."""
+    return portal()
 
 
 @bp.post("/complaint/submit")

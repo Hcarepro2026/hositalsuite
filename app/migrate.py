@@ -6,11 +6,14 @@ SQLite and PostgreSQL) so existing deployments upgrade without manual SQL.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from sqlalchemy import inspect, text
 
 from .models import db
+
+log = logging.getLogger("hms.migrate")
 
 
 def _bool_true_sql() -> str:
@@ -197,11 +200,22 @@ def run_alembic_upgrade(app) -> bool:
         app.logger.info("alembic: database is at head")
         return True
     except Exception as exc:                     # noqa: BLE001
-        app.logger.warning("alembic upgrade skipped (%s) — falling back to ensure_schema()", exc)
+        # The hospital stays up (ensure_schema covers the known columns), but
+        # this MUST be loud and actionable: a skipped upgrade that repeats on
+        # every boot means a broken/non-idempotent migration or an unreachable
+        # database (e.g. Supabase quota → SSL SYSCALL EOF). Silent repetition
+        # here is how schema drift accumulates unnoticed.
+        app.logger.error(
+            "alembic upgrade FAILED (%s: %s) — falling back to ensure_schema(). "
+            "Schema may now be drifting: fix the migration (existence guards, "
+            "see migrations/versions/g8h21) or restore database access, then "
+            "redeploy. This error repeating on every boot is NOT normal.",
+            type(exc).__name__, exc)
         return False
 
 
 def ensure_schema() -> None:
+    added = []
     insp = inspect(db.engine)
     existing_tables = set(insp.get_table_names())
     for table, column, coltype in COLUMNS:
@@ -215,112 +229,33 @@ def ensure_schema() -> None:
                 # PostgreSQL and an unquoted ALTER TABLE user ... is a syntax
                 # error, which would silently skip the migration.
                 conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN {column} {resolved}'))
+            added.append(f"{table}.{column}")
     for name, table, cols, where in UNIQUE_INDEXES:
         if table not in existing_tables:
             continue
         with db.engine.begin() as conn:
             conn.execute(text(
                 f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {table} ({cols}) WHERE {where}'))
+    if added:
+        log.info("ensure_schema added %d missing column(s): %s", len(added), ", ".join(added))
 
-    # --- New tables that may not exist on old deployments (e.g. leave workflow)
-    # FIX 2026-09-04: senior review — bare `except Exception: pass` hid
-    # migration drift (app would 500 later with no log). Now: inspector check,
-    # dialect-aware DDL, and warning logs instead of silent swallow.
-    import logging as _logging
-    _log = _logging.getLogger(__name__)
+    # --- New tables that may not exist on old deployments (leave workflow).
+    # db.metadata.create_all is the right tool and replaces the old
+    # hand-written CREATE TABLE pair (a Postgres variant wrapped in
+    # `except: pass` with a SQLite variant nested inside another bare except).
+    # That version was exactly the migration drift it was meant to prevent:
+    # if BOTH dialect variants failed, the error vanished and production
+    # 500-ed later with no signal why. create_all is dialect-agnostic,
+    # checkfirst-idempotent, and always derives the schema from the MODELS —
+    # one source of truth instead of three diverging copies. Failures are
+    # logged loudly; ensure_schema is a safety net and must never fail silent.
+    from .models import LeaveBalance, LeaveRequest
     try:
-        from flask import current_app as _cur_app
-        if _cur_app and hasattr(_cur_app, "logger"):
-            _log = _cur_app.logger  # prefer app logger when in context
-    except Exception:
-        pass
-    _is_pg = str(db.engine.url).startswith("postgres")
-    # Refresh table list — earlier loop may have added columns but not tables.
-    try:
-        _existing_after = set(inspect(db.engine).get_table_names())
-    except Exception:
-        _existing_after = existing_tables
-    _leave_tables = {
-        "leave_request": (
-            """CREATE TABLE IF NOT EXISTS leave_request (
-                    id SERIAL PRIMARY KEY,
-                    org_id INTEGER NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    leave_type VARCHAR(16) NOT NULL,
-                    start_date DATE NOT NULL,
-                    end_date DATE NOT NULL,
-                    days_requested INTEGER NOT NULL,
-                    reason VARCHAR(300),
-                    status VARCHAR(12) DEFAULT 'PENDING' NOT NULL,
-                    requested_at TIMESTAMP,
-                    reviewed_by INTEGER,
-                    reviewed_at TIMESTAMP,
-                    review_note VARCHAR(300),
-                    roster_created BOOLEAN DEFAULT FALSE NOT NULL,
-                    created_at TIMESTAMP,
-                    updated_at TIMESTAMP
-                )""" ,
-            """CREATE TABLE IF NOT EXISTS leave_request (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        org_id INTEGER NOT NULL,
-                        user_id INTEGER NOT NULL,
-                        leave_type VARCHAR(16) NOT NULL,
-                        start_date DATE NOT NULL,
-                        end_date DATE NOT NULL,
-                        days_requested INTEGER NOT NULL,
-                        reason VARCHAR(300),
-                        status VARCHAR(12) DEFAULT 'PENDING' NOT NULL,
-                        requested_at TIMESTAMP,
-                        reviewed_by INTEGER,
-                        reviewed_at TIMESTAMP,
-                        review_note VARCHAR(300),
-                        roster_created BOOLEAN DEFAULT 0 NOT NULL,
-                        created_at TIMESTAMP,
-                        updated_at TIMESTAMP
-                    )"""
-        ),
-        "leave_balance": (
-            """CREATE TABLE IF NOT EXISTS leave_balance (
-                    id SERIAL PRIMARY KEY,
-                    org_id INTEGER NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    year INTEGER NOT NULL,
-                    leave_type VARCHAR(16) NOT NULL,
-                    entitled INTEGER DEFAULT 0 NOT NULL,
-                    used INTEGER DEFAULT 0 NOT NULL,
-                    remaining INTEGER DEFAULT 0 NOT NULL,
-                    updated_at TIMESTAMP,
-                    UNIQUE (org_id, user_id, year, leave_type)
-                )""" ,
-            """CREATE TABLE IF NOT EXISTS leave_balance (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        org_id INTEGER NOT NULL,
-                        user_id INTEGER NOT NULL,
-                        year INTEGER NOT NULL,
-                        leave_type VARCHAR(16) NOT NULL,
-                        entitled INTEGER DEFAULT 0 NOT NULL,
-                        used INTEGER DEFAULT 0 NOT NULL,
-                        remaining INTEGER DEFAULT 0 NOT NULL,
-                        updated_at TIMESTAMP,
-                        UNIQUE (org_id, user_id, year, leave_type)
-                    )"""
-        ),
-    }
-    for _tbl, (_ddl_pg, _ddl_sqlite) in _leave_tables.items():
-        if _tbl in _existing_after:
-            continue
-        _ddl_primary = _ddl_pg if _is_pg else _ddl_sqlite
-        _ddl_fallback = _ddl_sqlite if _is_pg else _ddl_pg
-        try:
-            with db.engine.begin() as _conn:
-                _conn.execute(text(_ddl_primary))
-            _log.info("ensure_schema: created missing table %s", _tbl)
-        except Exception as _exc:  # noqa: BLE001
-            _log.warning("ensure_schema: primary DDL for %s failed (%s) — trying fallback", _tbl, _exc)
-            try:
-                with db.engine.begin() as _conn2:
-                    _conn2.execute(text(_ddl_fallback))
-                _log.info("ensure_schema: created %s via fallback DDL", _tbl)
-            except Exception as _exc2:  # noqa: BLE001
-                _log.error("ensure_schema: could not create %s — app may 500 on that table (%s / %s)", _tbl, _exc, _exc2)
+        db.metadata.create_all(db.engine, tables=[LeaveRequest.__table__,
+                                                  LeaveBalance.__table__])
+    except Exception:                                    # noqa: BLE001
+        db.session.rollback()
+        log.exception("ensure_schema could not create leave tables — /roster "
+                      "leave features WILL 500 until this is fixed. This is "
+                      "NOT safe to ignore.")
 

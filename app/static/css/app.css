@@ -378,3 +378,8 @@ summary{cursor:pointer;font-weight:750;font-size:var(--fs-sm)}
   .score-row{flex-wrap:wrap}
   .score-opt{flex:1 1 28%;min-width:56px}
 }
+
+/* Accessibility: skip link — invisible until a keyboard user Tabs to it */
+.skip-link{position:absolute;left:-9999px;top:0;background:#000;color:#fff;
+  padding:10px 16px;border-radius:0 0 10px 0;z-index:2000;font-weight:700}
+.skip-link:focus{left:0;outline:3px solid #FFD700}

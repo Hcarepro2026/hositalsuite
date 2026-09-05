@@ -23,6 +23,9 @@ psycopg2-binary>=2.9.12,<3
 python-dotenv>=1.2.2,<2
 gunicorn>=26.0.0,<27
 pytest>=9.0.3,<10
+# F-009: coverage reporting — "792 tests pass" says nothing about which code
+# they exercise. Run `pytest --cov=app --cov-report=term` and read the number.
+pytest-cov>=7.0.0,<8
 # Phase 1 hardening: Redis for shared rate limiting + caching (expert review S5)
 redis>=5.0.0,<6
 # Observability: error tracking (expert review Phase 2)

@@ -377,6 +377,30 @@ production was in, stamps it at the old revision, and runs the real upgrade.
 - **Open redirect** via `startswith("/")` allowing `//evil.com`.
 - **404s from template/route mismatches** → built `tools/check_links.py`; run it every time.
 
+### The September 2026 independent review — three lessons, all fixed
+1. **A secret typed into a report is committed.** The VAPID *private* key was
+   written into `HOSPITAL_ASSISTANT_WORLD_CLASS_REPORT.md` in the same
+   patchset that added `vapid_keys.json` to `.gitignore` — the ignore rule
+   protects runtime files, not prose. Removed; `tests/test_secrets_hygiene.py`
+   now fails the build if it (or any PEM/VAPID-shaped key) reappears. The key
+   itself must still be **rotated** — see
+   `docs/SECURITY_INCIDENT_2026-09-03_VAPID_KEY_ROTATION.md`.
+2. **Self-graded "✅ DONE" is not status.** The same session graded its own
+   keyword filter "Prompt Injection Security DONE"; an external reviewer
+   called it security theater and was right. The guardrail is now layered
+   (phrase + intent regex + typo probe + separator/homoglyph squashing) with
+   an adversarial suite — `tests/test_chatbot_guardrails_adversarial.py` —
+   that pins BOTH catch-rate and a benign corpus. **Claims must point at
+   tests, not at themselves.**
+3. **Concurrent deploys race migrations.** Two Render instances ran
+   `alembic upgrade` at once → `relation "service_clinic" already exists` →
+   aborted transaction → the same failure every deploy, forever.
+   `migrations/env.py` now takes a PostgreSQL advisory lock, and `g8h21`
+   tolerates duplicate creates inside savepoints.
+
+Related: the **Supabase egress blowout (424 GB / 5 GB)** that made all of the
+above visible at once — runbook in `docs/SUPABASE_EGRESS_INCIDENT_2026-09.md`.
+
 ---
 
 ## 8. Key files

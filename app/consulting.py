@@ -28,6 +28,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from . import announce
+from .clinical_tier import clinical_order, emergency_tier_expr
 from .models import (ONWARD_CODES, ONWARD_LABELS, Patient, PatientVisit,
                      VisitOnward, db, now_naive)
 from .servicepoints import active_destinations, destinations_for_clinic, ensure_defaults as sp_ensure
@@ -87,12 +88,17 @@ def doctor_queue(org_id: int, doctor_id: int) -> list[PatientVisit]:
     # hide today's patients entirely. An OPEN visit is open until somebody
     # closes it, whatever the calendar says. Stale rows are handled properly by
     # the tracking cleanup job, not by hiding real patients from a doctor.
+    # F-012 clinical tier rule: EMERGENCY clinic first, then Fast Track
+    # WITHIN the tier, then longest wait. Fast Track can never jump an
+    # emergency patient — see app/clinical_tier.py.
     return (db.session.query(PatientVisit)
             .filter(PatientVisit.org_id == org_id,
                     PatientVisit.status.in_(("TRIAGED", "IN_CONSULTATION")),
                     or_(*conditions))
-            .order_by(PatientVisit.is_fast_track.desc(),
-                      PatientVisit.triaged_at.asc().nullsfirst())
+            .order_by(*clinical_order(
+                emergency_tier_expr(PatientVisit.clinic),
+                PatientVisit.is_fast_track,
+                PatientVisit.triaged_at.asc().nullsfirst()))
             .all())
 
 
@@ -217,15 +223,19 @@ def finish(visit: PatientVisit, doctor_id: int, destinations: list[str],
 
 # ------------------------------------------------------------------ Stage D
 def pending_for(org_id: int, destination: str) -> list[VisitOnward]:
-    """Everyone the doctors have sent to one desk — fast-track first, then oldest."""
-    # Join to visit to prioritize fast-track patients at Lab/Pharmacy etc.
+    """Everyone the doctors have sent to one desk.
+
+    F-012 clinical tier rule: an EMERGENCY routing outranks Fast Track; Fast
+    Track outranks time within the same tier. See app/clinical_tier.py."""
     return (db.session.query(VisitOnward)
             .join(PatientVisit, VisitOnward.visit_id == PatientVisit.id)
             .filter(VisitOnward.org_id == org_id,
                     VisitOnward.destination == destination,
                     VisitOnward.status == "PENDING")
-            .order_by(PatientVisit.is_fast_track.desc(),
-                      VisitOnward.sent_at.asc())
+            .order_by(*clinical_order(
+                emergency_tier_expr(VisitOnward.destination),
+                PatientVisit.is_fast_track,
+                VisitOnward.sent_at.asc()))
             .limit(200).all())
 
 

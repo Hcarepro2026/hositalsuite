@@ -9,13 +9,14 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <div class="portal-head">
   {% include "_brand_mark.html" %}
   <div>{{ _('tagline') }}</div>
   {% include "_langbar.html" %}
   {% if qr_loc %}<div class="mt"><span class="pill blue">📍 {{ qr_loc.name }}</span></div>{% endif %}
 </div>
-<main class="wrap" style="max-width:560px">
+<main id="main-content" class="wrap" style="max-width:560px">
   {% with back_to="/welcome" %}{% include "_patient_nav.html" %}{% endwith %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
@@ -28,29 +29,29 @@
     <input type="hidden" name="loc" value="{{ qr_loc.code if qr_loc else '' }}">
     <input type="hidden" name="idem" value="{{ csrf_token()[:24] }}-{{ range(100000, 999999) | random }}">
 
-    <label>1 · {{ _('f_dept') }} <span class="req">*</span></label>
-    <select name="department_id" required>
+    <label for="cmp-dept">1 · {{ _('f_dept') }} <span class="req">*</span></label>
+    <select name="department_id" id="cmp-dept" required>
       <option value="">— {{ _('f_dept') }} —</option>
       {% for d in depts %}
       <option value="{{ d.id }}" {{ 'selected' if form and form.get('department_id')==d.id|string }}>{{ d.name }}</option>
       {% endfor %}
     </select>
 
-    <label>2 · {{ _('f_cat') }} <span class="req">*</span></label>
-    <select name="category" required>
+    <label for="cmp-cat">2 · {{ _('f_cat') }} <span class="req">*</span></label>
+    <select name="category" id="cmp-cat" required>
       <option value="">— {{ _('f_cat') }} —</option>
       {% for c in categories %}
       <option {{ 'selected' if form and form.get('category')==c.name }}>{{ c.name }}</option>
       {% endfor %}
     </select>
 
-    <label>3 · {{ _('f_desc') }} <span class="req">*</span></label>
+    <label for="cmp-desc">3 · {{ _('f_desc') }} <span class="req">*</span></label>
     <textarea name="description" id="cmp-desc" required minlength="10"
               placeholder="{{ _('f_desc') }}…">{{ form.get('description','') if form else '' }}</textarea>
     <button type="button" class="mic-btn" data-lang="{{ speech_lang }}"
             onclick="hmsVoice.start(this,'cmp-desc')">🎤 {{ _('speak') }}</button>
 
-    <label>4 · {{ _('f_phone') }} <span class="req" id="phone-req">*</span></label>
+    <label for="cmp-phone">4 · {{ _('f_phone') }} <span class="req" id="phone-req">*</span></label>
     <input type="tel" name="phone" id="cmp-phone" required inputmode="tel" placeholder="08012345678"
            value="{{ form.get('phone','') if form else '' }}">
 
@@ -62,9 +63,9 @@
         hospital will not be able to call you back.</span>
     </label>
 
-    <label>5 · {{ _('f_attach') }}</label>
-    <input type="file" name="attachment" accept="image/jpeg,image/png,image/webp" style="font-size:.9rem">
-    <select name="contact_method" class="mt" style="margin-top:8px">
+    <label for="cmp-attach">5 · {{ _('f_attach') }}</label>
+    <input type="file" name="attachment" id="cmp-attach" accept="image/jpeg,image/png,image/webp" style="font-size:.9rem">
+    <select name="contact_method" id="cmp-contact" aria-label="Preferred contact method" class="mt" style="margin-top:8px">
       <option value="phone">Call / Kiran / Oku</option>
       <option value="whatsapp">WhatsApp</option>
       <option value="either">— / —</option>

@@ -85,7 +85,7 @@
   <p class="muted">Upload logo at <a href="/admin/hospital">Hospital Setup</a> — it shows on phone home screen when PWA installed. Per-hospital, multi-tenant.</p>
   <div style="display:flex;gap:12px;align-items:center;margin-top:10px">
     {% if hospital and hospital.logo_path %}
-      <img src="/branding/logo" style="width:64px;height:64px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+      <img src="/branding/logo" alt="{{ hospital.name if hospital else 'Hospital' }} logo" style="width:64px;height:64px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
       <span>✅ Logo set — will show on home screen</span>
     {% else %}
       <span>🏥 No logo yet — upload at Admin → Hospital Setup</span>

@@ -14,16 +14,10 @@ depends_on = None
 
 
 def upgrade():
-    # FIX 2026-09-04: idempotent — check existence before ALTER, avoids
-    # "already exists" aborting the transaction and breaking subsequent upgrades
-    # (Supabase 424GB egress / InFailedSqlTransaction).
-    bind = op.get_bind()
-    insp = sa.inspect(bind)
-    if 'tv_screen' not in insp.get_table_names():
-        return
-    cols = [c['name'] for c in insp.get_columns('tv_screen')]
-    if 'voice_volume' not in cols:
+    try:
         op.add_column('tv_screen', sa.Column('voice_volume', sa.Integer(), nullable=True, server_default='100'))
+    except Exception:
+        pass
 
 
 def downgrade():

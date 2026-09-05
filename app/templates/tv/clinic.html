@@ -1,6 +1,6 @@
 {# TV Clinic - Premium clean, no voice details, no footer debug #}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang if lang else 'en' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -59,9 +59,9 @@
     <span>🔉</span><input type="range" id="volSlider" min="0" max="100" value="{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}" oninput="hmsTv.setVolume(this.value)" onchange="hmsTv.saveVolume(this.value)"><span id="volLabel" style="font-size:.8rem;font-weight:800">{{ screen.voice_volume if screen and screen.voice_volume is not none else 100 }}%</span><span>🔊</span>
   </div>
   <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px">
-    <span>🔅</span><input type="range" id="brightSlider" min="10" max="100" value="{{ screen.brightness if screen and screen.brightness is not none else 100 }}" oninput="hmsTv.setBrightness(this.value)" onchange="hmsTv.saveBrightness(this.value)"><span id="brightLabel" style="font-size:.8rem;font-weight:800">{{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span><span>🔆</span>
+    <span aria-hidden="true">🔅</span><input type="range" id="brightSlider" aria-label="Screen brightness" min="10" max="100" value="{{ screen.brightness if screen and screen.brightness is not none else 100 }}" oninput="hmsTv.setBrightness(this.value)" onchange="hmsTv.saveBrightness(this.value)"><span id="brightLabel" style="font-size:.8rem;font-weight:800">{{ screen.brightness if screen and screen.brightness is not none else 100 }}%</span><span>🔆</span>
   </div>
-  <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px;cursor:pointer" onclick="hmsTv.toggleNight()"><span id="nightIcon">{{ '🌙' if screen and screen.night_mode else '☀️' }}</span><span id="nightLabel" style="font-size:.75rem">{{ 'Night ON' if screen and screen.night_mode else 'Night OFF' }}</span></div>
+  <button type="button" class="tv-night-toggle" style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 10px;border-radius:999px;cursor:pointer;border:none;color:inherit;font:inherit" onclick="hmsTv.toggleNight()" aria-pressed="{{ 'true' if screen and screen.night_mode else 'false' }}"><span id="nightIcon">{{ '🌙' if screen and screen.night_mode else '☀️' }}</span><span id="nightLabel" style="font-size:.75rem">{{ 'Night ON' if screen and screen.night_mode else 'Night OFF' }}</span></button>
   <button onclick="hmsTv.enableVoice()" id="voiceBtn">🔊 Voice</button>
   <button onclick="hmsTv.testVoice()">🎤 Test</button>
 </div>

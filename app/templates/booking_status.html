@@ -5,10 +5,10 @@
 <div class="wrap" style="max-width:560px;margin:0 auto;padding:0">
 <h1>{{ _('check_status') }}</h1>
 <form class="card mb" method="get" action="/book/status">
-  <label>Booking reference</label>
-  <input type="text" name="ref" value="{{ ref }}" placeholder="e.g. HOSP-APT-2026-000001" required>
-  <label>Your phone number (for verification)</label>
-  <input type="tel" name="phone" value="{{ phone }}" placeholder="e.g. 08012345678">
+  <label for="bk-ref">Booking reference</label>
+  <input type="text" name="ref" id="bk-ref" value="{{ ref }}" placeholder="e.g. HOSP-APT-2026-000001" required>
+  <label for="bk-phone">Your phone number (for verification)</label>
+  <input type="tel" name="phone" id="bk-phone" value="{{ phone }}" placeholder="e.g. 08012345678">
   <button class="btn mt" style="width:100%">Check</button>
 </form>
 

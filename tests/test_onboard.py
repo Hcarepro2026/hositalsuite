@@ -113,7 +113,10 @@ def test_setup_code_opens_a_second_hospital(client, seeded):
     assert again.status_code == 422
 
 
-def test_taken_sign_in_name_is_rejected(client, seeded):
+def test_sign_in_name_of_another_hospital_is_allowed(client, seeded):
+    """F-021: usernames are scoped per hospital — a NEW hospital may choose
+    "admin" even though the first hospital already uses it. (Inside one
+    hospital the name stays unique; see test_f021_per_tenant_usernames.py.)"""
     login(client, "admin")
     token = csrf(client, "/admin/security")
     minted = client.post("/admin/onboard-invite", data={"_csrf": token},
@@ -123,8 +126,22 @@ def test_taken_sign_in_name_is_rejected(client, seeded):
     token = csrf(client, "/start")
     r = client.post("/start", data={**_payload(username="admin"), "invite": code,
                                     "_csrf": token}, follow_redirects=True)
+    assert r.status_code == 200
+    assert b"already taken" not in r.data
+
+
+def test_short_sign_in_name_is_still_rejected(client, seeded):
+    login(client, "admin")
+    token = csrf(client, "/admin/security")
+    minted = client.post("/admin/onboard-invite", data={"_csrf": token},
+                         follow_redirects=True)
+    code = minted.data.decode().split("Setup code for a new hospital:")[1].split(".")[0].strip()
+    client.post("/logout", data={"_csrf": csrf(client, "/")})
+    token = csrf(client, "/start")
+    r = client.post("/start", data={**_payload(username="ab"), "invite": code,
+                                    "_csrf": token}, follow_redirects=True)
     assert r.status_code == 422
-    assert b"already taken" in r.data
+    assert b"at least 3 letters" in r.data
 
 
 def test_weak_password_is_rejected(client):

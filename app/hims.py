@@ -36,6 +36,8 @@ from datetime import date, datetime
 
 from sqlalchemy import func, or_
 
+from . import crypto_fields
+
 from .models import (ASSISTANCE_CODES, CATEGORY_CODES, MARITAL_STATUSES,
                      PATIENT_LANG_LABELS,
                      PAYER_CODES, Patient, PatientVisit, db, new_code, now_naive)
@@ -121,6 +123,16 @@ def _lev(a: str, b: str) -> int:
     return prev[-1]
 
 
+# How many LIGHT candidate rows the fuzzy fallback may inspect when an exact
+# search finds nothing. Rows fetched here carry ONLY the match fields
+# (surname / first name / other names / folder number) — deliberately NOT
+# full Patient entities, which pull phone numbers, addresses and next-of-kin
+# into memory for every failed search. Full entities are fetched for the top
+# matches only, after scoring.
+FUZZY_CANDIDATE_CAP = 500
+FUZZY_MAX_EDIT = 2
+
+
 def _fuzzy_surname_matches(org_id: int, term: str, limit: int = 10) -> list:
     """Fallback: when exact LIKE finds nothing, look for close spellings.
 
@@ -128,98 +140,61 @@ def _fuzzy_surname_matches(org_id: int, term: str, limit: int = 10) -> list:
     "Ogunlewe". A 1-2 letter edit distance catches those without needing
     PostgreSQL pg_trgm (not available on Render free).
 
-    FIX 2026-09-04 (perf/privacy): old version loaded 500 full Patient rows
-    (all columns, including PII like address, nok_phone) into Python memory
-    per failed search, then ran Levenshtein per field in Python. At scale that
-    is a privacy and egress risk (424 GB Supabase overage). New version:
-      - pulls only needed columns (id, surname, first_name, hospital_number)
-        as lightweight tuples, never full PII rows;
-      - pre-filters by first 2 letters / length to cut candidate set from 500
-        to ~50-100;
-      - fetches full Patient objects only for the ~10 actual matches.
+    Two phases, on purpose:
+      1. score LIGHT tuples (5 small columns) from up to FUZZY_CANDIDATE_CAP
+         recent, active folders of THIS hospital — minimal PII in memory,
+         far less bandwidth from the database (egress matters: a 62 MB
+         Supabase database once shipped 424 GB in a month);
+      2. load full Patient rows ONLY for the best `limit` ids, so the views
+         keep working with real entities while 490 rejected candidates never
+         materialize past their four name fields.
     """
-    term_l = term.lower().strip()[:40]
+    term_l = term.lower().strip()
     if len(term_l) < 3:
         return []
-    from . import branches as br
-    # Lightweight candidate fetch — no PII beyond names/number.
-    # Include last_visit_at for recency ordering; branch filtering included.
-    try:
-        base_q = db.session.query(
-            Patient.id, Patient.surname, Patient.first_name,
-            Patient.hospital_number, Patient.last_visit_at
-        ).filter(Patient.org_id == org_id, Patient.active.is_(True))
-        base_q = br.apply_branch_filter(base_q, Patient.branch_id)
-        # Narrow to plausible candidates: same first letter or first 2 chars.
-        # This cuts typical scan from 500 to <100 without losing true typos
-        # (edit distance 2 rarely changes first 2 letters).
-        prefix = term_l[:2]
-        # Use LIKE on surname prefix — indexed via ix_patient_org_surname
-        candidates = (base_q.filter(
-            or_(
-                func.lower(Patient.surname).like(f"{prefix}%"),
-                func.lower(Patient.first_name).like(f"{prefix}%"),
-            )
-        ).order_by(Patient.last_visit_at.desc().nullslast()).limit(200).all())
-        # If prefix filter finds too few, broaden to length-similar set (still limited)
-        if len(candidates) < 10:
-            extra = (base_q.filter(
-                func.length(Patient.surname).between(len(term_l)-2, len(term_l)+2)
-            ).order_by(Patient.last_visit_at.desc().nullslast()).limit(100).all())
-            # merge, deduplicate by id
-            seen_ids = {c[0] for c in candidates}
-            for e in extra:
-                if e[0] not in seen_ids:
-                    candidates.append(e)
-                    seen_ids.add(e[0])
-                    if len(candidates) >= 200:
-                        break
-    except Exception:
-        # Fallback: small raw fetch without prefix filtering
-        try:
-            candidates = (db.session.query(
-                Patient.id, Patient.surname, Patient.first_name,
-                Patient.hospital_number, Patient.last_visit_at
-            ).filter(Patient.org_id == org_id, Patient.active.is_(True))
-            .order_by(Patient.last_visit_at.desc().nullslast()).limit(200).all())
-        except Exception:
-            return []
-    scored_ids = []
-    seen_ids = set()
-    for pid, surname, first_name, hospital_number, _last in candidates:
-        found = False
-        for field in (surname, first_name, hospital_number):
+    candidates = (db.session.query(
+                      Patient.id,
+                      Patient.surname,
+                      Patient.first_name,
+                      Patient.other_names,
+                      Patient.hospital_number)
+                  .filter(Patient.org_id == org_id, Patient.active.is_(True))
+                  .order_by(Patient.last_visit_at.desc().nullslast())
+                  .limit(FUZZY_CANDIDATE_CAP)
+                  .all())
+    scored = []                                   # (best_distance, id)
+    for pid, surname, first_name, other_names, hosp_no in candidates:
+        best = FUZZY_MAX_EDIT + 1
+        for field in (surname, first_name, other_names, hosp_no):
             if not field:
                 continue
-            fl = field.lower()
-            if abs(len(fl) - len(term_l)) > 2:
-                # length filter already, but keep for safety
+            fl = str(field).lower()
+            # Quick length filter: more than 2 letters away can never be
+            # within edit distance 2.
+            if abs(len(fl) - len(term_l)) > FUZZY_MAX_EDIT:
                 continue
-            if _lev(term_l, fl) <= 2 or _lev(term_l, fl[:len(term_l)]) <= 1:
-                found = True
-                break
-            for part in fl.split():
-                if _lev(term_l, part) <= 2:
-                    found = True
+            d = _lev(term_l, fl)
+            if d > FUZZY_MAX_EDIT and len(fl) >= len(term_l):
+                # prefix match tolerates "ogunl…" + a trailing second surname
+                d = min(d, _lev(term_l, fl[:len(term_l)]) + 1)
+            if d > FUZZY_MAX_EDIT:
+                for part in fl.split():
+                    d = min(d, _lev(term_l, part))
+                    if d <= FUZZY_MAX_EDIT:
+                        break
+            if d < best:
+                best = d
+                if best == 0:
                     break
-            if found:
-                break
-        if found and pid not in seen_ids:
-            scored_ids.append(pid)
-            seen_ids.add(pid)
-            if len(scored_ids) >= limit:
-                break
-    if not scored_ids:
+        if best <= FUZZY_MAX_EDIT:
+            scored.append((best, pid))
+    if not scored:
         return []
-    # Fetch full rows ONLY for the handful of matches — preserves caller contract
-    # but avoids pulling 500 full PII rows per failed search.
-    try:
-        rows = db.session.query(Patient).filter(Patient.id.in_(scored_ids)).all()
-        # Preserve scored order
-        by_id = {r.id: r for r in rows}
-        return [by_id[i] for i in scored_ids if i in by_id]
-    except Exception:
-        return []
+    scored.sort(key=lambda t: (t[0], t[1]))
+    top_ids = [pid for _d, pid in scored[:limit]]
+    by_id = {p.id: p for p in (db.session.query(Patient)
+                               .filter(Patient.id.in_(top_ids)).all())}
+    return [by_id[pid] for pid in top_ids if pid in by_id]
 
 
 
@@ -248,7 +223,14 @@ def search(org_id: int, term: str, limit: int = MAX_SEARCH_RESULTS) -> list[Pati
     if len(digits) >= 4:
         conds.append(Patient.phone.like(f"%{digits}%"))
         conds.append(Patient.phone_alt.like(f"%{digits}%"))
-        conds.append(Patient.nok_phone.like(f"%{digits}%"))
+        if crypto_fields.encryption_enabled():
+            # F-015: NOK phone is field-encrypted — LIKE is impossible by
+            # design, so match the blind index (full normalised number).
+            bx = crypto_fields.blind_index("patient.nok_phone", digits)
+            if bx:
+                conds.append(Patient.nok_phone_bx == bx)
+        else:
+            conds.append(Patient.nok_phone.like(f"%{digits}%"))
     # "abatan lekan" — try it as surname + first name too
     parts = [p for p in re.split(r"[\s,]+", term.lower()) if p]
     if len(parts) >= 2:

@@ -433,7 +433,12 @@ def dashboard():
         org_id = current_user.org_id
         role = getattr(current_user, "role", "") or ""
         if role == "STAFF":
-            return redirect(url_for("deptdesk.my_department"))
+            # F-007: the deptdesk blueprint's entry endpoint is `desk`
+            # (@bp.get("")). This used to point at a nonexistent
+            # `deptdesk.my_department`, which raised BuildError — a 500 on
+            # login for every ordinary staff member. Guarded by a regression
+            # test that logs in EVERY role and asserts no crash.
+            return redirect(url_for("deptdesk.desk"))
 
         try:
             kpi = _kpi(org_id, viewer=current_user)

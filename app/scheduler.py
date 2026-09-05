@@ -25,6 +25,7 @@ from .models import (AppNotification, Complaint, CorrectiveAction, DutyRoster,
 _started = False
 _thread_ref = None          # for health reporting
 _lock = threading.Lock()
+_last_backup_monotonic = 0.0   # in-memory min-interval guard for the nightly backup
 
 
 # ------------------------------------------------------------------ helpers
@@ -270,12 +271,28 @@ def job_nightly_backup(app):
 
     The previous implementation silently returned on PostgreSQL, so production
     had no backups at all despite the UI claiming otherwise. See app/backup.py.
+
+    A backup is a FULL read of every table — the single largest routine query
+    this app points at the database. On a metered-egress host (Supabase free:
+    5 GB/month) an accidental second run per day would double the largest line
+    item, so a hard in-memory minimum interval backstops the per-day Setting
+    guard: even if the Setting read fails or races, a backup can never run
+    more than once per MIN_BACKUP_INTERVAL_HOURS per process.
     """
+    import time as _time
     from .backup import create_backup, prune_backups
     from .config import Config
+
+    global _last_backup_monotonic
+    if _last_backup_monotonic and \
+            (_time.monotonic() - _last_backup_monotonic) < Config.MIN_BACKUP_INTERVAL_HOURS * 3600:
+        app.logger.info("nightly backup skipped — another one ran less than "
+                        "%sh ago (in-memory guard)", Config.MIN_BACKUP_INTERVAL_HOURS)
+        return
     try:
         create_backup(app, kind="nightly")
         prune_backups(keep=Config.BACKUP_KEEP)
+        _last_backup_monotonic = _time.monotonic()
     except Exception as exc:                     # noqa: BLE001
         app.logger.exception("nightly backup FAILED: %s", exc)
         db.session.rollback()
@@ -424,10 +441,39 @@ def _loop(app, interval: int):
     FIX 2026-08-21: last_backup_day lived in memory. Render restarts constantly,
     so memory resets and backup ran 4x/day (twice 9 seconds apart), blowing the
     Supabase quota. Now stored in Setting table so it survives restarts.
+
+    F-002 (multi-process): WEB_CONCURRENCY>1 or >1 dyno means several identical
+    schedulers run in parallel. Jobs are idempotent but the nightly backup was
+    NOT (quota) and SLA escalations would fire 2-3x. A PostgreSQL SESSION-scoped
+    advisory lock held on a dedicated connection elects ONE leader per fleet:
+    lock loss (worker killed / connection dropped) auto-releases, so leadership
+    fails over within one interval. On SQLite (single-process pilot) every loop
+    is the leader.
     """
+    from sqlalchemy import text
+
+    SCHEDULER_LEADER_LOCK_KEY = 736559103   # sibling of audit chain lock
+    leader_conn = None
     consecutive_failures = 0
     while True:
         try:
+            if db.engine.url.get_backend_name() == "postgresql":
+                if leader_conn is None:
+                    try:
+                        leader_conn = db.engine.connect()
+                        # defensive: make sure we start from a clean slate
+                        leader_conn.rollback()
+                    except Exception:  # noqa: BLE001 — DB down; retry next tick
+                        app.logger.exception("Scheduler could not open leader-election connection")
+                        leader_conn = None
+                        time.sleep(interval)
+                        continue
+                is_leader = leader_conn.execute(text(
+                    f"SELECT pg_try_advisory_lock({SCHEDULER_LEADER_LOCK_KEY})"
+                )).scalar()
+                if not is_leader:
+                    time.sleep(interval)   # another instance is the leader
+                    continue
             tick(app)
             today = now_naive().date()
             # Check if backup already done today (from DB, not memory)
