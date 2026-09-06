@@ -11,7 +11,7 @@ These tests would fail if any ordering regressed to putting a paying
 fast-track patient ahead of an emergency — the single most indefensible
 thing a hospital queue could do.
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -19,6 +19,37 @@ from app.clinical_tier import clinical_order, emergency_tier_expr
 from app.consulting import doctor_queue, pending_for
 from app.models import (Patient, PatientVisit, VisitOnward, db, now_naive)
 from app.triage import waiting as triage_waiting
+
+
+# The oldest back-date any fixture below uses. Keep in step with the numbers
+# passed to _ago() so the compression factor stays proportional.
+_MAX_BACKDATE_MIN = 90
+
+
+def _ago(minutes: float) -> datetime:
+    """`minutes` before now — but never earlier than midnight today.
+
+    triage.waiting() deliberately returns only visits started TODAY. A fixture
+    that naively subtracts 90 minutes therefore falls out of that window when
+    the suite runs shortly after midnight: the visit is silently dropped and
+    the assertion dies on `ValueError: N is not in list` rather than on the
+    behaviour it meant to test. That made this file fail every night between
+    00:00 and 01:30 and pass the other 22.5 hours.
+
+    Every offset is scaled by ONE shared factor, so the relative ages — and so
+    the queue ordering these tests assert — are preserved exactly. Between
+    ~01:31 and 23:59 the factor is 1 and the timestamps are unchanged.
+    """
+    now = now_naive()
+    midnight = datetime.combine(now.date(), datetime.min.time())
+    # Guarantee a sliver of "today" exists to lay the timeline inside, even if
+    # the clock is sitting exactly on midnight (subtracting anything from
+    # midnight itself would land on yesterday and vanish from the query).
+    base = max(now, midnight + timedelta(seconds=1))
+    available = (base - midnight).total_seconds() / 60.0
+    # 0.99 leaves a margin so the oldest visit stays strictly after midnight.
+    factor = min(1.0, (available * 0.99) / _MAX_BACKDATE_MIN)
+    return base - timedelta(minutes=minutes * factor)
 
 
 def _patient(n):
@@ -32,13 +63,13 @@ def _patient(n):
 
 def _visit(patient, *, clinic, fast, started_min_ago, status="TRIAGED",
            triaged=True):
-    now = now_naive()
+    started = _ago(started_min_ago)
     v = PatientVisit(org_id=1, patient_id=patient.id,
                      visit_no=f"FTGV/{patient.id:04d}", status=status,
                      clinic=clinic, is_fast_track=fast,
-                     started_at=now - timedelta(minutes=started_min_ago))
+                     started_at=started)
     if triaged:
-        v.triaged_at = now - timedelta(minutes=started_min_ago)
+        v.triaged_at = started
     db.session.add(v)
     db.session.flush()
     return v
@@ -104,11 +135,11 @@ def test_onward_emergency_destination_outranks_fast_track(app, tier_scenario):
     with app.app_context():
         o_fast = VisitOnward(org_id=1, visit_id=tier_scenario["fast_old"].id,
                              destination="PHARMACY", status="PENDING",
-                             sent_at=now_naive() - timedelta(minutes=80))
+                             sent_at=_ago(80))
         o_em = VisitOnward(org_id=1,
                            visit_id=tier_scenario["emergency_new"].id,
                            destination="EMERGENCY", status="PENDING",
-                           sent_at=now_naive() - timedelta(minutes=2))
+                           sent_at=_ago(2))
         db.session.add_all([o_fast, o_em])
         db.session.commit()
         rows = pending_for(1, "EMERGENCY")
