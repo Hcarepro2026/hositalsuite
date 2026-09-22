@@ -184,12 +184,12 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
 
         # Boot steps are individually guarded: a failure in seeding or the KB
         # must never leave the hospital with a dead site. Log loudly, serve on.
+        # Issue #4: each step also rolls its own transaction back on failure,
+        # so a poisoned session can never swallow the next step's inserts.
+        from .boot import run_boot_step
+
         def _boot_step(name, fn):
-            try:
-                fn()
-            except Exception:                            # noqa: BLE001
-                db.session.rollback()
-                app.logger.exception("boot step %r failed — continuing", name)
+            run_boot_step(app, name, fn)
 
         # ONE database readiness probe up front. If the database is not
         # answering, every subsequent boot step would each burn its own
@@ -248,6 +248,16 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
             def _seed_roles():
                 from .models import Organization
                 from .roles import ensure_builtin_roles
+                from .rls import all_orgs
+                # This boot seeder legitimately writes across every hospital,
+                # and it runs AFTER row_level_security has armed the
+                # policies. Without declaring all_orgs() the INSERTs into
+                # the protected `role` table are refused on PostgreSQL
+                # (InsufficientPrivilege: new row violates row-level
+                # security policy) and every hospital silently boots without
+                # its built-in roles. Invisible on SQLite, where RLS is a
+                # no-op — found on a real PostgreSQL 16 server.
+                all_orgs()
                 for org in db.session.query(Organization).all():
                     ensure_builtin_roles(org.id)
                 db.session.commit()
@@ -255,6 +265,10 @@ def create_app(config_object=None, scheduler: bool = True) -> Flask:
 
             def _seed_branches():
                 from .branches import ensure_all_orgs
+                from .rls import all_orgs
+                # Same story as seed_roles above: `branch` is a protected
+                # table and this writes to it outside any request.
+                all_orgs()
                 ensure_all_orgs()
             _boot_step("seed_branches", _seed_branches)
 

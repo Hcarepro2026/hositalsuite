@@ -336,3 +336,126 @@ def test_role_management_never_becomes_a_medical_record():
                 assert word not in column.name.lower(), (
                     f"{model.__name__}.{column.name} looks like clinical data. "
                     f"This system is not an EMR.")
+
+
+def test_alembic_cli_can_migrate_without_an_explicit_url(tmp_path):
+    """`alembic upgrade head` must work from a shell, not only at app boot.
+
+    alembic.ini ships Alembic's placeholder URL ("driver://user:pass@localhost/
+    dbname"). migrations/env.py used to read that placeholder as "the caller
+    supplied a URL", so every CLI run died with:
+
+        NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:driver
+
+    The app never noticed — run_alembic_upgrade() passes the real URL — but an
+    operator on a Render shell, a VPS, or a laptop pointed at the Supabase
+    pooler could not migrate by hand at all. This runs the real CLI in a
+    subprocess against a throwaway database and checks it reaches head.
+    """
+    import subprocess
+    import sys
+
+    db_file = tmp_path / "cli_migrate.db"
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = dict(os.environ)
+    env["DATABASE_URL"] = f"sqlite:///{db_file}"
+    env["SECRET_KEY"] = env.get("SECRET_KEY") or "migration-cli-test"
+    env["DISABLE_SCHEDULER"] = "1"
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=root, env=env, capture_output=True, text=True, timeout=180)
+
+    assert proc.returncode == 0, (
+        f"alembic upgrade head failed from the CLI.\n"
+        f"stdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}")
+
+    from sqlalchemy import create_engine
+    insp = inspect(create_engine(f"sqlite:///{db_file}"))
+    assert "alembic_version" in insp.get_table_names()
+    assert "patient" in insp.get_table_names(), "migrations ran but built nothing"
+
+
+def test_env_py_does_not_mistake_the_ini_placeholder_for_a_real_url():
+    """Guard the guard: the placeholder must be recognised as 'not supplied'."""
+    env_py = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "migrations", "env.py")
+    src = open(env_py, encoding="utf-8").read()
+    assert "driver://user:pass@localhost/dbname" in src, (
+        "env.py no longer recognises the alembic.ini placeholder — "
+        "`alembic upgrade head` from a shell will break again")
+
+
+# ============================================================ PostgreSQL guards
+# Found 2026-09-13 by running the whole chain against a real PostgreSQL 16
+# server (the SQLite runs could not see any of these). Each test locks one
+# of the three fixes.
+
+
+def test_no_integer_literal_server_defaults_in_migrations():
+    """PostgreSQL rejects `BOOLEAN DEFAULT 0`; SQLite shrugs and accepts it.
+
+    The chain died at k25_fast_track (`ALTER TABLE patient_visit ADD COLUMN
+    is_fast_track BOOLEAN DEFAULT 0` — DatatypeMismatch) and the same disease
+    was in k26_voices (night_mode). The dialect-aware idiom already used by
+    c4a92e1f7b30 / d5b03c8a2e41 ("1" if sqlite else "true") is the fix; this
+    scans every migration for the raw-integer form so it cannot come back.
+    """
+    bad = []
+    for fn in sorted(os.listdir(MIGRATIONS)):
+        if not fn.endswith(".py"):
+            continue
+        text = open(os.path.join(MIGRATIONS, fn), encoding="utf-8").read()
+        for m in re.finditer(
+                r"server_default\s*=\s*sa\.text\(\s*['\"](\d+)['\"]\s*\)", text):
+            bad.append(f"{fn}: server_default=sa.text('{m.group(1)}')")
+    assert not bad, (
+        "integer literal as a text server default — PostgreSQL rejects these "
+        f"on boolean columns and the whole migration chain aborts: {bad}")
+
+
+def test_env_py_hands_alembic_a_clean_transaction():
+    """The advisory lock must not leave an open transaction behind it.
+
+    Taking the lock executes a statement, which auto-begins a transaction on
+    the connection. Alembic treats a connection that is already inside a
+    transaction as externally managed: `context.begin_transaction()` then
+    neither begins nor commits anything, every migration runs only to be
+    silently ROLLED BACK when the connection closes, and `alembic upgrade
+    head` exits 0 having changed nothing. Verified with log_statement=all on
+    a real PostgreSQL 16 server: CREATE TABLE ... ROLLBACK. The explicit
+    `connection.commit()` between the lock and configure() returns ownership
+    to Alembic (the lock itself is session-scoped and survives it).
+    """
+    env_py = os.path.join(os.path.dirname(MIGRATIONS), "env.py")
+    src = open(env_py, encoding="utf-8").read()
+    online = src[src.index("def run_migrations_online"):]
+    call = online.index("_take_migration_lock(connection)")
+    commit = online.index("connection.commit()", call)
+    configure = online.index("context.configure(", commit)
+    assert call < commit < configure, (
+        "env.py must end the advisory-lock transaction (connection.commit()) "
+        "before context.configure(), or PostgreSQL migrations never commit")
+
+
+def test_k28_probes_uniqueness_inside_savepoints():
+    """A missed DDL name must not poison the migration on PostgreSQL.
+
+    k28 tries several candidate names when dropping the old global username
+    uniqueness. On PostgreSQL a failed statement aborts the surrounding
+    transaction; the old bare try/except swallowed the Python error and left
+    the chain dead from that point (InFailedSqlTransaction at the version
+    stamp). Additionally, those uniques are INDEXES (ix_user_username), not
+    constraints — drop_constraint alone can never remove them. This locks
+    both properties of the fix.
+    """
+    text = open(os.path.join(MIGRATIONS, "k28_per_tenant_usernames.py"),
+                encoding="utf-8").read()
+    assert "begin_nested" in text, (
+        "k28 must run its optional DDL inside SAVEPOINTs (begin_nested) — "
+        "on PostgreSQL one miss otherwise aborts the whole migration")
+    body = text[text.index("def _drop_uniq"):text.index("def upgrade")]
+    assert "drop_index" in body, (
+        "the baseline creates the username uniques as INDEXES; _drop_uniq "
+        "must try drop_index as well as drop_constraint or it can never "
+        "remove them on PostgreSQL")

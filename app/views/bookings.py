@@ -30,6 +30,16 @@ def _default_org() -> Organization | None:
 @bp.get("/book")
 @rate_limit(limit=30, window=60.0)
 def portal():
+    return _portal_render(fast_track=False)
+
+
+@bp.get("/book/fast-track")
+@rate_limit(limit=30, window=60.0)
+def portal_fast_track():
+    return _portal_render(fast_track=True)
+
+
+def _portal_render(fast_track: bool):
     org = _default_org()
     if not org:
         return render_template("error.html", code=503, message="System not configured yet."), 503
@@ -46,8 +56,19 @@ def portal():
     today = now_naive().date()
     window = int(services.get_setting(org.id, "booking_window_days") or 30)
     s = services.org_settings_bundle(org.id)
+    if not fast_track:
+        # "Fast Track" is a paid lounge, not an ordinary clinic. Offering it on
+        # the free door lets a patient wander into a premium service by picking
+        # the first item in a dropdown — with no price and no consent on screen.
+        # It belongs on /book/fast-track, where both are shown.
+        from ..patient_places import is_fast_track_dept
+        depts = [d for d in depts if not is_fast_track_dept(d)]
+    # Owner 2026-09-13: the service dropdown shows only the three patient
+    # services (see _service_choices).
+    choices = _service_choices(org.id, fast_track, loc_code)
     return render_template("booking_portal.html", org=org, depts=depts, qr_loc=qr_loc,
-                           ref_code=ref_code, s=s,
+                           ref_code=ref_code, s=s, fast_track=fast_track,
+                           choices=choices,
                            min_date=today.isoformat(),
                            max_date=(today + timedelta(days=window)).isoformat(),
                            slots=services.get_setting(org.id, "booking_slots") or [],
@@ -57,6 +78,33 @@ def portal():
 def _new_idem() -> str:
     import secrets
     return secrets.token_urlsafe(16)
+
+
+def _service_choices(org_id: int, fast_track: bool, loc_code: str = "",
+                     form=None) -> list[dict]:
+    """Owner 2026-09-13: "Which service do you need?" shows ONLY the three
+    patient services — Reception/Front Desk, HIMS/Records,
+    Fast-Track/Premium Service. On the FREE door the Fast-Track line is a
+    door, not a value: picking it walks the patient to /book/fast-track
+    where the price and the premium consent are on screen (the rule
+    tests/test_fasttrack_doors.py pins). The free door therefore never
+    POSTs the premium department.
+    """
+    from ..patient_places import is_fast_track_dept, service_choices, service_label
+    ft_url = url_for("bookings.portal_fast_track")
+    if loc_code:
+        ft_url = f"{ft_url}?loc={loc_code}"
+    choices = []
+    for d in service_choices(org_id):
+        label = service_label(d)
+        if is_fast_track_dept(d) and not fast_track:
+            choices.append({"id": "", "label": label, "goto": ft_url, "selected": False})
+        else:
+            selected = bool(form is not None and form.get("department_id") == str(d.id))
+            if fast_track and is_fast_track_dept(d):
+                selected = True
+            choices.append({"id": d.id, "label": label, "goto": "", "selected": selected})
+    return choices
 
 
 @bp.post("/book/submit")
@@ -108,9 +156,17 @@ def portal_submit():
     if request.form.get("consent") not in ("1", "on", "true", "yes"):
         errors.append("Please tick the box to allow the hospital to store your "
                       "details for this appointment.")
-    # MUST consent for Fast Track premium service
-    is_ft_check = (request.form.get("is_fast_track") or "").strip() in ("1","on","true","yes") or True
-    if is_ft_check and request.form.get("fast_track_consent") not in ("1","on","true","yes"):
+    # MUST consent for Fast Track premium service.
+    #
+    # Not only when the form posts is_fast_track: booking INTO the "Fast Track"
+    # department makes the visit premium as well (see is_ft below), so without
+    # this a patient could pick that department and be handed a paid service
+    # they never saw a consent box for. The rule follows the outcome, not
+    # whichever field happened to be submitted.
+    from ..patient_places import is_fast_track_dept
+    is_ft_check = (request.form.get("is_fast_track") or "").strip() in ("1","on","true","yes")
+    becomes_fast_track = is_ft_check or (dept is not None and is_fast_track_dept(dept))
+    if becomes_fast_track and request.form.get("fast_track_consent") not in ("1","on","true","yes"):
         errors.append("To use Fast Track, you must agree that it is a premium service and you will pay a little more for quick, private care.")
     if day and dept and slot in slots and services.slot_is_full(org.id, dept.id, day, slot):
         errors.append("That time slot is full — please choose another time.")
@@ -118,6 +174,9 @@ def portal_submit():
     if errors:
         from ..patient_places import public_departments
         depts = public_departments(org.id)
+        if not is_ft_check:
+            from ..patient_places import is_fast_track_dept as _ft_dept
+            depts = [d for d in depts if not _ft_dept(d)]
         for e in errors:
             flash(e, "error")
         # preserve the QR location tag on re-render
@@ -126,6 +185,9 @@ def portal_submit():
         s_err = services.org_settings_bundle(org.id)
         return render_template("booking_portal.html", org=org, depts=depts, qr_loc=qr_loc_err,
                                ref_code=(request.form.get("r") or ""), s=s_err,
+                               fast_track=is_ft_check,   # keep the gold door gold after a typo
+                               choices=_service_choices(org.id, is_ft_check, loc_code_err,
+                                                        request.form),
                                min_date=now.date().isoformat(),
                                max_date=(now.date() + timedelta(days=int(
                                    services.get_setting(org.id, "booking_window_days") or 30))).isoformat(),
@@ -138,7 +200,7 @@ def portal_submit():
     from ..patient_places import is_fast_track_dept
     # Fast Track — Booking is now Fast Track premium linked to Reception
     is_ft = ((request.form.get("is_fast_track") or "").strip() in ("1","on","true","yes")
-             or is_fast_track_dept(dept) or True)
+             or is_fast_track_dept(dept))
     ft_reason = (request.form.get("fast_track_reason") or "PREMIUM").strip().upper()[:40] or "PREMIUM"
     ft_price = int(services.get_setting(org.id, "fast_track_price") or 15000)
     ft_requires_pay = bool(services.get_setting(org.id, "fast_track_booking_requires_payment"))

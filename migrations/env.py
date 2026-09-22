@@ -29,7 +29,17 @@ config = context.config
 # pointing at a scratch database all SILENTLY MIGRATED THE WRONG DATABASE:
 # Alembic reported "Running upgrade ..." while the intended database was never
 # touched. Anything verifying an upgrade this way was proving nothing.
-if not config.get_main_option("sqlalchemy.url", None):
+# alembic.ini ships Alembic's own placeholder ("driver://user:pass@localhost/
+# dbname"). It is truthy, so the guard above treated it as "the caller supplied
+# a URL" and left it in place — which made every CLI run die with
+#   NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:driver
+# The app's boot path never noticed because run_alembic_upgrade() passes an
+# explicit URL. Treat the placeholder as "nobody supplied one" so
+# `alembic upgrade head` works from a shell (Render shell, a VPS, or a laptop
+# pointed at the Supabase pooler) while a real -x url=... still wins.
+_INI_PLACEHOLDER = "driver://user:pass@localhost/dbname"
+_supplied_url = (config.get_main_option("sqlalchemy.url", None) or "").strip()
+if not _supplied_url or _supplied_url == _INI_PLACEHOLDER:
     config.set_main_option("sqlalchemy.url",
                            Config.SQLALCHEMY_DATABASE_URI.replace("%", "%%"))
 
@@ -97,6 +107,18 @@ def run_migrations_online() -> None:
                                      poolclass=pool.NullPool)
     with connectable.connect() as connection:
         _take_migration_lock(connection)
+        # The lock statements above triggered SQLAlchemy 2.0's autobegin, so
+        # this connection is now inside an open transaction. Alembic treats a
+        # connection that is ALREADY in a transaction as externally managed
+        # (MigrationContext sets _in_external_transaction at configure time),
+        # and context.begin_transaction() then neither begins nor commits
+        # anything: every migration runs only to be silently ROLLED BACK when
+        # the connection closes — `alembic upgrade head` exits 0 having
+        # changed nothing. Verified against a real PostgreSQL 16 server with
+        # statement logging (log_statement=all): CREATE TABLE ... ROLLBACK.
+        # Ending the lock's transaction returns ownership to Alembic. The
+        # advisory lock itself is SESSION-scoped and survives the commit.
+        connection.commit()
         try:
             context.configure(connection=connection,
                               target_metadata=target_metadata,
