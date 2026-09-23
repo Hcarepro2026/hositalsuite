@@ -14,10 +14,13 @@ from tests.conftest import login
 
 
 def _org_and_admin(app):
-    # the fixture's app context keeps one long-lived session; make_demo (and
-    # auto_seed) run in their own session, so expire cached rows before
-    # re-reading or the identity map would hand back pre-demo state.
-    db.session.expire_all()
+    # Seed helpers commit in their own app context/session. The fixture's
+    # session may already have an unscoped transaction from an earlier count()
+    # query. expire_all() refreshes objects but does not end that transaction,
+    # so the RLS after_begin hook would not run inside background_all_orgs().
+    # End the old read session so the verification queries start a NEW,
+    # explicitly scoped transaction and see the committed seeded accounts.
+    db.session.remove()
     from app.rls import background_all_orgs
     with background_all_orgs():
         org = db.session.query(Organization).first()
