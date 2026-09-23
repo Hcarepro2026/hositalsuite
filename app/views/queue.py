@@ -74,27 +74,48 @@ def announce_queue_depth(org_id: int, dept: Department) -> None:
                         name=dept.name, count=waiting, place=place)
 
 
+@bp.get("/emergency")
+@rate_limit(limit=30, window=60.0)
+def emergency_page():
+    """The emergency landing page — its OWN page since 2026-09-13.
+
+    It used to be the join-a-queue form wearing a red hat (?emergency=1), so an
+    emergency patient landed on a page full of queue, booking and Fast-Track
+    content and a service dropdown. Owner: separate them. This page now carries
+    ONE thing only — go to A&E, and optionally register an emergency number
+    that shows at the desk. No service dropdown, no Fast Track, no booking.
+    """
+    org = _default_org()
+    if not org:
+        abort(503)
+    from ..patient_places import ensure_emergency_dept
+    dept = ensure_emergency_dept(org.id)
+    db.session.commit()
+    loc = (request.args.get("loc") or "").strip().upper()
+    return render_template("emergency_landing.html", org=org,
+                           emergency_dept=dept, loc=loc)
+
+
 @bp.get("/queue/join")
 @rate_limit(limit=30, window=60.0)
 def join_page():
     org = _default_org()
     if not org:
         abort(503)
-    from ..patient_places import public_departments
-    # Founder: Link queue only to Reception + Fast Track, show as Patient on Queue with priority for today's date only
-    is_emergency = request.args.get("emergency") == "1"
-    if is_emergency:
-        # Emergency goes straight to Accident & Emergency
-        depts = public_departments(org.id, only_reception=False)
-        # Pre-select Accident & Emergency if exists
-        emergency_dept = next((d for d in depts if "emergency" in d.name.lower() or "accident" in d.name.lower()), None)
-        pre = emergency_dept.id if emergency_dept else None
-    else:
-        depts = public_departments(org.id, only_reception=True)
-        pre = request.args.get("dept", type=int)
-    db.session.commit()
     loc = (request.args.get("loc") or "").strip().upper()
-    return render_template("queue_join.html", org=org, depts=depts, pre=pre, loc=loc, is_emergency=is_emergency)
+    if request.args.get("emergency") == "1":
+        # Old links (welcome page card, emergency banner, printed posters)
+        # keep working — emergencies have their own landing page now.
+        return redirect(url_for("queue.emergency_page", **({"loc": loc} if loc else {})))
+    from ..patient_places import service_choices, service_label
+    # Owner 2026-09-13: the patient picks from exactly three services —
+    # Reception/Front Desk, HIMS/Records, Fast-Track/Premium Service.
+    depts = service_choices(org.id)
+    db.session.commit()
+    pre = request.args.get("dept", type=int)
+    choices = [(d, service_label(d)) for d in depts]
+    return render_template("queue_join.html", org=org, depts=depts,
+                           choices=choices, pre=pre, loc=loc)
 
 
 @bp.post("/queue/join")
@@ -143,7 +164,10 @@ def join_submit():
         phone=phone or None,
         patient_id=patient_id,
         status="WAITING",
-        source="qr" if request.form.get("loc") else "link",
+        # 2026-09-14: registrations from the emergency landing page are
+        # tagged so staff reports can tell an A&E arrival from a walk-in.
+        source=("emergency" if request.form.get("emergency") == "1"
+                else ("qr" if request.form.get("loc") else "link")),
         is_fast_track=is_fast,
         fast_track_reason=fast_reason if is_fast else None,
     )
@@ -160,8 +184,71 @@ def join_submit():
         from .. import personal_tv as ptv
         sess = ptv.ensure_personal_session(org.id, ticket=t)
         ptv.update_session_from_ticket(sess, t)
+        # Request 3 — entry routing by patient history: returning patients (existing Patient record)
+        # skip the paper-folder Reception stage and start at HIMS; new patients start at RECEPTION.
+        entry_stage = "HIMS" if patient_id else "RECEPTION"
+        if sess and hasattr(sess, 'current_stage') and sess.current_stage != entry_stage:
+            sess.current_stage = entry_stage
+            db.session.add(sess)
     except Exception:
         current_app.logger.exception("personal TV session create failed")
+
+    # Request 3, finished — the tracker must not be ahead of reality.
+    #
+    # Setting current_stage alone meant a returning patient's tracker could read
+    # "HIMS" while no HIMS record existed yet, and a first-time patient's could
+    # read "RECEPTION" with nothing on the Reception desk to match. So the entry
+    # now creates the real record behind the stage:
+    #
+    #   * first-time patient -> a ReceptionIntake is opened (they need a paper
+    #     folder), the ticket is linked to it, and the journey opens at
+    #     RECEPTION. Reception can see them coming instead of finding out when
+    #     the patient arrives at the desk.
+    #   * returning patient  -> their folder already exists, so NO duplicate
+    #     intake is minted; the journey simply opens at HIMS against the folder.
+    #
+    # created_by stays NULL on purpose: nobody at a desk did this, the patient
+    # did it themselves from a QR code. Inventing a staff member would put a
+    # false name in the audit trail.
+    #
+    # Wrapped like every other tracking call: a measurement must never stop a
+    # patient being seen.
+    try:
+        from .. import reception as reception_engine, tracking
+
+        if patient_id:
+            tracking.safely(tracking.enter, org.id, "HIMS",
+                            patient_id=patient_id, department_id=dept.id)
+        else:
+            from ..models import ReceptionIntake
+            parts = name.split()
+            surname = parts[-1] if parts else "\u2014"
+            first = " ".join(parts[:-1]) if len(parts) > 1 else (parts[0] if parts else "Patient")
+            intake = ReceptionIntake(
+                org_id=org.id,
+                ref=reception_engine.next_ref(org.id),
+                surname=surname[:80],
+                first_name=first[:80],
+                phone=phone or None,
+                stage="RECEPTION",
+                is_fast_track=bool(is_fast),
+                fast_track_reason=fast_reason if is_fast else None,
+            )
+            db.session.add(intake)
+            db.session.flush()
+            t.intake_id = intake.id
+            if sess is not None:
+                sess.intake_id = intake.id
+                db.session.add(sess)
+            tracking.safely(tracking.enter, org.id, "RECEPTION",
+                            intake_id=intake.id, department_id=dept.id)
+        audit("QUEUE_ENTRY_ROUTED", "queue_ticket", t.id,
+              {"code": t.code, "entry_stage": entry_stage,
+               "returning": bool(patient_id)}, org_id=org.id)
+    except Exception:                                    # noqa: BLE001
+        current_app.logger.exception(
+            "queue join: entry record could not be created — the patient still "
+            "has a ticket and a tracker, but the journey is not being measured")
 
     # Announce to the department: staff hear how many are now waiting.
     try:
@@ -480,6 +567,17 @@ def to_reception(tid: int):
         flash("That ticket is no longer waiting.", "error")
         return redirect(url_for("queue.staff_queue", dept=t.department_id))
 
+    # Request 3 (entry routing) mints the Reception intake the moment a
+    # first-time patient joins the queue, so by the time this button is pressed
+    # the intake very often already exists. Minting a second one would put the
+    # same name on the Reception desk twice and open two journeys — the exact
+    # duplicate the routing work set out to remove. One journey, not two.
+    if t.intake_id:
+        already = db.session.get(ReceptionIntake, t.intake_id)
+        if already:
+            flash(f"{t.patient_name or 'Patient'} ({t.code}) is already at Reception as {already.ref}.", "success")
+            return redirect(url_for("queue.staff_queue", dept=t.department_id))
+
     # Split name into surname/first for intake (best effort)
     parts = (t.patient_name or "").strip().split()
     surname = parts[-1] if parts else "—"
@@ -556,5 +654,12 @@ def booking_checkin_queue(aid: int):
     db.session.flush()
     audit("BOOKING_ARRIVED", "appointment", apt.id, {"ref": apt.ref, "queue": t.code, "fast_track": ft, "paid": apt.fast_track_payment_status})
     db.session.commit()
-    flash(f"⭐ {apt.patient_name} checked in — queue ticket {t.code} gold lane.", "success")
+    # Only a Fast Track booking gets the gold lane. Telling staff a standard
+    # booking is "gold lane" is the same staff/patient copy drift this file has
+    # been burned by before: the patient-facing pages say one thing, the desk
+    # that acts on it says another.
+    if ft:
+        flash(f"⭐ {apt.patient_name} checked in — Fast Track queue ticket {t.code}, gold lane.", "success")
+    else:
+        flash(f"{apt.patient_name} checked in — queue ticket {t.code}.", "success")
     return redirect(url_for("queue.staff_queue", dept=apt.department_id))

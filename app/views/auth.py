@@ -7,6 +7,7 @@ from datetime import timedelta
 from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, session, url_for)
 from flask_login import current_user, login_user, logout_user
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .. import accounts
@@ -20,6 +21,19 @@ bp = Blueprint("auth", __name__)
 
 OTP_TTL_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5
+
+# F-062: password verification must take the same expensive path for an
+# unknown username as it does for a real account with a wrong password.  This
+# is deliberately a fixed, unusable scrypt hash: it is never a credential and
+# its salt must not be regenerated per request (doing that would make the
+# timing gap visible again).  Keep this value in source rather than deriving
+# it during a request; Werkzeug's scrypt verifier performs the same work as
+# User.check_password().
+_DUMMY_PASSWORD_HASH = (
+    "scrypt:32768:8:1$F062-dummy-salt$"
+    "082ddfd1542e376448621b0ae46a807667d8c826006355f412307cf099ecaee2"
+    "bad8f32d943d86b6b2eed3c0e5badc2860364642eb4a8d5eb3590adc47e623db"
+)
 
 # pages reachable while a password change is pending
 ALLOWED_WHEN_PENDING = ("auth.change_password", "auth.change_password_post",
@@ -42,7 +56,22 @@ def _lock_row(username: str, org_id: int | None = None) -> LoginAttempt:
     if row is None:
         row = LoginAttempt(org_id=org_id, username=username, failures=0)
         db.session.add(row)
-        db.session.flush()
+        try:
+            db.session.flush()
+        except IntegrityError:
+            # Issue #6 (2026-09-14): two near-simultaneous sign-ins for the
+            # same username — a double-tap, or a slow-network retry — can both
+            # pass the SELECT above and both INSERT; the second trips the
+            # unique index and used to end the login with a 500 instead of
+            # signing the person in (or refusing them). Roll the collision
+            # back and take the row the other request already created.
+            # Nothing else is pending at this point in the login request, so
+            # the rollback discards only our own collided row.
+            db.session.rollback()
+            row = (db.session.query(LoginAttempt)
+                   .filter_by(org_id=org_id, username=username).first())
+            if row is None:
+                raise
     return row
 
 
@@ -110,13 +139,20 @@ def login_post():
             return render_template("login.html", next=nxt, username=username), 429
 
     user = accounts.find_login_user(username, org_id=org_id)
+
+    # Always perform one password-hash verification before deciding whether
+    # the login is valid.  Without the dummy branch, a nonexistent username
+    # returns immediately while a real username pays for scrypt, creating a
+    # measurable username-enumeration side channel (F-062).
+    password_ok = (user.check_password(password) if user is not None else
+                   check_password_hash(_DUMMY_PASSWORD_HASH, password))
     if user is None and accounts.find_login_user_ambiguous(username):
         db.session.commit()
         flash("This sign-in name is used in more than one hospital on this "
               "server. Please open your own hospital's page (your hospital's "
               "link or QR poster) and sign in there.", "error")
         return render_template("login.html", next=nxt, username=username), 400
-    if not user or not user.check_password(password):
+    if not password_ok:
         if lock is not None:
             lock.failures = (lock.failures or 0) + 1
             lock.last_failure_at = now_naive()
